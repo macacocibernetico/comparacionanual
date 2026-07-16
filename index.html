@@ -88,6 +88,8 @@
   .modal .actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
   .modal .actions .danger{color:var(--red);border-color:#6b2020}
   .modal .actions .primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .clickhint{color:var(--muted);font-size:.72rem;font-weight:400}
+  .modal.wide{width:min(760px,94vw)}
 </style>
 </head>
 <body>
@@ -124,10 +126,10 @@
   <div class="kpis" id="kpis"></div>
 
   <div class="grid">
-    <div class="card"><h2>Toneladas consolidadas por mes</h2><div class="chartbox"><canvas id="chTns"></canvas></div></div>
-    <div class="card"><h2>USD por mes</h2><div class="chartbox"><canvas id="chUsd"></canvas></div></div>
-    <div class="card"><h2>Comisión por mes (USD)</h2><div class="chartbox"><canvas id="chCom"></canvas></div></div>
-    <div class="card"><h2>Embarques por mes</h2><div class="chartbox"><canvas id="chEtd"></canvas></div></div>
+    <div class="card"><h2>Toneladas por mes (según ETD) <span class="clickhint">— click en una barra para ver las cargas</span></h2><div class="chartbox"><canvas id="chTns"></canvas></div></div>
+    <div class="card"><h2>USD por mes <span class="clickhint">— click en una barra para ver las cargas</span></h2><div class="chartbox"><canvas id="chUsd"></canvas></div></div>
+    <div class="card"><h2>Comisión por mes (USD) <span class="clickhint">— click en una barra para ver las cargas</span></h2><div class="chartbox"><canvas id="chCom"></canvas></div></div>
+    <div class="card"><h2>Embarques por mes <span class="clickhint">— click en una barra para ver las cargas</span></h2><div class="chartbox"><canvas id="chEtd"></canvas></div></div>
     <div class="card wide" id="bizCard" style="display:none"><h2>Toneladas por negocio — <span id="lblBizYear"></span></h2><div class="chartbox"><canvas id="chBiz"></canvas></div></div>
     <div class="card wide"><h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2><div class="chartbox tall"><canvas id="chProd"></canvas></div></div>
     <div class="card wide"><h2>Detalle mensual: toneladas exportadas por producto — <span id="lblTableYear"></span></h2><div class="tablewrap" id="prodTable"></div></div>
@@ -136,6 +138,15 @@
 </div>
 
 <footer id="footer"></footer>
+
+<div class="modal-bg" id="detailBg">
+  <div class="modal wide">
+    <h2 id="detailTitle"></h2>
+    <p class="hint" id="detailSub"></p>
+    <div class="tablewrap" id="detailTable"></div>
+    <div class="actions"><button class="primary" id="detailClose">Cerrar</button></div>
+  </div>
+</div>
 
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -331,6 +342,7 @@ function parseCSV(text){
 
 function parseNumber(v){
   if (v == null) return 0;
+  if (typeof v === "number") return isFinite(v) ? v : 0;   // valor crudo de gviz JSON: sin redondeo de formato
   let s = String(v).trim().replace(/[^\d.,\-]/g, "");
   if (!s) return 0;
   const lastDot = s.lastIndexOf("."), lastCom = s.lastIndexOf(",");
@@ -350,10 +362,11 @@ function parseNumber(v){
 
 function parseDate(v, fmt){
   if (v == null) return null;
+  if (typeof v === "object" && v.y && v.mo) return v;      // fecha ya resuelta (gviz JSON)
   const s = String(v).trim();
   if (!s) return null;
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return { y: +m[1], mo: +m[2] };
+  if (m) return { y: +m[1], mo: +m[2], d: +m[3] };
   m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (m){
     let a = +m[1], b = +m[2], y = +m[3];
@@ -361,9 +374,39 @@ function parseDate(v, fmt){
     let d, mo;
     if (fmt === "MDY"){ mo = a; d = b; } else { d = a; mo = b; }
     if (mo > 12 && d <= 12){ [d, mo] = [mo, d]; }
-    if (mo >= 1 && mo <= 12) return { y, mo };
+    if (mo >= 1 && mo <= 12) return { y, mo, d };
   }
   return null;
+}
+
+/* Convierte la respuesta gviz JSON en filas tipo CSV, pero con valores CRUDOS:
+   números sin el redondeo del formato de celda y fechas ya resueltas. */
+function gvizJsonToRows(text){
+  const m = text.match(/setResponse\(([\s\S]*)\)\s*;?\s*$/);
+  if (!m) throw new Error("Respuesta JSON de Google inesperada.");
+  const fixed = m[1].replace(/new Date\(([^)]*)\)/g, '"Date($1)"');
+  const obj = JSON.parse(fixed);
+  if (obj.status === "error"){
+    throw new Error((obj.errors || []).map(e => e.detail || e.message).join("; ") || "Error de gviz.");
+  }
+  const t = obj.table;
+  const dateRe = /^Date\((\d+),(\d+),(\d+)/;
+  const rows = [t.cols.map(c => c.label || "")];
+  for (const row of (t.rows || [])){
+    rows.push((row.c || []).map(cell => {
+      if (!cell || cell.v == null) return "";
+      const v = cell.v;
+      if (typeof v === "string"){
+        const dm = v.match(dateRe);
+        if (dm) return { y: +dm[1], mo: +dm[2] + 1, d: +dm[3] };  // el mes de gviz es 0-based
+        return v;
+      }
+      if (typeof v === "number") return v;
+      if (typeof v === "boolean") return cell.f ?? String(v);
+      return cell.f ?? String(v);
+    }));
+  }
+  return rows;
 }
 
 function countContainers(v){
@@ -415,7 +458,7 @@ function buildRecords(rows, cfg, bizKey){
     const r = rows[i]; if (!r) continue;
     const etd = parseDate(r[C.etd], cfg.DATE_FORMAT);   // el mes/año lo define ETD
     const tns = parseNumber(r[C.tns]);
-    const product = (r[C.product] || "").trim();
+    const product = String(r[C.product] ?? "").trim();
     if (!etd && !tns && !product) continue;
     if (!etd) continue;
     const com = cfg.COMISION.mode === "porTon"
@@ -431,7 +474,7 @@ function buildRecords(rows, cfg, bizKey){
       containers: countContainers(r[C.containers]),
       etd,
       consolidacion: parseDate(r[C.consolidacion], cfg.DATE_FORMAT),
-      negocio: (r[C.negocio] || "").trim(),
+      negocio: String(r[C.negocio] ?? "").trim(),
     });
   }
   return recs;
@@ -470,7 +513,9 @@ function bestMonth(arr){
 
 const fmt0 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 0});
 const fmt1 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 1});
+const fmt3 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 3});
 const fmtUsd = n => "US$ " + fmt0(n);
+const fmtDate = d => d ? `${d.d ?? "?"}/${d.mo}/${d.y}` : "—";
 
 const PALETTE = ["#4f8ef7","#f7a44f","#3ecf8e","#e06ae0","#f0d45a","#6ae0d8","#f06a6a","#9b7af0","#7fc95b","#f78fb0","#5ba3c9","#c9a35b"];
 const CHART_COLORS = { chTns: "#4f8ef7", chUsd: "#3ecf8e", chCom: "#f7a44f", chEtd: "#9b7af0" };
@@ -520,16 +565,18 @@ async function fetchBiz(key){
   const cfg = CONFIG[key];
   const base = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}`;
   const sheetQ = encodeURIComponent(cfg.SHEET_NAME);
-  const urls = [
-    `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`,
-    `${base}/export?format=csv&gid=${encodeURIComponent(cfg.GID || "0")}&t=${Date.now()}`,
-    `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=0&t=${Date.now()}`,
+  const attempts = [
+    // 1º: gviz JSON → valores crudos, sin redondeo del formato de celda (máxima precisión)
+    { url: `${base}/gviz/tq?tqx=out:json&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`, parse: gvizJsonToRows },
+    { url: `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`, parse: parseCSV },
+    { url: `${base}/export?format=csv&gid=${encodeURIComponent(cfg.GID || "0")}&t=${Date.now()}`, parse: parseCSV },
+    { url: `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=0&t=${Date.now()}`, parse: parseCSV },
   ];
   let lastErr = null;
-  for (const url of urls){
+  for (const a of attempts){
     try {
-      const text = await fetchCsvText(url);
-      const recs = buildRecords(parseCSV(text), cfg, key);
+      const text = await fetchCsvText(a.url);
+      const recs = buildRecords(a.parse(text), cfg, key);
       if (!recs.length) throw new Error("No se encontraron filas con fecha ETD válida.");
       return recs;
     } catch(e){ lastErr = e; }
@@ -615,6 +662,11 @@ function makeBarChart(id, dsA, dsB, yA, yB, opts = {}){
     data: { labels: MESES, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
+      onClick: (e, els) => {
+        if (!els || !els.length) return;
+        const year = els[0].datasetIndex === 1 && yB ? yB : yA;
+        openDetail(els[0].index, year);
+      },
       plugins: { legend: { display: !!dsB, labels: { color: "#c5cede" } } },
       scales: {
         x: { ticks: { color: "#8b96ab" }, grid: { color: "#2a334755" } },
@@ -622,6 +674,30 @@ function makeBarChart(id, dsA, dsB, yA, yB, opts = {}){
       },
     },
   });
+}
+
+/* ---- detalle mensual (auditoría) ---- */
+const detailBg = document.getElementById("detailBg");
+document.getElementById("detailClose").onclick = () => detailBg.classList.remove("open");
+detailBg.onclick = e => { if (e.target === detailBg) detailBg.classList.remove("open"); };
+
+function openDetail(monthIdx, year){
+  const recs = getRecords()
+    .filter(r => r.year === year && r.month === monthIdx + 1)
+    .sort((a, b) => (a.etd?.d || 0) - (b.etd?.d || 0));
+  document.getElementById("detailTitle").textContent = `${MESES[monthIdx]} ${year} — ${recs.length} carga(s)`;
+  document.getElementById("detailSub").textContent =
+    "Cargas con ETD en este mes, con los valores exactos que suma el dashboard.";
+  let tot = { tns: 0, usd: 0, com: 0, cont: 0 };
+  let html = "<table><tr><th>Negocio</th><th>Producto</th><th>ETD</th><th>Tns</th><th>USD</th><th>Comisión</th><th>Cont.</th></tr>";
+  for (const r of recs){
+    tot.tns += r.tns; tot.usd += r.usd; tot.com += r.comision; tot.cont += r.containers;
+    html += `<tr><td>${r.negocio || "—"}</td><td>${r.product}</td><td>${fmtDate(r.etd)}</td>
+      <td>${fmt3(r.tns)}</td><td>${fmtUsd(r.usd)}</td><td>${fmtUsd(r.comision)}</td><td>${fmt0(r.containers)}</td></tr>`;
+  }
+  html += `<tr class="total"><td>Total</td><td></td><td></td><td>${fmt3(tot.tns)}</td><td>${fmtUsd(tot.usd)}</td><td>${fmtUsd(tot.com)}</td><td>${fmt0(tot.cont)}</td></tr></table>`;
+  document.getElementById("detailTable").innerHTML = html;
+  detailBg.classList.add("open");
 }
 
 function renderBizChart(a, yA){
