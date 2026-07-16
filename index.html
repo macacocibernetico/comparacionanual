@@ -200,6 +200,7 @@ const TOTAL_KEY = "total";
 const SHEET_DEFAULTS = {
   SHEET_ID: "",
   SHEET_NAME: "Hoja1",
+  GID: "",              // id numérico de la pestaña (#gid=... en la URL); se extrae solo al pegar la URL
   HEADER_ROW: 2,
   DATE_FORMAT: "DMY",
   USD_COL: "TOTAL FINAL",                          // "TOTAL FINAL" o "Total CFR"
@@ -281,16 +282,27 @@ function headerMap(headerRowArr){
   return map;
 }
 
+/* Busca un encabezado en el mapa: match exacto, o como sufijo de palabra completa.
+   (gviz con headers=N concatena filas de encabezado: "Título ETD" debe matchear "ETD") */
+function findInMap(name, hmap){
+  const target = normHeader(name);
+  if (hmap[target] !== undefined) return hmap[target];
+  for (const k in hmap){
+    if (k.endsWith(" " + target)) return hmap[k];
+  }
+  return undefined;
+}
+
 /* Resuelve el índice de una columna: primero por encabezado, después por letra */
 function resolveCol(spec, hmap){
-  const byHeader = hmap[normHeader(spec.header)];
+  const byHeader = findInMap(spec.header, hmap);
   if (byHeader !== undefined) return { idx: byHeader, byHeader: true };
   return { idx: colToIndex(spec.fallback), byHeader: false };
 }
 
 /* Resuelve un nombre de encabezado suelto (config USD/Comisión) */
 function resolveHeaderName(name, hmap){
-  const idx = hmap[normHeader(name)];
+  const idx = findInMap(name, hmap);
   if (idx !== undefined) return idx;
   // fallback: si coincide con alguna COLS conocida, usar su letra
   for (const k in COLS){
@@ -367,12 +379,12 @@ function countContainers(v){
    Google a veces omite filas vacías al exportar, así que el número de
    fila configurado puede no coincidir con la posición real en el CSV. */
 function findHeaderRow(rows, cfg){
-  const expected = Object.values(COLS).map(c => normHeader(c.header));
+  const expected = Object.values(COLS).map(c => c.header);
   const limit = Math.min(rows.length, Math.max(cfg.HEADER_ROW + 8, 12));
   let best = -1, bestScore = 0;
   for (let i = 0; i < limit; i++){
     const hm = headerMap(rows[i]);
-    const score = expected.filter(h => h in hm).length;
+    const score = expected.filter(h => findInMap(h, hm) !== undefined).length;
     if (score > bestScore){ bestScore = score; best = i; }
   }
   if (bestScore >= 3) return best;                 // fila con varios encabezados conocidos
@@ -493,16 +505,36 @@ function demoData(){
   return recs;
 }
 
-async function fetchBiz(key){
-  const cfg = CONFIG[key];
-  const url = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.SHEET_NAME)}&headers=0&t=${Date.now()}`;
+async function fetchCsvText(url){
   const res = await fetch(url);
   if (!res.ok) throw new Error("HTTP " + res.status);
   const text = await res.text();
   if (text.trim().startsWith("<")) throw new Error("La planilla no es pública. Compartila como 'Cualquier persona con el enlace: Lector'.");
-  const recs = buildRecords(parseCSV(text), cfg, key);
-  if (!recs.length) throw new Error("No se encontraron filas con fecha de Consolidación válida. Revisá nombre de pestaña y fila de encabezados.");
-  return recs;
+  return text;
+}
+
+/* Intenta varios endpoints de Google en orden. gviz con headers=N devuelve los
+   encabezados como etiquetas de texto (no los vacía por el tipo de la columna,
+   que es lo que pasa con headers=0 en columnas de fechas/números como ETD o Tns). */
+async function fetchBiz(key){
+  const cfg = CONFIG[key];
+  const base = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}`;
+  const sheetQ = encodeURIComponent(cfg.SHEET_NAME);
+  const urls = [
+    `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`,
+    `${base}/export?format=csv&gid=${encodeURIComponent(cfg.GID || "0")}&t=${Date.now()}`,
+    `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=0&t=${Date.now()}`,
+  ];
+  let lastErr = null;
+  for (const url of urls){
+    try {
+      const text = await fetchCsvText(url);
+      const recs = buildRecords(parseCSV(text), cfg, key);
+      if (!recs.length) throw new Error("No se encontraron filas con fecha ETD válida.");
+      return recs;
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr;
 }
 
 async function loadData(){
@@ -807,11 +839,14 @@ document.getElementById("cfgCancel").onclick = closeConfig;
 modalBg.onclick = e => { if (e.target === modalBg) closeConfig(); };
 
 document.getElementById("cfgSave").onclick = async () => {
-  let id = document.getElementById("cfgSheetId").value.trim();
-  const m = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);   // acepta URL completa
+  const raw = document.getElementById("cfgSheetId").value.trim();
+  let id = raw;
+  const m = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);   // acepta URL completa
   if (m) id = m[1];
+  const g = raw.match(/[#&?]gid=(\d+)/);                          // extrae el gid de la URL
   CONFIG[cfgBizKey] = {
     SHEET_ID: id,
+    GID: g ? g[1] : (CONFIG[cfgBizKey].GID || ""),
     SHEET_NAME: document.getElementById("cfgSheetName").value.trim() || "Hoja1",
     HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
