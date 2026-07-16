@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Anual — Exportaciones</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#171c26; --panel2:#1d2433; --border:#2a3347;
+    --text:#e8ecf3; --muted:#8b96ab; --accent:#4f8ef7; --accent2:#f7a44f;
+    --green:#3ecf8e; --red:#f06a6a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;padding:24px;min-height:100vh}
+  header{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:20px}
+  header h1{font-size:1.35rem;font-weight:600}
+  header .sub{color:var(--muted);font-size:.85rem;width:100%}
+  .controls{display:flex;gap:10px;margin-left:auto;align-items:center;flex-wrap:wrap}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.9rem;cursor:pointer}
+  button:hover,select:hover{border-color:var(--accent)}
+  .banner{background:#3a2f14;border:1px solid #6b5620;color:#f0d48a;padding:10px 14px;border-radius:10px;margin-bottom:18px;font-size:.88rem}
+  .banner.err{background:#3a1717;border-color:#6b2020;color:#f0a0a0}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .kpi .label{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+  .kpi .value{font-size:1.55rem;font-weight:700;margin:6px 0 4px}
+  .kpi .delta{font-size:.82rem;font-weight:600}
+  .delta.up{color:var(--green)} .delta.down{color:var(--red)} .delta.na{color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}
+  .card h2{font-size:.95rem;font-weight:600;margin-bottom:12px;color:#c5cede}
+  .card.wide{grid-column:1/-1}
+  .chartbox{position:relative;height:280px}
+  .chartbox.tall{height:340px}
+  table{width:100%;border-collapse:collapse;font-size:.82rem}
+  th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--panel)}
+  th{color:var(--muted);font-weight:600}
+  tr.total td{font-weight:700;border-top:2px solid var(--border)}
+  .tablewrap{overflow-x:auto}
+  footer{color:var(--muted);font-size:.75rem;margin-top:24px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>📦 Dashboard Anual de Exportaciones</h1>
+  <div class="controls">
+    <label style="color:var(--muted);font-size:.85rem">Año:</label>
+    <select id="selYear"></select>
+    <label style="color:var(--muted);font-size:.85rem">vs:</label>
+    <select id="selCompare"></select>
+    <button id="btnReload">↻ Actualizar</button>
+  </div>
+  <div class="sub" id="statusLine">Cargando…</div>
+</header>
+
+<div id="banner" class="banner" style="display:none"></div>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="grid">
+  <div class="card"><h2>Toneladas consolidadas por mes</h2><div class="chartbox"><canvas id="chTns"></canvas></div></div>
+  <div class="card"><h2>USD por mes (Total Final)</h2><div class="chartbox"><canvas id="chUsd"></canvas></div></div>
+  <div class="card"><h2>Comisión por mes (USD)</h2><div class="chartbox"><canvas id="chCom"></canvas></div></div>
+  <div class="card"><h2>Embarques por mes (según ETD)</h2><div class="chartbox"><canvas id="chEtd"></canvas></div></div>
+  <div class="card wide"><h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2><div class="chartbox tall"><canvas id="chProd"></canvas></div></div>
+  <div class="card wide"><h2>Detalle mensual: toneladas exportadas por producto — <span id="lblTableYear"></span></h2><div class="tablewrap" id="prodTable"></div></div>
+  <div class="card wide"><h2>Productos: comparación anual (toneladas)</h2><div class="tablewrap" id="prodCompare"></div></div>
+</div>
+
+<footer id="footer"></footer>
+
+<script>
+/* ==================== CONFIG ==================== */
+const CONFIG = {
+  // ID de la planilla: es la parte larga de la URL
+  // https://docs.google.com/spreadsheets/d/  <-- ESTO -->  /edit
+  SHEET_ID: "",                 // ← pegá acá el ID. Vacío = modo demo.
+  SHEET_NAME: "Hoja1",          // ← nombre exacto de la pestaña
+  HEADER_ROW: 2,                // fila donde están los encabezados
+
+  // Columnas (letra de columna en la planilla)
+  COLS: {
+    negocio: "A",
+    tns: "B",
+    product: "C",
+    containers: "F",
+    consolidacion: "K",   // fecha que define mes/año del negocio
+    etd: "L",
+    totalCFR: "AC",
+    priceServ: "AF",
+    totalFinal: "AG",
+  },
+
+  USD_COL: "AG",                // columna usada para el KPI "USD" (AG=TOTAL FINAL, AC=Total CFR)
+
+  // Comisión: mode "suma"  → suma la columna tal cual (importes)
+  //           mode "porTon"→ multiplica la columna (precio unitario) × Tns
+  COMISION: { mode: "suma", col: "AF" },
+
+  DATE_FORMAT: "DMY",           // orden de fecha en la planilla: "DMY" (dd/mm/aaaa) o "MDY"
+};
+/* ================================================= */
+
+const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+// ---- LOGIC ----
+
+function colToIndex(letter){
+  let n = 0;
+  for (const ch of letter.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+
+function parseCSV(text){
+  const rows = []; let row = [], field = "", inQ = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (inQ){
+      if (c === '"'){ if (text[i+1] === '"'){ field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ""; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ""; }
+      else if (c !== '\r') field += c;
+    }
+  }
+  if (field !== "" || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function parseNumber(v){
+  if (v == null) return 0;
+  let s = String(v).trim().replace(/[^\d.,\-]/g, "");
+  if (!s) return 0;
+  const lastDot = s.lastIndexOf("."), lastCom = s.lastIndexOf(",");
+  if (lastDot > -1 && lastCom > -1){
+    if (lastCom > lastDot) s = s.replace(/\./g, "").replace(",", ".");  // 1.234,56
+    else s = s.replace(/,/g, "");                                       // 1,234.56
+  } else if (lastCom > -1){
+    const dec = s.length - lastCom - 1;
+    s = (dec !== 3 && s.split(",").length === 2) ? s.replace(",", ".") : s.replace(/,/g, "");
+  } else if (lastDot > -1){
+    const dec = s.length - lastDot - 1;
+    if (dec === 3 || s.split(".").length > 2) s = s.replace(/\./g, "");  // 12.500 → miles (es-AR)
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function parseDate(v, fmt){
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);                       // yyyy-mm-dd
+  if (m) return { y: +m[1], mo: +m[2] };
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);             // dd/mm/yyyy o mm/dd/yyyy
+  if (m){
+    let a = +m[1], b = +m[2], y = +m[3];
+    if (y < 100) y += 2000;
+    let d, mo;
+    if (fmt === "MDY"){ mo = a; d = b; } else { d = a; mo = b; }
+    if (mo > 12 && d <= 12){ [d, mo] = [mo, d]; }                        // autocorrección
+    if (mo >= 1 && mo <= 12) return { y, mo };
+  }
+  return null;
+}
+
+function countContainers(v){
+  if (v == null) return 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  const n = parseNumber(s);
+  if (/^[\d.,\s]+$/.test(s) && n > 0) return n;
+  return s.split(/[,;\n]+/).filter(x => x.trim()).length;
+}
+
+// Convierte filas crudas de la planilla en registros
+function buildRecords(rows, cfg){
+  const C = {}; for (const k in cfg.COLS) C[k] = colToIndex(cfg.COLS[k]);
+  const usdIdx = colToIndex(cfg.USD_COL);
+  const comIdx = colToIndex(cfg.COMISION.col);
+  const recs = [];
+  for (let i = cfg.HEADER_ROW; i < rows.length; i++){
+    const r = rows[i]; if (!r) continue;
+    const cons = parseDate(r[C.consolidacion], cfg.DATE_FORMAT);
+    const tns = parseNumber(r[C.tns]);
+    const product = (r[C.product] || "").trim();
+    if (!cons && !tns && !product) continue;                             // fila vacía
+    if (!cons) continue;                                                 // sin fecha no se puede agrupar
+    const com = cfg.COMISION.mode === "porTon"
+      ? parseNumber(r[comIdx]) * tns
+      : parseNumber(r[comIdx]);
+    recs.push({
+      year: cons.y, month: cons.mo,
+      tns,
+      product: product || "(sin producto)",
+      usd: parseNumber(r[usdIdx]),
+      comision: com,
+      containers: countContainers(r[C.containers]),
+      etd: parseDate(r[C.etd], cfg.DATE_FORMAT),
+      negocio: (r[C.negocio] || "").trim(),
+    });
+  }
+  return recs;
+}
+
+function aggregate(recs, year){
+  const byMonth = () => Array(12).fill(0);
+  const agg = {
+    tns: byMonth(), usd: byMonth(), com: byMonth(), etdCount: byMonth(),
+    totTns: 0, totUsd: 0, totCom: 0, totCont: 0, totNeg: 0,
+    products: {},          // product -> [12 meses de tns]
+    prodTotals: {},        // product -> total tns
+  };
+  for (const r of recs){
+    if (r.year === year){
+      const m = r.month - 1;
+      agg.tns[m] += r.tns; agg.usd[m] += r.usd; agg.com[m] += r.comision;
+      agg.totTns += r.tns; agg.totUsd += r.usd; agg.totCom += r.comision;
+      agg.totCont += r.containers; agg.totNeg += 1;
+      if (!agg.products[r.product]) agg.products[r.product] = byMonth();
+      agg.products[r.product][m] += r.tns;
+      agg.prodTotals[r.product] = (agg.prodTotals[r.product] || 0) + r.tns;
+    }
+    if (r.etd && r.etd.y === year) agg.etdCount[r.etd.mo - 1] += 1;
+  }
+  return agg;
+}
+
+// ---- DOM ----
+
+const fmt0 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 0});
+const fmt1 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 1});
+const fmtUsd = n => "US$ " + fmt0(n);
+
+const PALETTE = ["#4f8ef7","#f7a44f","#3ecf8e","#e06ae0","#f0d45a","#6ae0d8","#f06a6a","#9b7af0","#7fc95b","#f78fb0","#5ba3c9","#c9a35b"];
+
+let RECORDS = [], charts = {};
+
+function demoData(){
+  const prods = ["Maní blancheado","Maní runner","Aceite de maní","Garbanzos","Porotos negros","Maíz pisingallo"];
+  const recs = [];
+  let seed = 42; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (const y of [2024, 2025, 2026]){
+    const maxMo = y === 2026 ? 7 : 12;
+    for (let mo = 1; mo <= maxMo; mo++){
+      const nDeals = 2 + Math.floor(rnd() * 4);
+      for (let d = 0; d < nDeals; d++){
+        const tns = 20 + rnd() * 80;
+        const price = 900 + rnd() * 600 + (y - 2024) * 60;
+        recs.push({
+          year: y, month: mo, tns,
+          product: prods[Math.floor(rnd() * prods.length)],
+          usd: tns * price,
+          comision: tns * (18 + rnd() * 14),
+          containers: 1 + Math.floor(rnd() * 3),
+          etd: { y, mo: Math.min(12, mo + (rnd() > .6 ? 1 : 0)) },
+          negocio: `DEMO-${y}-${mo}-${d}`,
+        });
+      }
+    }
+  }
+  return recs;
+}
+
+async function loadData(){
+  const status = document.getElementById("statusLine");
+  const banner = document.getElementById("banner");
+  banner.style.display = "none";
+  if (!CONFIG.SHEET_ID){
+    RECORDS = demoData();
+    banner.style.display = "block";
+    banner.className = "banner";
+    banner.innerHTML = "⚠️ <b>Modo demo:</b> mostrando datos de ejemplo. Pegá el <code>SHEET_ID</code> de tu planilla en el bloque CONFIG de <code>index.html</code> para ver tus datos reales.";
+    status.textContent = "Datos de ejemplo · " + RECORDS.length + " negocios";
+    return;
+  }
+  status.textContent = "Cargando planilla…";
+  const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CONFIG.SHEET_NAME)}&headers=0&t=${Date.now()}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const text = await res.text();
+    if (text.trim().startsWith("<")) throw new Error("La planilla no es pública. Compartila como 'Cualquier persona con el enlace: Lector'.");
+    RECORDS = buildRecords(parseCSV(text), CONFIG);
+    if (!RECORDS.length) throw new Error("No se encontraron filas con fecha de Consolidación válida. Revisá SHEET_NAME y HEADER_ROW.");
+    status.textContent = `Planilla "${CONFIG.SHEET_NAME}" · ${RECORDS.length} negocios · actualizado ${new Date().toLocaleTimeString("es-AR")}`;
+  } catch (e){
+    banner.style.display = "block";
+    banner.className = "banner err";
+    banner.innerHTML = "❌ <b>Error al cargar la planilla:</b> " + e.message;
+    status.textContent = "Error de carga";
+    RECORDS = [];
+  }
+}
+
+function yearsAvailable(){
+  return [...new Set(RECORDS.map(r => r.year))].sort((a, b) => b - a);
+}
+
+function deltaHtml(cur, prev){
+  if (!prev) return '<span class="delta na">—</span>';
+  const pct = (cur - prev) / prev * 100;
+  const cls = pct >= 0 ? "up" : "down";
+  const arrow = pct >= 0 ? "▲" : "▼";
+  return `<span class="delta ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}% vs año comp.</span>`;
+}
+
+function renderKpis(a, b, yA, yB){
+  const items = [
+    ["Toneladas", fmt1(a.totTns) + " t", a.totTns, b?.totTns],
+    ["USD (Total Final)", fmtUsd(a.totUsd), a.totUsd, b?.totUsd],
+    ["Comisión", fmtUsd(a.totCom), a.totCom, b?.totCom],
+    ["Contenedores", fmt0(a.totCont), a.totCont, b?.totCont],
+    ["Negocios", fmt0(a.totNeg), a.totNeg, b?.totNeg],
+  ];
+  document.getElementById("kpis").innerHTML = items.map(([label, val, cur, prev]) => `
+    <div class="kpi">
+      <div class="label">${label} · ${yA}</div>
+      <div class="value">${val}</div>
+      ${deltaHtml(cur, prev)}
+    </div>`).join("");
+}
+
+function makeBarChart(id, labels, dsA, dsB, yA, yB, opts = {}){
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id);
+  const datasets = [{ label: String(yA), data: dsA, backgroundColor: "#4f8ef7", borderRadius: 4 }];
+  if (dsB) datasets.push({ label: String(yB), data: dsB, backgroundColor: "#8b96ab55", borderColor: "#8b96ab", borderWidth: 1, borderRadius: 4 });
+  charts[id] = new Chart(ctx, {
+    type: "bar",
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: "#c5cede" } } },
+      scales: {
+        x: { ticks: { color: "#8b96ab" }, grid: { color: "#2a334755" } },
+        y: { ticks: { color: "#8b96ab", callback: v => opts.usd ? "$" + fmt0(v) : fmt0(v) }, grid: { color: "#2a334755" } },
+      },
+    },
+  });
+}
+
+function renderProductChart(a, yA){
+  document.getElementById("lblProdYear").textContent = yA;
+  if (charts.chProd) charts.chProd.destroy();
+  const prods = Object.keys(a.prodTotals).sort((x, y) => a.prodTotals[y] - a.prodTotals[x]);
+  charts.chProd = new Chart(document.getElementById("chProd"), {
+    type: "bar",
+    data: {
+      labels: MESES,
+      datasets: prods.map((p, i) => ({ label: p, data: a.products[p], backgroundColor: PALETTE[i % PALETTE.length], borderRadius: 3 })),
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: "#c5cede", boxWidth: 12 } } },
+      scales: {
+        x: { stacked: true, ticks: { color: "#8b96ab" }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: "#8b96ab" }, grid: { color: "#2a334755" }, title: { display: true, text: "Tns", color: "#8b96ab" } },
+      },
+    },
+  });
+}
+
+function renderProductTable(a, yA){
+  document.getElementById("lblTableYear").textContent = yA;
+  const prods = Object.keys(a.prodTotals).sort((x, y) => a.prodTotals[y] - a.prodTotals[x]);
+  let html = "<table><tr><th>Producto</th>" + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
+  for (const p of prods){
+    html += `<tr><td>${p}</td>` + a.products[p].map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td><b>${fmt1(a.prodTotals[p])}</b></td></tr>`;
+  }
+  html += `<tr class="total"><td>Total</td>` + a.tns.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td>${fmt1(a.totTns)}</td></tr></table>`;
+  document.getElementById("prodTable").innerHTML = html;
+}
+
+function renderProductCompare(a, b, yA, yB){
+  const el = document.getElementById("prodCompare");
+  if (!b){ el.innerHTML = '<p style="color:var(--muted)">Sin año de comparación.</p>'; return; }
+  const prods = [...new Set([...Object.keys(a.prodTotals), ...Object.keys(b.prodTotals)])]
+    .sort((x, y) => (a.prodTotals[y] || 0) - (a.prodTotals[x] || 0));
+  let html = `<table><tr><th>Producto</th><th>${yA} (t)</th><th>${yB} (t)</th><th>Δ t</th><th>Δ %</th></tr>`;
+  for (const p of prods){
+    const va = a.prodTotals[p] || 0, vb = b.prodTotals[p] || 0, d = va - vb;
+    const pct = vb ? (d / vb * 100) : null;
+    const cls = d >= 0 ? "up" : "down";
+    html += `<tr><td>${p}</td><td>${fmt1(va)}</td><td>${fmt1(vb)}</td>
+      <td class="delta ${cls}">${d >= 0 ? "+" : ""}${fmt1(d)}</td>
+      <td class="delta ${cls}">${pct === null ? "nuevo" : (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%"}</td></tr>`;
+  }
+  html += "</table>";
+  el.innerHTML = html;
+}
+
+function render(){
+  const yA = +document.getElementById("selYear").value;
+  const yBraw = document.getElementById("selCompare").value;
+  const yB = yBraw === "none" ? null : +yBraw;
+  const a = aggregate(RECORDS, yA);
+  const b = yB ? aggregate(RECORDS, yB) : null;
+  renderKpis(a, b, yA, yB);
+  makeBarChart("chTns", MESES, a.tns, b?.tns, yA, yB);
+  makeBarChart("chUsd", MESES, a.usd, b?.usd, yA, yB, { usd: true });
+  makeBarChart("chCom", MESES, a.com, b?.com, yA, yB, { usd: true });
+  makeBarChart("chEtd", MESES, a.etdCount, b?.etdCount, yA, yB);
+  renderProductChart(a, yA);
+  renderProductTable(a, yA);
+  renderProductCompare(a, b, yA, yB);
+  document.getElementById("footer").textContent =
+    `Mes/año según columna Consolidación (${CONFIG.COLS.consolidacion}) · USD = col ${CONFIG.USD_COL} · Comisión = col ${CONFIG.COMISION.col} (${CONFIG.COMISION.mode})`;
+}
+
+function fillSelectors(){
+  const years = yearsAvailable();
+  const selY = document.getElementById("selYear"), selC = document.getElementById("selCompare");
+  selY.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+  const fillCompare = () => {
+    const cur = +selY.value;
+    const others = years.filter(y => y !== cur);
+    selC.innerHTML = others.map(y => `<option value="${y}">${y}</option>`).join("") + '<option value="none">Ninguno</option>';
+    const prev = others.find(y => y === cur - 1);
+    if (prev) selC.value = prev;
+  };
+  fillCompare();
+  selY.onchange = () => { fillCompare(); render(); };
+  selC.onchange = render;
+}
+
+async function init(){
+  await loadData();
+  if (RECORDS.length){ fillSelectors(); render(); }
+}
+document.getElementById("btnReload").onclick = init;
+init();
+</script>
+</body>
+</html>
