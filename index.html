@@ -3,30 +3,57 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Anual — Exportaciones</title>
+<title>Dashboard Anual — Negocios</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#0e1117; --panel:#171c26; --panel2:#1d2433; --border:#2a3347;
     --text:#e8ecf3; --muted:#8b96ab; --accent:#4f8ef7; --accent2:#f7a44f;
-    --green:#3ecf8e; --red:#f06a6a;
+    --green:#3ecf8e; --red:#f06a6a; --purple:#9b7af0;
+    --grad:linear-gradient(135deg,#4f8ef7,#9b7af0);
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;padding:24px;min-height:100vh}
-  header{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:20px}
-  header h1{font-size:1.35rem;font-weight:600}
-  header .sub{color:var(--muted);font-size:.85rem;width:100%}
-  .controls{display:flex;gap:10px;margin-left:auto;align-items:center;flex-wrap:wrap}
-  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.9rem;cursor:pointer}
+  header{margin-bottom:16px}
+  header h1{font-size:1.35rem;font-weight:600;margin-bottom:14px}
+
+  /* Tabs de negocios */
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:9px 18px;font-size:.92rem;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:8px;transition:all .15s}
+  .tab:hover{border-color:var(--accent)}
+  .tab.active{background:var(--grad);border-color:transparent;color:#fff;font-weight:600;box-shadow:0 4px 16px #4f8ef744}
+  .tab.soon{opacity:.55;cursor:default}
+  .tab.soon:hover{border-color:var(--border)}
+  .tab .badge{background:#3a2f14;color:#f0d48a;border:1px solid #6b5620;font-size:.65rem;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.03em}
+  .tab.active .badge{background:#ffffff22;color:#fff;border-color:#ffffff44}
+
+  /* Controles: años + modo */
+  .controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .yearpills{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:7px 16px;font-size:.88rem;cursor:pointer;color:var(--muted);font-weight:600;transition:all .15s}
+  .pill:hover{border-color:var(--accent);color:var(--text)}
+  .pill.active{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 3px 12px #4f8ef755}
+  .seg{display:flex;background:var(--panel2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;border:none;color:var(--muted);padding:8px 14px;font-size:.85rem;cursor:pointer;font-weight:600}
+  .seg button.active{background:var(--grad);color:#fff}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.9rem;cursor:pointer;font-family:inherit}
   button:hover,select:hover{border-color:var(--accent)}
+  .spacer{margin-left:auto;display:flex;gap:8px}
+  .sub{color:var(--muted);font-size:.85rem;margin:8px 0 14px}
+
   .banner{background:#3a2f14;border:1px solid #6b5620;color:#f0d48a;padding:10px 14px;border-radius:10px;margin-bottom:18px;font-size:.88rem}
   .banner.err{background:#3a1717;border-color:#6b2020;color:#f0a0a0}
+
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px}
-  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad);opacity:0;transition:opacity .2s}
+  .kpi.solo::before{opacity:1}
   .kpi .label{color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
   .kpi .value{font-size:1.55rem;font-weight:700;margin:6px 0 4px}
   .kpi .delta{font-size:.82rem;font-weight:600}
+  .kpi .extra{font-size:.78rem;color:var(--muted)}
   .delta.up{color:var(--green)} .delta.down{color:var(--red)} .delta.na{color:var(--muted)}
+
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
   @media(max-width:900px){.grid{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}
@@ -34,6 +61,7 @@
   .card.wide{grid-column:1/-1}
   .chartbox{position:relative;height:280px}
   .chartbox.tall{height:340px}
+
   table{width:100%;border-collapse:collapse;font-size:.82rem}
   th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
   th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--panel)}
@@ -41,70 +69,176 @@
   tr.total td{font-weight:700;border-top:2px solid var(--border)}
   .tablewrap{overflow-x:auto}
   footer{color:var(--muted);font-size:.75rem;margin-top:24px;text-align:center}
+
+  /* Vista "próximamente" */
+  .soonview{display:none;text-align:center;padding:80px 20px}
+  .soonview .icon{font-size:3.5rem;margin-bottom:16px}
+  .soonview h2{font-size:1.4rem;margin-bottom:8px}
+  .soonview p{color:var(--muted);max-width:420px;margin:0 auto}
+
+  /* Modal de configuración */
+  .modal-bg{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:100}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:24px;width:min(480px,92vw);max-height:90vh;overflow-y:auto}
+  .modal h2{font-size:1.05rem;margin-bottom:6px}
+  .modal .hint{color:var(--muted);font-size:.8rem;margin-bottom:16px}
+  .modal label{display:block;color:var(--muted);font-size:.8rem;margin:12px 0 4px}
+  .modal input,.modal select{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:.9rem}
+  .modal .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modal .actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
+  .modal .actions .danger{color:var(--red);border-color:#6b2020}
+  .modal .actions .primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 </style>
 </head>
 <body>
 <header>
-  <h1>📦 Dashboard Anual de Exportaciones</h1>
+  <h1>📦 Dashboard de Negocios</h1>
+  <div class="tabs" id="tabs"></div>
   <div class="controls">
-    <label style="color:var(--muted);font-size:.85rem">Año:</label>
-    <select id="selYear"></select>
-    <label style="color:var(--muted);font-size:.85rem">vs:</label>
-    <select id="selCompare"></select>
-    <button id="btnReload">↻ Actualizar</button>
+    <div class="yearpills" id="yearPills"></div>
+    <div class="seg" id="modeSeg">
+      <button data-mode="solo">Un año</button>
+      <button data-mode="comparar">Comparar</button>
+    </div>
+    <span id="compareWrap" style="display:none">
+      <label style="color:var(--muted);font-size:.85rem">vs </label>
+      <select id="selCompare"></select>
+    </span>
+    <div class="spacer">
+      <button id="btnReload">↻ Actualizar</button>
+      <button id="btnConfig" title="Configuración">⚙️ Config</button>
+    </div>
   </div>
   <div class="sub" id="statusLine">Cargando…</div>
 </header>
 
 <div id="banner" class="banner" style="display:none"></div>
 
-<div class="kpis" id="kpis"></div>
+<div class="soonview" id="soonView">
+  <div class="icon">🚧</div>
+  <h2 id="soonTitle"></h2>
+  <p>Este negocio se sumará próximamente al dashboard. Cuando esté lista su planilla, va a aparecer acá con sus propios números y dentro de la pestaña Total.</p>
+</div>
 
-<div class="grid">
-  <div class="card"><h2>Toneladas consolidadas por mes</h2><div class="chartbox"><canvas id="chTns"></canvas></div></div>
-  <div class="card"><h2>USD por mes (Total Final)</h2><div class="chartbox"><canvas id="chUsd"></canvas></div></div>
-  <div class="card"><h2>Comisión por mes (USD)</h2><div class="chartbox"><canvas id="chCom"></canvas></div></div>
-  <div class="card"><h2>Embarques por mes (según ETD)</h2><div class="chartbox"><canvas id="chEtd"></canvas></div></div>
-  <div class="card wide"><h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2><div class="chartbox tall"><canvas id="chProd"></canvas></div></div>
-  <div class="card wide"><h2>Detalle mensual: toneladas exportadas por producto — <span id="lblTableYear"></span></h2><div class="tablewrap" id="prodTable"></div></div>
-  <div class="card wide"><h2>Productos: comparación anual (toneladas)</h2><div class="tablewrap" id="prodCompare"></div></div>
+<div id="dashView">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="card"><h2>Toneladas consolidadas por mes</h2><div class="chartbox"><canvas id="chTns"></canvas></div></div>
+    <div class="card"><h2>USD por mes</h2><div class="chartbox"><canvas id="chUsd"></canvas></div></div>
+    <div class="card"><h2>Comisión por mes (USD)</h2><div class="chartbox"><canvas id="chCom"></canvas></div></div>
+    <div class="card"><h2>Embarques por mes (según ETD)</h2><div class="chartbox"><canvas id="chEtd"></canvas></div></div>
+    <div class="card wide" id="bizCard" style="display:none"><h2>Toneladas por negocio — <span id="lblBizYear"></span></h2><div class="chartbox"><canvas id="chBiz"></canvas></div></div>
+    <div class="card wide"><h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2><div class="chartbox tall"><canvas id="chProd"></canvas></div></div>
+    <div class="card wide"><h2>Detalle mensual: toneladas exportadas por producto — <span id="lblTableYear"></span></h2><div class="tablewrap" id="prodTable"></div></div>
+    <div class="card wide" id="compareCard"><h2>Productos: comparación anual (toneladas)</h2><div class="tablewrap" id="prodCompare"></div></div>
+  </div>
 </div>
 
 <footer id="footer"></footer>
 
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2>⚙️ Configuración</h2>
+    <p class="hint">Se guarda solo en este navegador (localStorage). No queda en el código ni en GitHub, así el repo público no expone datos sensibles.</p>
+    <label>Negocio</label>
+    <select id="cfgBiz"></select>
+    <label>Sheet ID <span style="color:var(--muted)">(o pegá la URL completa de la planilla)</span></label>
+    <input id="cfgSheetId" placeholder="1AbC…" autocomplete="off">
+    <label>Nombre de la pestaña</label>
+    <input id="cfgSheetName" placeholder="Hoja1" autocomplete="off">
+    <div class="row">
+      <div>
+        <label>Fila de encabezados</label>
+        <input id="cfgHeaderRow" type="number" min="1" value="2">
+      </div>
+      <div>
+        <label>Formato de fecha</label>
+        <select id="cfgDateFormat">
+          <option value="DMY">dd/mm/aaaa</option>
+          <option value="MDY">mm/dd/aaaa</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Columna USD</label>
+        <select id="cfgUsdCol">
+          <option value="AG">AG — TOTAL FINAL</option>
+          <option value="AC">AC — Total CFR</option>
+        </select>
+      </div>
+      <div>
+        <label>Comisión (col AF)</label>
+        <select id="cfgComMode">
+          <option value="suma">Sumar AF tal cual</option>
+          <option value="porTon">AF × Tns (precio unitario)</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="danger" id="cfgClear">Borrar config</button>
+      <button id="cfgCancel">Cancelar</button>
+      <button class="primary" id="cfgSave">Guardar y cargar</button>
+    </div>
+  </div>
+</div>
+
 <script>
-/* ==================== CONFIG ==================== */
-const CONFIG = {
-  // ID de la planilla: es la parte larga de la URL
-  // https://docs.google.com/spreadsheets/d/  <-- ESTO -->  /edit
-  SHEET_ID: "",                 // ← pegá acá el ID. Vacío = modo demo.
-  SHEET_NAME: "Hoja1",          // ← nombre exacto de la pestaña
-  HEADER_ROW: 2,                // fila donde están los encabezados
+/* ==================== NEGOCIOS ====================
+   status: "active" = con planilla propia
+           "soon"   = se muestra como próximamente
+=================================================== */
+const BUSINESSES = [
+  { key: "axt",       name: "AXT",       status: "active" },
+  { key: "buzaram",   name: "Buzaram",   status: "soon"   },
+  { key: "brokerage", name: "Brokerage", status: "soon"   },
+];
+const TOTAL_KEY = "total";
 
-  // Columnas (letra de columna en la planilla)
-  COLS: {
-    negocio: "A",
-    tns: "B",
-    product: "C",
-    containers: "F",
-    consolidacion: "K",   // fecha que define mes/año del negocio
-    etd: "L",
-    totalCFR: "AC",
-    priceServ: "AF",
-    totalFinal: "AG",
-  },
-
-  USD_COL: "AG",                // columna usada para el KPI "USD" (AG=TOTAL FINAL, AC=Total CFR)
-
-  // Comisión: mode "suma"  → suma la columna tal cual (importes)
-  //           mode "porTon"→ multiplica la columna (precio unitario) × Tns
-  COMISION: { mode: "suma", col: "AF" },
-
-  DATE_FORMAT: "DMY",           // orden de fecha en la planilla: "DMY" (dd/mm/aaaa) o "MDY"
+/* Config por defecto de cada planilla (estructura de columnas AXT) */
+const SHEET_DEFAULTS = {
+  SHEET_ID: "",
+  SHEET_NAME: "Hoja1",
+  HEADER_ROW: 2,
+  DATE_FORMAT: "DMY",
+  USD_COL: "AG",                          // AG=TOTAL FINAL, AC=Total CFR
+  COMISION: { mode: "suma", col: "AF" },  // "suma" o "porTon" (AF × Tns)
 };
-/* ================================================= */
-
+const COLS = {
+  negocio: "A", tns: "B", product: "C", containers: "F",
+  consolidacion: "K",   // fecha que define mes/año
+  etd: "L", totalCFR: "AC", priceServ: "AF", totalFinal: "AG",
+};
+const LS_KEY = "dashboardConfigV2";
+const UI_KEY = "dashboardUI";
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+function loadConfig(){
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e){}
+  // migración desde la versión anterior (config de un solo negocio)
+  if (!Object.keys(saved).length){
+    try {
+      const old = JSON.parse(localStorage.getItem("dashboardConfig"));
+      if (old && old.SHEET_ID) saved = { axt: old };
+    } catch(e){}
+  }
+  const cfg = {};
+  for (const b of BUSINESSES){
+    cfg[b.key] = { ...SHEET_DEFAULTS, ...(saved[b.key] || {}),
+      COMISION: { ...SHEET_DEFAULTS.COMISION, ...((saved[b.key] || {}).COMISION || {}) } };
+  }
+  return cfg;
+}
+let CONFIG = loadConfig();
+
+function loadUI(){
+  try { return { biz: "axt", mode: "comparar", ...(JSON.parse(localStorage.getItem(UI_KEY)) || {}) }; }
+  catch(e){ return { biz: "axt", mode: "comparar" }; }
+}
+let UI = loadUI();
+function saveUI(){ localStorage.setItem(UI_KEY, JSON.stringify(UI)); }
 
 // ---- LOGIC ----
 
@@ -155,15 +289,15 @@ function parseDate(v, fmt){
   if (v == null) return null;
   const s = String(v).trim();
   if (!s) return null;
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);                       // yyyy-mm-dd
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return { y: +m[1], mo: +m[2] };
-  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);             // dd/mm/yyyy o mm/dd/yyyy
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (m){
     let a = +m[1], b = +m[2], y = +m[3];
     if (y < 100) y += 2000;
     let d, mo;
     if (fmt === "MDY"){ mo = a; d = b; } else { d = a; mo = b; }
-    if (mo > 12 && d <= 12){ [d, mo] = [mo, d]; }                        // autocorrección
+    if (mo > 12 && d <= 12){ [d, mo] = [mo, d]; }
     if (mo >= 1 && mo <= 12) return { y, mo };
   }
   return null;
@@ -178,9 +312,8 @@ function countContainers(v){
   return s.split(/[,;\n]+/).filter(x => x.trim()).length;
 }
 
-// Convierte filas crudas de la planilla en registros
-function buildRecords(rows, cfg){
-  const C = {}; for (const k in cfg.COLS) C[k] = colToIndex(cfg.COLS[k]);
+function buildRecords(rows, cfg, bizKey){
+  const C = {}; for (const k in COLS) C[k] = colToIndex(COLS[k]);
   const usdIdx = colToIndex(cfg.USD_COL);
   const comIdx = colToIndex(cfg.COMISION.col);
   const recs = [];
@@ -189,12 +322,13 @@ function buildRecords(rows, cfg){
     const cons = parseDate(r[C.consolidacion], cfg.DATE_FORMAT);
     const tns = parseNumber(r[C.tns]);
     const product = (r[C.product] || "").trim();
-    if (!cons && !tns && !product) continue;                             // fila vacía
-    if (!cons) continue;                                                 // sin fecha no se puede agrupar
+    if (!cons && !tns && !product) continue;
+    if (!cons) continue;
     const com = cfg.COMISION.mode === "porTon"
       ? parseNumber(r[comIdx]) * tns
       : parseNumber(r[comIdx]);
     recs.push({
+      biz: bizKey,
       year: cons.y, month: cons.mo,
       tns,
       product: product || "(sin producto)",
@@ -213,8 +347,7 @@ function aggregate(recs, year){
   const agg = {
     tns: byMonth(), usd: byMonth(), com: byMonth(), etdCount: byMonth(),
     totTns: 0, totUsd: 0, totCom: 0, totCont: 0, totNeg: 0,
-    products: {},          // product -> [12 meses de tns]
-    prodTotals: {},        // product -> total tns
+    products: {}, prodTotals: {}, bizTotals: {},
   };
   for (const r of recs){
     if (r.year === year){
@@ -225,10 +358,17 @@ function aggregate(recs, year){
       if (!agg.products[r.product]) agg.products[r.product] = byMonth();
       agg.products[r.product][m] += r.tns;
       agg.prodTotals[r.product] = (agg.prodTotals[r.product] || 0) + r.tns;
+      agg.bizTotals[r.biz] = (agg.bizTotals[r.biz] || 0) + r.tns;
     }
     if (r.etd && r.etd.y === year) agg.etdCount[r.etd.mo - 1] += 1;
   }
   return agg;
+}
+
+function bestMonth(arr){
+  let bi = -1, bv = 0;
+  arr.forEach((v, i) => { if (v > bv){ bv = v; bi = i; } });
+  return bi < 0 ? null : { name: MESES[bi], value: bv };
 }
 
 // ---- DOM ----
@@ -238,8 +378,11 @@ const fmt1 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 1});
 const fmtUsd = n => "US$ " + fmt0(n);
 
 const PALETTE = ["#4f8ef7","#f7a44f","#3ecf8e","#e06ae0","#f0d45a","#6ae0d8","#f06a6a","#9b7af0","#7fc95b","#f78fb0","#5ba3c9","#c9a35b"];
+const CHART_COLORS = { chTns: "#4f8ef7", chUsd: "#3ecf8e", chCom: "#f7a44f", chEtd: "#9b7af0" };
 
-let RECORDS = [], charts = {};
+let DATA = {};        // bizKey -> records
+let charts = {};
+let demoMode = false;
 
 function demoData(){
   const prods = ["Maní blancheado","Maní runner","Aceite de maní","Garbanzos","Porotos negros","Maíz pisingallo"];
@@ -253,7 +396,7 @@ function demoData(){
         const tns = 20 + rnd() * 80;
         const price = 900 + rnd() * 600 + (y - 2024) * 60;
         recs.push({
-          year: y, month: mo, tns,
+          biz: "axt", year: y, month: mo, tns,
           product: prods[Math.floor(rnd() * prods.length)],
           usd: tns * price,
           comision: tns * (18 + rnd() * 14),
@@ -267,80 +410,122 @@ function demoData(){
   return recs;
 }
 
+async function fetchBiz(key){
+  const cfg = CONFIG[key];
+  const url = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cfg.SHEET_NAME)}&headers=0&t=${Date.now()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const text = await res.text();
+  if (text.trim().startsWith("<")) throw new Error("La planilla no es pública. Compartila como 'Cualquier persona con el enlace: Lector'.");
+  const recs = buildRecords(parseCSV(text), cfg, key);
+  if (!recs.length) throw new Error("No se encontraron filas con fecha de Consolidación válida. Revisá nombre de pestaña y fila de encabezados.");
+  return recs;
+}
+
 async function loadData(){
   const status = document.getElementById("statusLine");
   const banner = document.getElementById("banner");
   banner.style.display = "none";
-  if (!CONFIG.SHEET_ID){
-    RECORDS = demoData();
+  DATA = {}; demoMode = false;
+  const active = BUSINESSES.filter(b => b.status === "active");
+  const configured = active.filter(b => CONFIG[b.key].SHEET_ID);
+  if (!configured.length){
+    DATA.axt = demoData();
+    demoMode = true;
     banner.style.display = "block";
     banner.className = "banner";
-    banner.innerHTML = "⚠️ <b>Modo demo:</b> mostrando datos de ejemplo. Pegá el <code>SHEET_ID</code> de tu planilla en el bloque CONFIG de <code>index.html</code> para ver tus datos reales.";
-    status.textContent = "Datos de ejemplo · " + RECORDS.length + " negocios";
+    banner.innerHTML = "⚠️ <b>Modo demo:</b> mostrando datos de ejemplo. Tocá <b>⚙️ Config</b> y pegá el Sheet ID de tu planilla para ver tus datos reales.";
+    status.textContent = "Datos de ejemplo";
     return;
   }
-  status.textContent = "Cargando planilla…";
-  const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CONFIG.SHEET_NAME)}&headers=0&t=${Date.now()}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const text = await res.text();
-    if (text.trim().startsWith("<")) throw new Error("La planilla no es pública. Compartila como 'Cualquier persona con el enlace: Lector'.");
-    RECORDS = buildRecords(parseCSV(text), CONFIG);
-    if (!RECORDS.length) throw new Error("No se encontraron filas con fecha de Consolidación válida. Revisá SHEET_NAME y HEADER_ROW.");
-    status.textContent = `Planilla "${CONFIG.SHEET_NAME}" · ${RECORDS.length} negocios · actualizado ${new Date().toLocaleTimeString("es-AR")}`;
-  } catch (e){
+  status.textContent = "Cargando planillas…";
+  const errors = [];
+  await Promise.all(configured.map(async b => {
+    try { DATA[b.key] = await fetchBiz(b.key); }
+    catch(e){ errors.push(`<b>${b.name}:</b> ${e.message}`); }
+  }));
+  if (errors.length){
     banner.style.display = "block";
     banner.className = "banner err";
-    banner.innerHTML = "❌ <b>Error al cargar la planilla:</b> " + e.message;
-    status.textContent = "Error de carga";
-    RECORDS = [];
+    banner.innerHTML = "❌ Error al cargar: " + errors.join(" · ");
   }
+  const n = Object.values(DATA).reduce((s, r) => s + r.length, 0);
+  status.textContent = `${Object.keys(DATA).length} negocio(s) cargado(s) · ${n} operaciones · actualizado ${new Date().toLocaleTimeString("es-AR")}`;
+}
+
+function getRecords(){
+  if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
+  return DATA[UI.biz] || [];
 }
 
 function yearsAvailable(){
-  return [...new Set(RECORDS.map(r => r.year))].sort((a, b) => b - a);
+  return [...new Set(getRecords().map(r => r.year))].sort((a, b) => b - a);
 }
 
+/* ---------- render ---------- */
+
 function deltaHtml(cur, prev){
-  if (!prev) return '<span class="delta na">—</span>';
+  if (prev == null || !isFinite(prev) || prev === 0) return '<span class="delta na">—</span>';
   const pct = (cur - prev) / prev * 100;
   const cls = pct >= 0 ? "up" : "down";
   const arrow = pct >= 0 ? "▲" : "▼";
   return `<span class="delta ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}% vs año comp.</span>`;
 }
 
-function renderKpis(a, b, yA, yB){
+function renderKpis(a, b, yA){
+  const solo = UI.mode === "solo";
+  const bm = { tns: bestMonth(a.tns), usd: bestMonth(a.usd), com: bestMonth(a.com) };
   const items = [
-    ["Toneladas", fmt1(a.totTns) + " t", a.totTns, b?.totTns],
-    ["USD (Total Final)", fmtUsd(a.totUsd), a.totUsd, b?.totUsd],
-    ["Comisión", fmtUsd(a.totCom), a.totCom, b?.totCom],
-    ["Contenedores", fmt0(a.totCont), a.totCont, b?.totCont],
-    ["Negocios", fmt0(a.totNeg), a.totNeg, b?.totNeg],
+    ["Toneladas", fmt1(a.totTns) + " t", a.totTns, b?.totTns, bm.tns && `Mejor mes: ${bm.tns.name} (${fmt1(bm.tns.value)} t)`],
+    ["USD", fmtUsd(a.totUsd), a.totUsd, b?.totUsd, bm.usd && `Mejor mes: ${bm.usd.name} (${fmtUsd(bm.usd.value)})`],
+    ["Comisión", fmtUsd(a.totCom), a.totCom, b?.totCom, bm.com && `Mejor mes: ${bm.com.name} (${fmtUsd(bm.com.value)})`],
+    ["Contenedores", fmt0(a.totCont), a.totCont, b?.totCont, null],
+    ["Negocios", fmt0(a.totNeg), a.totNeg, b?.totNeg, null],
   ];
-  document.getElementById("kpis").innerHTML = items.map(([label, val, cur, prev]) => `
-    <div class="kpi">
+  document.getElementById("kpis").innerHTML = items.map(([label, val, cur, prev, extra]) => `
+    <div class="kpi ${solo ? "solo" : ""}">
       <div class="label">${label} · ${yA}</div>
       <div class="value">${val}</div>
-      ${deltaHtml(cur, prev)}
+      ${solo ? (extra ? `<div class="extra">${extra}</div>` : "") : deltaHtml(cur, prev)}
     </div>`).join("");
 }
 
-function makeBarChart(id, labels, dsA, dsB, yA, yB, opts = {}){
+function makeBarChart(id, dsA, dsB, yA, yB, opts = {}){
   if (charts[id]) charts[id].destroy();
-  const ctx = document.getElementById(id);
-  const datasets = [{ label: String(yA), data: dsA, backgroundColor: "#4f8ef7", borderRadius: 4 }];
-  if (dsB) datasets.push({ label: String(yB), data: dsB, backgroundColor: "#8b96ab55", borderColor: "#8b96ab", borderWidth: 1, borderRadius: 4 });
-  charts[id] = new Chart(ctx, {
+  const color = CHART_COLORS[id] || "#4f8ef7";
+  const datasets = [{ label: String(yA), data: dsA, backgroundColor: color, borderRadius: 5 }];
+  if (dsB) datasets.push({ label: String(yB), data: dsB, backgroundColor: "#8b96ab55", borderColor: "#8b96ab", borderWidth: 1, borderRadius: 5 });
+  charts[id] = new Chart(document.getElementById(id), {
     type: "bar",
-    data: { labels, datasets },
+    data: { labels: MESES, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: "#c5cede" } } },
+      plugins: { legend: { display: !!dsB, labels: { color: "#c5cede" } } },
       scales: {
         x: { ticks: { color: "#8b96ab" }, grid: { color: "#2a334755" } },
         y: { ticks: { color: "#8b96ab", callback: v => opts.usd ? "$" + fmt0(v) : fmt0(v) }, grid: { color: "#2a334755" } },
       },
+    },
+  });
+}
+
+function renderBizChart(a, yA){
+  const card = document.getElementById("bizCard");
+  if (UI.biz !== TOTAL_KEY){ card.style.display = "none"; if (charts.chBiz){ charts.chBiz.destroy(); delete charts.chBiz; } return; }
+  card.style.display = "";
+  document.getElementById("lblBizYear").textContent = yA;
+  if (charts.chBiz) charts.chBiz.destroy();
+  const names = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
+  const keys = Object.keys(a.bizTotals);
+  charts.chBiz = new Chart(document.getElementById("chBiz"), {
+    type: "doughnut",
+    data: {
+      labels: keys.map(k => names[k] || k),
+      datasets: [{ data: keys.map(k => a.bizTotals[k]), backgroundColor: PALETTE, borderColor: "#171c26", borderWidth: 3 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: "62%",
+      plugins: { legend: { position: "right", labels: { color: "#c5cede" } } },
     },
   });
 }
@@ -378,8 +563,10 @@ function renderProductTable(a, yA){
 }
 
 function renderProductCompare(a, b, yA, yB){
+  const card = document.getElementById("compareCard");
+  if (!b){ card.style.display = "none"; return; }
+  card.style.display = "";
   const el = document.getElementById("prodCompare");
-  if (!b){ el.innerHTML = '<p style="color:var(--muted)">Sin año de comparación.</p>'; return; }
   const prods = [...new Set([...Object.keys(a.prodTotals), ...Object.keys(b.prodTotals)])]
     .sort((x, y) => (a.prodTotals[y] || 0) - (a.prodTotals[x] || 0));
   let html = `<table><tr><th>Producto</th><th>${yA} (t)</th><th>${yB} (t)</th><th>Δ t</th><th>Δ %</th></tr>`;
@@ -396,45 +583,182 @@ function renderProductCompare(a, b, yA, yB){
 }
 
 function render(){
-  const yA = +document.getElementById("selYear").value;
-  const yBraw = document.getElementById("selCompare").value;
-  const yB = yBraw === "none" ? null : +yBraw;
-  const a = aggregate(RECORDS, yA);
-  const b = yB ? aggregate(RECORDS, yB) : null;
-  renderKpis(a, b, yA, yB);
-  makeBarChart("chTns", MESES, a.tns, b?.tns, yA, yB);
-  makeBarChart("chUsd", MESES, a.usd, b?.usd, yA, yB, { usd: true });
-  makeBarChart("chCom", MESES, a.com, b?.com, yA, yB, { usd: true });
-  makeBarChart("chEtd", MESES, a.etdCount, b?.etdCount, yA, yB);
+  const biz = BUSINESSES.find(b => b.key === UI.biz);
+  const soonView = document.getElementById("soonView");
+  const dashView = document.getElementById("dashView");
+  if (biz && biz.status === "soon"){
+    soonView.style.display = "block";
+    dashView.style.display = "none";
+    document.getElementById("soonTitle").textContent = biz.name + " — Próximamente";
+    document.getElementById("footer").textContent = "";
+    return;
+  }
+  soonView.style.display = "none";
+  dashView.style.display = "";
+
+  const years = yearsAvailable();
+  if (!years.length){
+    document.getElementById("kpis").innerHTML = "";
+    document.getElementById("prodTable").innerHTML = '<p style="color:var(--muted)">Sin datos para mostrar.</p>';
+    return;
+  }
+  if (!years.includes(UI.year)) UI.year = years[0];
+
+  const yA = UI.year;
+  let yB = null;
+  if (UI.mode === "comparar"){
+    const sel = document.getElementById("selCompare");
+    yB = sel.value && sel.value !== "none" && +sel.value !== yA ? +sel.value : null;
+  }
+  const recs = getRecords();
+  const a = aggregate(recs, yA);
+  const b = yB != null ? aggregate(recs, yB) : null;
+
+  renderKpis(a, b, yA);
+  makeBarChart("chTns", a.tns, b?.tns, yA, yB);
+  makeBarChart("chUsd", a.usd, b?.usd, yA, yB, { usd: true });
+  makeBarChart("chCom", a.com, b?.com, yA, yB, { usd: true });
+  makeBarChart("chEtd", a.etdCount, b?.etdCount, yA, yB);
+  renderBizChart(a, yA);
   renderProductChart(a, yA);
   renderProductTable(a, yA);
   renderProductCompare(a, b, yA, yB);
+
+  const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
   document.getElementById("footer").textContent =
-    `Mes/año según columna Consolidación (${CONFIG.COLS.consolidacion}) · USD = col ${CONFIG.USD_COL} · Comisión = col ${CONFIG.COMISION.col} (${CONFIG.COMISION.mode})`;
+    `${bizName} · Mes/año según Consolidación (${COLS.consolidacion}) · USD = col ${CONFIG.axt.USD_COL} · Comisión = col ${CONFIG.axt.COMISION.col} (${CONFIG.axt.COMISION.mode})${demoMode ? " · DATOS DEMO" : ""}`;
 }
 
-function fillSelectors(){
-  const years = yearsAvailable();
-  const selY = document.getElementById("selYear"), selC = document.getElementById("selCompare");
-  selY.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
-  const fillCompare = () => {
-    const cur = +selY.value;
-    const others = years.filter(y => y !== cur);
-    selC.innerHTML = others.map(y => `<option value="${y}">${y}</option>`).join("") + '<option value="none">Ninguno</option>';
-    const prev = others.find(y => y === cur - 1);
-    if (prev) selC.value = prev;
-  };
-  fillCompare();
-  selY.onchange = () => { fillCompare(); render(); };
-  selC.onchange = render;
+/* ---------- controles ---------- */
+
+function renderTabs(){
+  const el = document.getElementById("tabs");
+  const tabs = [
+    ...BUSINESSES.map(b => ({ key: b.key, name: b.name, soon: b.status === "soon" })),
+    { key: TOTAL_KEY, name: "Σ Total", soon: false },
+  ];
+  el.innerHTML = tabs.map(t => `
+    <div class="tab ${UI.biz === t.key ? "active" : ""} ${t.soon ? "soon" : ""}" data-key="${t.key}">
+      ${t.name}${t.soon ? ' <span class="badge">PRÓXIMAMENTE</span>' : ""}
+    </div>`).join("");
+  el.querySelectorAll(".tab").forEach(tab => {
+    tab.onclick = () => {
+      UI.biz = tab.dataset.key;
+      saveUI();
+      renderTabs(); renderControls(); render();
+    };
+  });
 }
+
+function renderControls(){
+  const years = yearsAvailable();
+  const pills = document.getElementById("yearPills");
+  const biz = BUSINESSES.find(b => b.key === UI.biz);
+  const isSoon = biz && biz.status === "soon";
+  pills.style.display = isSoon ? "none" : "";
+  document.getElementById("modeSeg").style.display = isSoon ? "none" : "";
+  if (!years.includes(UI.year)) UI.year = years[0];
+  pills.innerHTML = years.map(y => `<div class="pill ${y === UI.year ? "active" : ""}" data-y="${y}">${y}</div>`).join("");
+  pills.querySelectorAll(".pill").forEach(p => {
+    p.onclick = () => { UI.year = +p.dataset.y; saveUI(); renderControls(); render(); };
+  });
+  // segmento de modo
+  document.querySelectorAll("#modeSeg button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === UI.mode);
+    btn.onclick = () => { UI.mode = btn.dataset.mode; saveUI(); renderControls(); render(); };
+  });
+  // selector de comparación
+  const wrap = document.getElementById("compareWrap");
+  const sel = document.getElementById("selCompare");
+  if (UI.mode === "comparar" && !isSoon){
+    wrap.style.display = "";
+    const others = years.filter(y => y !== UI.year);
+    const prevVal = sel.value;
+    sel.innerHTML = others.map(y => `<option value="${y}">${y}</option>`).join("") + '<option value="none">Ninguno</option>';
+    const prev = others.find(y => y === UI.year - 1);
+    sel.value = others.map(String).includes(prevVal) ? prevVal : (prev ? String(prev) : (others[0] ? String(others[0]) : "none"));
+    sel.onchange = render;
+  } else {
+    wrap.style.display = "none";
+  }
+}
+
+/* ---------- config ---------- */
+
+const modalBg = document.getElementById("modalBg");
+let cfgBizKey = "axt";
+
+function fillConfigForm(){
+  const c = CONFIG[cfgBizKey];
+  document.getElementById("cfgSheetId").value = c.SHEET_ID;
+  document.getElementById("cfgSheetName").value = c.SHEET_NAME;
+  document.getElementById("cfgHeaderRow").value = c.HEADER_ROW;
+  document.getElementById("cfgDateFormat").value = c.DATE_FORMAT;
+  document.getElementById("cfgUsdCol").value = c.USD_COL;
+  document.getElementById("cfgComMode").value = c.COMISION.mode;
+}
+
+function openConfig(){
+  const selBiz = document.getElementById("cfgBiz");
+  const active = BUSINESSES.filter(b => b.status === "active");
+  if (!active.find(b => b.key === cfgBizKey)) cfgBizKey = active[0].key;
+  selBiz.innerHTML = active.map(b => `<option value="${b.key}">${b.name}</option>`).join("");
+  selBiz.value = cfgBizKey;
+  selBiz.onchange = () => { cfgBizKey = selBiz.value; fillConfigForm(); };
+  fillConfigForm();
+  modalBg.classList.add("open");
+}
+function closeConfig(){ modalBg.classList.remove("open"); }
+
+function persistConfig(){
+  const out = {};
+  for (const b of BUSINESSES){
+    const c = CONFIG[b.key];
+    if (c.SHEET_ID) out[b.key] = c;
+  }
+  localStorage.setItem(LS_KEY, JSON.stringify(out));
+}
+
+document.getElementById("btnConfig").onclick = openConfig;
+document.getElementById("cfgCancel").onclick = closeConfig;
+modalBg.onclick = e => { if (e.target === modalBg) closeConfig(); };
+
+document.getElementById("cfgSave").onclick = async () => {
+  let id = document.getElementById("cfgSheetId").value.trim();
+  const m = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);   // acepta URL completa
+  if (m) id = m[1];
+  CONFIG[cfgBizKey] = {
+    SHEET_ID: id,
+    SHEET_NAME: document.getElementById("cfgSheetName").value.trim() || "Hoja1",
+    HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
+    DATE_FORMAT: document.getElementById("cfgDateFormat").value,
+    USD_COL: document.getElementById("cfgUsdCol").value,
+    COMISION: { mode: document.getElementById("cfgComMode").value, col: "AF" },
+  };
+  persistConfig();
+  closeConfig();
+  await init();
+};
+
+document.getElementById("cfgClear").onclick = async () => {
+  localStorage.removeItem(LS_KEY);
+  localStorage.removeItem("dashboardConfig");
+  CONFIG = loadConfig();
+  closeConfig();
+  await init();
+};
+
+/* ---------- init ---------- */
 
 async function init(){
   await loadData();
-  if (RECORDS.length){ fillSelectors(); render(); }
+  renderTabs();
+  renderControls();
+  render();
 }
 document.getElementById("btnReload").onclick = init;
 init();
+if (!Object.values(CONFIG).some(c => c.SHEET_ID)) setTimeout(openConfig, 400);
 </script>
 </body>
 </html>
