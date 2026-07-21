@@ -160,6 +160,7 @@
     <div class="card"><h2>USD por mes <span class="clickhint">— click en una barra para ver las cargas</span></h2><div class="chartbox"><canvas id="chUsd"></canvas></div></div>
     <div class="card"><h2>Comisión por mes (USD) <span class="clickhint">— click en una barra para ver las cargas</span></h2><div class="chartbox"><canvas id="chCom"></canvas></div></div>
     <div class="card"><h2>Embarques por mes <span class="clickhint">— click en una barra para ver las cargas</span></h2><div class="chartbox"><canvas id="chEtd"></canvas></div></div>
+    <div class="card wide"><h2>📈 Tendencia mensual — historia completa <span class="clickhint">— Tns en eje izquierdo · USD y comisión en eje derecho · click en un punto = detalle</span></h2><div class="chartbox tall"><canvas id="chTrend"></canvas></div></div>
     <div class="card wide" id="bizCard" style="display:none"><h2>Toneladas por negocio — <span id="lblBizYear"></span></h2><div class="chartbox"><canvas id="chBiz"></canvas></div></div>
     <div class="card wide"><h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2><div class="chartbox tall"><canvas id="chProd"></canvas></div></div>
     <div class="card wide"><h2>Detalle mensual: toneladas exportadas por producto — <span id="lblTableYear"></span></h2><div class="tablewrap" id="prodTable"></div></div>
@@ -742,6 +743,47 @@ function makeChart(id, series, opts = {}){
   });
 }
 
+/* Tendencia: línea continua mes a mes de toda la historia (Tns eje izq, USD/comisión eje der) */
+function renderTrend(recs){
+  if (charts.chTrend){ charts.chTrend.destroy(); delete charts.chTrend; }
+  const keys = recs.map(r => r.year * 12 + (r.month - 1));
+  if (!keys.length) return;
+  const min = Math.min(...keys), max = Math.max(...keys);
+  const labels = [], tns = [], usd = [], com = [], meta = [];
+  const sums = {};
+  for (const r of recs){
+    const k = r.year * 12 + (r.month - 1);
+    if (!sums[k]) sums[k] = { t: 0, u: 0, c: 0 };
+    sums[k].t += r.tns; sums[k].u += r.usd; sums[k].c += r.comision;
+  }
+  for (let k = min; k <= max; k++){
+    const y = Math.floor(k / 12), m = k % 12;
+    labels.push(`${MESES[m]} ${String(y).slice(2)}`);
+    meta.push({ y, m });
+    const s = sums[k] || { t: 0, u: 0, c: 0 };
+    tns.push(s.t); usd.push(s.u); com.push(s.c);
+  }
+  charts.chTrend = new Chart(document.getElementById("chTrend"), {
+    type: "line",
+    data: { labels, datasets: [
+      { label: "Toneladas", data: tns, borderColor: "#4f8ef7", backgroundColor: "#4f8ef722", yAxisID: "y", tension: .3, pointRadius: 2, borderWidth: 2, fill: true },
+      { label: "USD", data: usd, borderColor: "#3ecf8e", yAxisID: "y1", tension: .3, pointRadius: 2, borderWidth: 2 },
+      { label: "Comisión", data: com, borderColor: "#f7a44f", yAxisID: "y1", tension: .3, pointRadius: 2, borderWidth: 2 },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      onClick: (e, els) => { if (els && els.length){ const mt = meta[els[0].index]; openDetail(mt.m, mt.y); } },
+      plugins: { legend: { labels: { color: "#c5cede", boxWidth: 12 } } },
+      scales: {
+        x: { ticks: { color: "#8b96ab", maxRotation: 0, autoSkip: true }, grid: { color: "#2a334733" } },
+        y: { position: "left", title: { display: true, text: "Tns", color: "#8b96ab" }, ticks: { color: "#8b96ab" }, grid: { color: "#2a334755" } },
+        y1: { position: "right", ticks: { color: "#8b96ab", callback: v => "$" + fmt0(v) }, grid: { drawOnChartArea: false } },
+      },
+    },
+  });
+}
+
 /* ---- detalle mensual (auditoría) ---- */
 const detailBg = document.getElementById("detailBg");
 document.getElementById("detailClose").onclick = () => detailBg.classList.remove("open");
@@ -865,41 +907,52 @@ function render(){
 
   const yA = UI.year;
   const recs = getRecords();
-  let yB = null;
-  if (UI.mode === "comparar"){
-    const sel = document.getElementById("selCompare");
-    yB = sel.value && sel.value !== "none" && +sel.value !== yA ? +sel.value : null;
-  }
-  const a = aggregate(recs, yA);
-  const b = yB != null ? aggregate(recs, yB) : null;
 
-  // desglose NOP/Conv (independiente del modo de años)
+  // años a comparar según la selección: uno, todos los anteriores, todos, ninguno
+  let cmpYears = [];
+  if (UI.mode === "comparar"){
+    const v = UI.compareSel;
+    if (v === "prev-all") cmpYears = years.filter(y => y < yA);
+    else if (v === "all") cmpYears = years.filter(y => y !== yA);
+    else if (v && v !== "none" && years.includes(+v) && +v !== yA) cmpYears = [+v];
+  }
+  cmpYears.sort((x, y) => y - x);
+
+  const a = aggregate(recs, yA);
+  const aggCmp = new Map(cmpYears.map(y => [y, aggregate(recs, y)]));
+  // para KPIs y tabla de productos: comparar contra el año anterior disponible
+  const lower = cmpYears.filter(y => y < yA);
+  const yB = lower.length ? Math.max(...lower) : (cmpYears.length ? Math.max(...cmpYears) : null);
+  const b = yB != null ? aggCmp.get(yB) : null;
+
+  // desglose NOP/Conv (en gráficos, hasta 2 años; en KPIs siempre)
+  const splitCharts = UI.split && cmpYears.length <= 1;
   let aN = null, aC = null, bN = null, bC = null;
   if (UI.split){
     const nopRecs = recs.filter(r => isNOP(r.product));
     const convRecs = recs.filter(r => !isNOP(r.product));
     aN = aggregate(nopRecs, yA); aC = aggregate(convRecs, yA);
-    if (yB != null){ bN = aggregate(nopRecs, yB); bC = aggregate(convRecs, yB); }
+    if (splitCharts && yB != null){ bN = aggregate(nopRecs, yB); bC = aggregate(convRecs, yB); }
   }
 
+  const MUTED = ["#8b96ab77", "#f7a44f55", "#e06ae055", "#6ae0d855", "#f0d45a55", "#9b7af055"];
   const mk = (id, key, opts) => {
     let series;
-    if (UI.split && yB != null){
-      // año vs año, cada barra apilada NOP + Conv
+    if (splitCharts && yB != null && bN){
       series = [
         { label: `${yA} 🌿NOP`, data: aN[key], color: "#3ecf8e", stack: "A", year: yA, group: "nop" },
         { label: `${yA} Conv`,  data: aC[key], color: "#4f8ef7", stack: "A", year: yA, group: "conv" },
         { label: `${yB} 🌿NOP`, data: bN[key], color: "#3ecf8e59", stack: "B", year: yB, group: "nop" },
         { label: `${yB} Conv`,  data: bC[key], color: "#4f8ef759", stack: "B", year: yB, group: "conv" },
       ];
-    } else if (UI.split){
+    } else if (splitCharts){
       series = [
         { label: "🌿 NOP", data: aN[key], color: "#3ecf8e", year: yA, group: "nop" },
         { label: "Convencional", data: aC[key], color: "#4f8ef7", year: yA, group: "conv" },
       ];
     } else {
       series = [{ label: String(yA), data: a[key], color: CHART_COLORS[id] || "#4f8ef7", year: yA }];
-      if (b) series.push({ label: String(yB), data: b[key], color: "#8b96ab55", year: yB });
+      cmpYears.forEach((y, i) => series.push({ label: String(y), data: aggCmp.get(y)[key], color: MUTED[i % MUTED.length], year: y }));
     }
     makeChart(id, series, opts);
   };
@@ -909,6 +962,7 @@ function render(){
   mk("chUsd", "usd", { usd: true });
   mk("chCom", "com", { usd: true });
   mk("chEtd", "etdCount");
+  renderTrend(recs);
   renderBizChart(a, yA);
   renderProductChart(a, yA);
   renderProductTable(a, yA);
@@ -916,7 +970,7 @@ function render(){
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
   document.getElementById("footer").textContent =
-    `${bizName} · Mes/año según "ETD" · USD = "${CONFIG.axt.USD_COL}" · Comisión = "${CONFIG.axt.COMISION.col}" (${CONFIG.axt.COMISION.mode})${UI.filter.mode !== "todos" ? " · FILTRO DE PRODUCTOS ACTIVO" : ""}${demoMode ? " · DATOS DEMO" : ""}`;
+    `${bizName} · Mes/año según "ETD" · USD = "${CONFIG.axt.USD_COL}" · Comisión = "${CONFIG.axt.COMISION.col}" (${CONFIG.axt.COMISION.mode})${UI.filter.mode !== "todos" ? " · FILTRO DE PRODUCTOS ACTIVO" : ""}${UI.split && !splitCharts ? " · 🌿 el desglose NOP/Conv en gráficos aplica con hasta 2 años (los KPIs sí lo muestran)" : ""}${demoMode ? " · DATOS DEMO" : ""}`;
 }
 
 /* ---------- controles ---------- */
@@ -954,9 +1008,19 @@ function renderControls(){
   btnSplit.onclick = () => { UI.split = !UI.split; saveUI(); renderControls(); render(); };
   if (isSoon) document.getElementById("filterPanel").style.display = "none";
   if (!years.includes(UI.year)) UI.year = years[0];
-  pills.innerHTML = years.map(y => `<div class="pill ${y === UI.year ? "active" : ""}" data-y="${y}">${y}</div>`).join("");
+  const allActive = UI.mode === "comparar" && UI.compareSel === "all";
+  pills.innerHTML = years.map(y => `<div class="pill ${y === UI.year ? "active" : ""}" data-y="${y}">${y}</div>`).join("")
+    + (years.length > 1 ? `<div class="pill ${allActive ? "active" : ""}" data-y="all" title="Ver todos los años en los gráficos">📊 Todos</div>` : "");
   pills.querySelectorAll(".pill").forEach(p => {
-    p.onclick = () => { UI.year = +p.dataset.y; saveUI(); renderControls(); render(); };
+    p.onclick = () => {
+      if (p.dataset.y === "all"){
+        if (allActive){ UI.compareSel = "none"; }
+        else { UI.mode = "comparar"; UI.compareSel = "all"; }
+      } else {
+        UI.year = +p.dataset.y;
+      }
+      saveUI(); renderControls(); render();
+    };
   });
   // segmento de modo
   document.querySelectorAll("#modeSeg button").forEach(btn => {
@@ -969,11 +1033,17 @@ function renderControls(){
   if (UI.mode === "comparar" && !isSoon){
     wrap.style.display = "";
     const others = years.filter(y => y !== UI.year);
-    const prevVal = sel.value;
-    sel.innerHTML = others.map(y => `<option value="${y}">${y}</option>`).join("") + '<option value="none">Ninguno</option>';
-    const prev = others.find(y => y === UI.year - 1);
-    sel.value = others.map(String).includes(prevVal) ? prevVal : (prev ? String(prev) : (others[0] ? String(others[0]) : "none"));
-    sel.onchange = render;
+    sel.innerHTML = others.map(y => `<option value="${y}">${y}</option>`).join("")
+      + '<option value="prev-all">Todos los anteriores</option>'
+      + '<option value="all">Todos los años</option>'
+      + '<option value="none">Ninguno</option>';
+    const valid = [...others.map(String), "prev-all", "all", "none"];
+    if (!valid.includes(UI.compareSel)){
+      const prev = others.find(y => y === UI.year - 1);
+      UI.compareSel = prev ? String(prev) : (others[0] ? String(others[0]) : "none");
+    }
+    sel.value = UI.compareSel;
+    sel.onchange = () => { UI.compareSel = sel.value; saveUI(); renderControls(); render(); };
   } else {
     wrap.style.display = "none";
   }
