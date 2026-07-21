@@ -90,6 +90,20 @@
   .modal .actions .primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
   .clickhint{color:var(--muted);font-size:.72rem;font-weight:400}
   .modal.wide{width:min(760px,94vw)}
+
+  /* Panel de filtro de productos */
+  .filterpanel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:10px}
+  .filterpanel .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .chip{background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:.83rem;cursor:pointer;color:var(--text)}
+  .chip:hover{border-color:var(--accent)}
+  .chip.active{background:var(--grad);border-color:transparent;color:#fff;font-weight:600}
+  .checkactions{display:flex;gap:8px;margin-bottom:10px}
+  .checkactions button{font-size:.78rem;padding:5px 10px}
+  .checklist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;max-height:220px;overflow-y:auto}
+  .checklist label{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--text);cursor:pointer;padding:4px 6px;border-radius:6px}
+  .checklist label:hover{background:var(--panel2)}
+  .checklist input{accent-color:var(--accent)}
+  #btnFilter.filtering{border-color:var(--accent2);color:var(--accent2)}
 </style>
 </head>
 <body>
@@ -101,7 +115,9 @@
     <div class="seg" id="modeSeg">
       <button data-mode="solo">Un año</button>
       <button data-mode="comparar">Comparar</button>
+      <button data-mode="grupos">NOP vs Conv</button>
     </div>
+    <button id="btnFilter">🎛 Productos: Todos</button>
     <span id="compareWrap" style="display:none">
       <label style="color:var(--muted);font-size:.85rem">vs </label>
       <select id="selCompare"></select>
@@ -110,6 +126,19 @@
       <button id="btnReload">↻ Actualizar</button>
       <button id="btnConfig" title="Configuración">⚙️ Config</button>
     </div>
+  </div>
+  <div class="filterpanel" id="filterPanel" style="display:none">
+    <div class="chips">
+      <button class="chip" data-fmode="todos">Todos</button>
+      <button class="chip" data-fmode="nop">🌿 Solo NOP</button>
+      <button class="chip" data-fmode="conv">Solo Convencional</button>
+    </div>
+    <div class="checkactions">
+      <button id="fltAll">Marcar todos</button>
+      <button id="fltNone">Ninguno</button>
+      <button id="fltInvert">Invertir</button>
+    </div>
+    <div class="checklist" id="prodChecks"></div>
   </div>
   <div class="sub" id="statusLine">Cargando…</div>
 </header>
@@ -263,11 +292,28 @@ function loadConfig(){
 let CONFIG = loadConfig();
 
 function loadUI(){
-  try { return { biz: "axt", mode: "comparar", ...(JSON.parse(localStorage.getItem(UI_KEY)) || {}) }; }
-  catch(e){ return { biz: "axt", mode: "comparar" }; }
+  let ui;
+  try { ui = { biz: "axt", mode: "comparar", ...(JSON.parse(localStorage.getItem(UI_KEY)) || {}) }; }
+  catch(e){ ui = { biz: "axt", mode: "comparar" }; }
+  if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", sel: null };
+  return ui;
 }
 let UI = loadUI();
 function saveUI(){ localStorage.setItem(UI_KEY, JSON.stringify(UI)); }
+
+/* NOP se detecta como palabra en el nombre del producto: "Aceite NOP", "nop maní", etc. */
+function isNOP(product){
+  return /(^|[^a-z0-9])nop([^a-z0-9]|$)/i.test(String(product));
+}
+
+function applyFilter(recs){
+  const f = UI.filter;
+  if (!f || f.mode === "todos") return recs;
+  if (f.mode === "nop") return recs.filter(r => isNOP(r.product));
+  if (f.mode === "conv") return recs.filter(r => !isNOP(r.product));
+  if (f.mode === "custom" && Array.isArray(f.sel)) return recs.filter(r => f.sel.includes(r.product));
+  return recs;
+}
 
 // ---- LOGIC ----
 
@@ -617,9 +663,12 @@ async function loadData(){
   status.textContent = `${Object.keys(DATA).length} negocio(s) cargado(s) · ${n} operaciones · actualizado ${new Date().toLocaleTimeString("es-AR")}`;
 }
 
-function getRecords(){
+function getRecordsUnfiltered(){
   if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
   return DATA[UI.biz] || [];
+}
+function getRecords(){
+  return applyFilter(getRecordsUnfiltered());
 }
 
 function yearsAvailable(){
@@ -638,6 +687,23 @@ function deltaHtml(cur, prev){
 
 function renderKpis(a, b, yA){
   const solo = UI.mode === "solo";
+  if (UI.mode === "grupos"){
+    // a = NOP, b = Convencional
+    const items = [
+      ["Toneladas", v => fmt1(v) + " t", a.totTns, b.totTns],
+      ["USD", fmtUsd, a.totUsd, b.totUsd],
+      ["Comisión", fmtUsd, a.totCom, b.totCom],
+      ["Contenedores", fmt0, a.totCont, b.totCont],
+      ["Negocios", fmt0, a.totNeg, b.totNeg],
+    ];
+    document.getElementById("kpis").innerHTML = items.map(([label, f, vN, vC]) => `
+      <div class="kpi solo">
+        <div class="label">${label} · ${yA}</div>
+        <div class="value">${f(vN + vC)}</div>
+        <div class="extra"><span style="color:var(--green)">🌿 NOP: ${f(vN)}</span> · Conv: ${f(vC)}</div>
+      </div>`).join("");
+    return;
+  }
   const bm = { tns: bestMonth(a.tns), usd: bestMonth(a.usd), com: bestMonth(a.com) };
   const items = [
     ["Toneladas", fmt1(a.totTns) + " t", a.totTns, b?.totTns, bm.tns && `Mejor mes: ${bm.tns.name} (${fmt1(bm.tns.value)} t)`],
@@ -656,9 +722,13 @@ function renderKpis(a, b, yA){
 
 function makeBarChart(id, dsA, dsB, yA, yB, opts = {}){
   if (charts[id]) charts[id].destroy();
-  const color = CHART_COLORS[id] || "#4f8ef7";
-  const datasets = [{ label: String(yA), data: dsA, backgroundColor: color, borderRadius: 5 }];
-  if (dsB) datasets.push({ label: String(yB), data: dsB, backgroundColor: "#8b96ab55", borderColor: "#8b96ab", borderWidth: 1, borderRadius: 5 });
+  const grupos = UI.mode === "grupos";
+  const color = grupos ? "#3ecf8e" : (CHART_COLORS[id] || "#4f8ef7");
+  const nameA = grupos ? "🌿 NOP" : String(yA);
+  const nameB = grupos ? "Convencional" : String(yB);
+  const colorB = grupos ? "#4f8ef7" : "#8b96ab55";
+  const datasets = [{ label: nameA, data: dsA, backgroundColor: color, borderRadius: 5 }];
+  if (dsB) datasets.push({ label: nameB, data: dsB, backgroundColor: colorB, borderColor: grupos ? colorB : "#8b96ab", borderWidth: grupos ? 0 : 1, borderRadius: 5 });
   charts[id] = new Chart(document.getElementById(id), {
     type: "bar",
     data: { labels: MESES, datasets },
@@ -666,6 +736,7 @@ function makeBarChart(id, dsA, dsB, yA, yB, opts = {}){
       responsive: true, maintainAspectRatio: false,
       onClick: (e, els) => {
         if (!els || !els.length) return;
+        if (grupos){ openDetail(els[0].index, yA, els[0].datasetIndex === 1 ? "conv" : "nop"); return; }
         const year = els[0].datasetIndex === 1 && yB ? yB : yA;
         openDetail(els[0].index, year);
       },
@@ -683,11 +754,13 @@ const detailBg = document.getElementById("detailBg");
 document.getElementById("detailClose").onclick = () => detailBg.classList.remove("open");
 detailBg.onclick = e => { if (e.target === detailBg) detailBg.classList.remove("open"); };
 
-function openDetail(monthIdx, year){
-  const recs = getRecords()
-    .filter(r => r.year === year && r.month === monthIdx + 1)
-    .sort((a, b) => (a.etd?.d || 0) - (b.etd?.d || 0));
-  document.getElementById("detailTitle").textContent = `${MESES[monthIdx]} ${year} — ${recs.length} carga(s)`;
+function openDetail(monthIdx, year, group){
+  let recs = getRecords().filter(r => r.year === year && r.month === monthIdx + 1);
+  if (group === "nop") recs = recs.filter(r => isNOP(r.product));
+  if (group === "conv") recs = recs.filter(r => !isNOP(r.product));
+  recs.sort((a, b) => (a.etd?.d || 0) - (b.etd?.d || 0));
+  const suffix = group === "nop" ? " · 🌿 NOP" : group === "conv" ? " · Convencional" : "";
+  document.getElementById("detailTitle").textContent = `${MESES[monthIdx]} ${year} — ${recs.length} carga(s)${suffix}`;
   document.getElementById("detailSub").textContent =
     "Cargas con ETD en este mes, con los valores exactos que suma el dashboard.";
   let tot = { tns: 0, usd: 0, com: 0, cont: 0 };
@@ -798,28 +871,44 @@ function render(){
   if (!years.includes(UI.year)) UI.year = years[0];
 
   const yA = UI.year;
-  let yB = null;
-  if (UI.mode === "comparar"){
-    const sel = document.getElementById("selCompare");
-    yB = sel.value && sel.value !== "none" && +sel.value !== yA ? +sel.value : null;
-  }
   const recs = getRecords();
-  const a = aggregate(recs, yA);
-  const b = yB != null ? aggregate(recs, yB) : null;
 
-  renderKpis(a, b, yA);
-  makeBarChart("chTns", a.tns, b?.tns, yA, yB);
-  makeBarChart("chUsd", a.usd, b?.usd, yA, yB, { usd: true });
-  makeBarChart("chCom", a.com, b?.com, yA, yB, { usd: true });
-  makeBarChart("chEtd", a.etdCount, b?.etdCount, yA, yB);
-  renderBizChart(a, yA);
-  renderProductChart(a, yA);
-  renderProductTable(a, yA);
-  renderProductCompare(a, b, yA, yB);
+  if (UI.mode === "grupos"){
+    // dos series del mismo año: NOP vs Convencional
+    const aN = aggregate(recs.filter(r => isNOP(r.product)), yA);
+    const aC = aggregate(recs.filter(r => !isNOP(r.product)), yA);
+    const a = aggregate(recs, yA);
+    renderKpis(aN, aC, yA);
+    makeBarChart("chTns", aN.tns, aC.tns, yA, yA);
+    makeBarChart("chUsd", aN.usd, aC.usd, yA, yA, { usd: true });
+    makeBarChart("chCom", aN.com, aC.com, yA, yA, { usd: true });
+    makeBarChart("chEtd", aN.etdCount, aC.etdCount, yA, yA);
+    renderBizChart(a, yA);
+    renderProductChart(a, yA);
+    renderProductTable(a, yA);
+    renderProductCompare(null, null, yA, null);   // oculta la tabla de comparación anual
+  } else {
+    let yB = null;
+    if (UI.mode === "comparar"){
+      const sel = document.getElementById("selCompare");
+      yB = sel.value && sel.value !== "none" && +sel.value !== yA ? +sel.value : null;
+    }
+    const a = aggregate(recs, yA);
+    const b = yB != null ? aggregate(recs, yB) : null;
+    renderKpis(a, b, yA);
+    makeBarChart("chTns", a.tns, b?.tns, yA, yB);
+    makeBarChart("chUsd", a.usd, b?.usd, yA, yB, { usd: true });
+    makeBarChart("chCom", a.com, b?.com, yA, yB, { usd: true });
+    makeBarChart("chEtd", a.etdCount, b?.etdCount, yA, yB);
+    renderBizChart(a, yA);
+    renderProductChart(a, yA);
+    renderProductTable(a, yA);
+    renderProductCompare(a, b, yA, yB);
+  }
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
   document.getElementById("footer").textContent =
-    `${bizName} · Mes/año según "ETD" · USD = "${CONFIG.axt.USD_COL}" · Comisión = "${CONFIG.axt.COMISION.col}" (${CONFIG.axt.COMISION.mode}) · columnas detectadas por encabezado de fila ${CONFIG.axt.HEADER_ROW}${demoMode ? " · DATOS DEMO" : ""}`;
+    `${bizName} · Mes/año según "ETD" · USD = "${CONFIG.axt.USD_COL}" · Comisión = "${CONFIG.axt.COMISION.col}" (${CONFIG.axt.COMISION.mode})${UI.filter.mode !== "todos" ? " · FILTRO DE PRODUCTOS ACTIVO" : ""}${demoMode ? " · DATOS DEMO" : ""}`;
 }
 
 /* ---------- controles ---------- */
@@ -850,6 +939,8 @@ function renderControls(){
   const isSoon = biz && biz.status === "soon";
   pills.style.display = isSoon ? "none" : "";
   document.getElementById("modeSeg").style.display = isSoon ? "none" : "";
+  document.getElementById("btnFilter").style.display = isSoon ? "none" : "";
+  if (isSoon) document.getElementById("filterPanel").style.display = "none";
   if (!years.includes(UI.year)) UI.year = years[0];
   pills.innerHTML = years.map(y => `<div class="pill ${y === UI.year ? "active" : ""}" data-y="${y}">${y}</div>`).join("");
   pills.querySelectorAll(".pill").forEach(p => {
@@ -875,6 +966,77 @@ function renderControls(){
     wrap.style.display = "none";
   }
 }
+
+/* ---------- filtro de productos ---------- */
+
+function allProducts(){
+  return [...new Set(getRecordsUnfiltered().map(r => r.product))].sort((a, b) => a.localeCompare(b, "es"));
+}
+
+function filterLabel(){
+  const f = UI.filter;
+  if (f.mode === "nop") return "🎛 Productos: Solo NOP";
+  if (f.mode === "conv") return "🎛 Productos: Solo Convencional";
+  if (f.mode === "custom"){
+    const n = (f.sel || []).length;
+    return `🎛 Productos: ${n} de ${allProducts().length}`;
+  }
+  return "🎛 Productos: Todos";
+}
+
+function refreshAfterFilter(){
+  saveUI();
+  document.getElementById("btnFilter").textContent = filterLabel();
+  document.getElementById("btnFilter").classList.toggle("filtering", UI.filter.mode !== "todos");
+  renderFilterPanel();
+  renderControls();
+  render();
+}
+
+function renderFilterPanel(){
+  const panel = document.getElementById("filterPanel");
+  // chips activos
+  panel.querySelectorAll(".chip").forEach(ch => {
+    ch.classList.toggle("active", UI.filter.mode === ch.dataset.fmode);
+    ch.onclick = () => { UI.filter = { mode: ch.dataset.fmode, sel: null }; refreshAfterFilter(); };
+  });
+  // checklist
+  const prods = allProducts();
+  const sel = UI.filter.mode === "custom" ? (UI.filter.sel || [])
+    : UI.filter.mode === "nop" ? prods.filter(isNOP)
+    : UI.filter.mode === "conv" ? prods.filter(p => !isNOP(p))
+    : prods;   // todos
+  const box = document.getElementById("prodChecks");
+  box.innerHTML = prods.map(p => `
+    <label><input type="checkbox" value="${p.replace(/"/g, "&quot;")}" ${sel.includes(p) ? "checked" : ""}>
+    ${isNOP(p) ? "🌿 " : ""}${p}</label>`).join("");
+  box.querySelectorAll("input").forEach(inp => {
+    inp.onchange = () => {
+      const chosen = [...box.querySelectorAll("input:checked")].map(i => i.value);
+      UI.filter = chosen.length === prods.length ? { mode: "todos", sel: null } : { mode: "custom", sel: chosen };
+      refreshAfterFilter();
+    };
+  });
+}
+
+document.getElementById("btnFilter").onclick = () => {
+  const panel = document.getElementById("filterPanel");
+  const open = panel.style.display !== "none";
+  panel.style.display = open ? "none" : "";
+  if (!open) renderFilterPanel();
+};
+document.getElementById("fltAll").onclick = () => { UI.filter = { mode: "todos", sel: null }; refreshAfterFilter(); };
+document.getElementById("fltNone").onclick = () => { UI.filter = { mode: "custom", sel: [] }; refreshAfterFilter(); };
+document.getElementById("fltInvert").onclick = () => {
+  const prods = allProducts();
+  const cur = UI.filter.mode === "custom" ? (UI.filter.sel || [])
+    : UI.filter.mode === "nop" ? prods.filter(isNOP)
+    : UI.filter.mode === "conv" ? prods.filter(p => !isNOP(p))
+    : prods;
+  const inv = prods.filter(p => !cur.includes(p));
+  UI.filter = inv.length === prods.length ? { mode: "todos", sel: null } : { mode: "custom", sel: inv };
+  refreshAfterFilter();
+};
 
 /* ---------- config ---------- */
 
@@ -949,6 +1111,8 @@ document.getElementById("cfgClear").onclick = async () => {
 async function init(){
   await loadData();
   renderTabs();
+  document.getElementById("btnFilter").textContent = filterLabel();
+  document.getElementById("btnFilter").classList.toggle("filtering", UI.filter.mode !== "todos");
   renderControls();
   render();
 }
