@@ -180,7 +180,7 @@
         </select>
       </div>
       <div>
-        <label>Comisión (col "Price Serv")</label>
+        <label>Comisión (col "Monto LT")</label>
         <select id="cfgComMode">
           <option value="suma">Sumar tal cual</option>
           <option value="porTon">× Tns (precio unitario)</option>
@@ -215,7 +215,7 @@ const SHEET_DEFAULTS = {
   HEADER_ROW: 2,
   DATE_FORMAT: "DMY",
   USD_COL: "TOTAL FINAL",                          // "TOTAL FINAL" o "Total CFR"
-  COMISION: { mode: "suma", col: "Price Serv" },   // "suma" o "porTon" (Price Serv × Tns)
+  COMISION: { mode: "suma", col: "Monto LT" },     // "suma" o "porTon" (Monto LT × Tns)
 };
 /* Las columnas se buscan por su ENCABEZADO en la fila de encabezados,
    así podés reordenar columnas en la planilla sin romper nada.
@@ -254,6 +254,8 @@ function loadConfig(){
     // migrar letras guardadas por versiones anteriores a nombres de encabezado
     if (LETTER_TO_HEADER[c.USD_COL]) c.USD_COL = LETTER_TO_HEADER[c.USD_COL];
     if (LETTER_TO_HEADER[c.COMISION.col]) c.COMISION.col = LETTER_TO_HEADER[c.COMISION.col];
+    // la comisión ahora sale de "Monto LT" (antes se usaba Price Serv)
+    if (c.COMISION.col === "Price Serv") c.COMISION.col = "Monto LT";
     cfg[b.key] = c;
   }
   return cfg;
@@ -450,9 +452,9 @@ function buildRecords(rows, cfg, bizKey){
     throw new Error(`No encuentro los encabezados ${critical.map(h => `"${h}"`).join(", ")}. En la fila detectada como encabezados leí: ${found}.`);
   }
   let usdIdx = resolveHeaderName(cfg.USD_COL, hmap);
-  let comIdx = resolveHeaderName(cfg.COMISION.col, hmap);
+  const comIdx = resolveHeaderName(cfg.COMISION.col, hmap);
   if (usdIdx < 0) usdIdx = colToIndex("AG");
-  if (comIdx < 0) comIdx = colToIndex("AF");
+  // si no existe el encabezado de comisión, mejor 0 visible que sumar otra columna en silencio
   const recs = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++){
     const r = rows[i]; if (!r) continue;
@@ -461,9 +463,9 @@ function buildRecords(rows, cfg, bizKey){
     const product = String(r[C.product] ?? "").trim();
     if (!etd && !tns && !product) continue;
     if (!etd) continue;
-    const com = cfg.COMISION.mode === "porTon"
+    const com = comIdx < 0 ? 0 : (cfg.COMISION.mode === "porTon"
       ? parseNumber(r[comIdx]) * tns
-      : parseNumber(r[comIdx]);
+      : parseNumber(r[comIdx]));
     recs.push({
       biz: bizKey,
       year: etd.y, month: etd.mo,
@@ -927,7 +929,7 @@ document.getElementById("cfgSave").onclick = async () => {
     HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
     USD_COL: document.getElementById("cfgUsdCol").value,
-    COMISION: { mode: document.getElementById("cfgComMode").value, col: "Price Serv" },
+    COMISION: { mode: document.getElementById("cfgComMode").value, col: "Monto LT" },
   };
   persistConfig();
   closeConfig();
