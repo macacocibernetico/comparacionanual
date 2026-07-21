@@ -185,38 +185,50 @@
     <p class="hint">Se guarda solo en este navegador (localStorage). No queda en el código ni en GitHub, así el repo público no expone datos sensibles.</p>
     <label>Negocio</label>
     <select id="cfgBiz"></select>
-    <label>Sheet ID <span style="color:var(--muted)">(o pegá la URL completa de la planilla)</span></label>
-    <input id="cfgSheetId" placeholder="1AbC…" autocomplete="off">
-    <label>Nombre de la pestaña</label>
-    <input id="cfgSheetName" placeholder="Hoja1" autocomplete="off">
-    <div class="row">
-      <div>
-        <label>Fila de encabezados</label>
-        <input id="cfgHeaderRow" type="number" min="1" value="2">
-      </div>
-      <div>
-        <label>Formato de fecha</label>
-        <select id="cfgDateFormat">
-          <option value="DMY">dd/mm/aaaa</option>
-          <option value="MDY">mm/dd/aaaa</option>
-        </select>
-      </div>
+    <div class="seg" style="margin-top:14px">
+      <button id="cfgTabBtnSheet" class="active" type="button">Planilla</button>
+      <button id="cfgTabBtnCols" type="button">Columnas</button>
     </div>
-    <div class="row">
-      <div>
-        <label>Columna USD (por encabezado)</label>
-        <select id="cfgUsdCol">
-          <option value="TOTAL FINAL">TOTAL FINAL</option>
-          <option value="Total CFR">Total CFR</option>
-        </select>
+    <div id="cfgTabSheet">
+      <label>Sheet ID <span style="color:var(--muted)">(o pegá la URL completa de la planilla)</span></label>
+      <input id="cfgSheetId" placeholder="1AbC…" autocomplete="off">
+      <label>Nombre de la pestaña</label>
+      <input id="cfgSheetName" placeholder="Hoja1" autocomplete="off">
+      <div class="row">
+        <div>
+          <label>Fila de encabezados</label>
+          <input id="cfgHeaderRow" type="number" min="1" value="2">
+        </div>
+        <div>
+          <label>Formato de fecha</label>
+          <select id="cfgDateFormat">
+            <option value="DMY">dd/mm/aaaa</option>
+            <option value="MDY">mm/dd/aaaa</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label>Comisión (col "Monto LT")</label>
-        <select id="cfgComMode">
-          <option value="suma">Sumar tal cual</option>
-          <option value="porTon">× Tns (precio unitario)</option>
-        </select>
+      <label>Cálculo de la comisión</label>
+      <select id="cfgComMode">
+        <option value="suma">Sumar la columna tal cual</option>
+        <option value="porTon">× Tns (la columna es precio unitario)</option>
+      </select>
+    </div>
+    <div id="cfgTabCols" style="display:none">
+      <p class="hint" style="margin-top:12px">Nombre EXACTO del encabezado de cada columna en la fila de encabezados de ESTE negocio. Si esta planilla usa otros nombres, ponelos acá. No importan mayúsculas ni acentos.</p>
+      <div class="row">
+        <div><label>Fecha (define mes/año)</label><input id="cfgColEtd" placeholder="ETD"></div>
+        <div><label>Toneladas</label><input id="cfgColTns" placeholder="Tns"></div>
       </div>
+      <div class="row">
+        <div><label>Producto</label><input id="cfgColProduct" placeholder="Product"></div>
+        <div><label>Contenedores</label><input id="cfgColContainers" placeholder="Containers"></div>
+      </div>
+      <div class="row">
+        <div><label>Facturación (USD)</label><input id="cfgColUsd" placeholder="TOTAL FINAL"></div>
+        <div><label>Comisión</label><input id="cfgColCom" placeholder="Monto LT"></div>
+      </div>
+      <label>Referencia / nombre del negocio</label>
+      <input id="cfgColNegocio" placeholder="Negocio">
     </div>
     <div class="actions">
       <button class="danger" id="cfgClear">Borrar config</button>
@@ -233,8 +245,8 @@
 =================================================== */
 const BUSINESSES = [
   { key: "axt",       name: "AXT",       status: "active" },
+  { key: "brokerage", name: "Brokerage", status: "active" },
   { key: "buzaram",   name: "Buzaram",   status: "soon"   },
-  { key: "brokerage", name: "Brokerage", status: "soon"   },
 ];
 const TOTAL_KEY = "total";
 
@@ -245,23 +257,21 @@ const SHEET_DEFAULTS = {
   GID: "",              // id numérico de la pestaña (#gid=... en la URL); se extrae solo al pegar la URL
   HEADER_ROW: 2,
   DATE_FORMAT: "DMY",
-  USD_COL: "TOTAL FINAL",                          // "TOTAL FINAL" o "Total CFR"
-  COMISION: { mode: "suma", col: "Monto LT" },     // "suma" o "porTon" (Monto LT × Tns)
+  USD_COL: "TOTAL FINAL",                          // encabezado de la columna de facturación
+  COMISION: { mode: "suma", col: "Monto LT" },     // "suma" o "porTon" (comisión × Tns)
+  /* Encabezados de las columnas que usa el dashboard. Editables por negocio
+     desde ⚙️ Config → Columnas, así cada planilla puede tener sus propios nombres. */
+  COLS: {
+    negocio:       "Negocio",
+    tns:           "Tns",
+    product:       "Product",
+    containers:    "Containers",
+    consolidacion: "Consolidación",
+    etd:           "ETD",          // fecha que define mes/año
+  },
 };
-/* Las columnas se buscan por su ENCABEZADO en la fila de encabezados,
-   así podés reordenar columnas en la planilla sin romper nada.
-   El fallback de letra solo se usa si el encabezado no aparece. */
-const COLS = {
-  negocio:       { header: "Negocio",       fallback: "A"  },
-  tns:           { header: "Tns",           fallback: "B"  },
-  product:       { header: "Product",       fallback: "C"  },
-  containers:    { header: "Containers",    fallback: "F"  },
-  consolidacion: { header: "Consolidación", fallback: "K"  },
-  etd:           { header: "ETD",           fallback: "L"  },  // fecha que define mes/año
-  totalCFR:      { header: "Total CFR",     fallback: "AC" },
-  priceServ:     { header: "Price Serv",    fallback: "AF" },
-  totalFinal:    { header: "TOTAL FINAL",   fallback: "AG" },
-};
+/* Fallback por letra, solo si el encabezado no aparece (estructura original AXT) */
+const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", containers: "F", consolidacion: "K", etd: "L" };
 /* migración de configs viejas que guardaban letras */
 const LETTER_TO_HEADER = { AG: "TOTAL FINAL", AC: "Total CFR", AF: "Price Serv" };
 const LS_KEY = "dashboardConfigV2";
@@ -280,8 +290,10 @@ function loadConfig(){
   }
   const cfg = {};
   for (const b of BUSINESSES){
-    const c = { ...SHEET_DEFAULTS, ...(saved[b.key] || {}),
-      COMISION: { ...SHEET_DEFAULTS.COMISION, ...((saved[b.key] || {}).COMISION || {}) } };
+    const s = saved[b.key] || {};
+    const c = { ...SHEET_DEFAULTS, ...s,
+      COMISION: { ...SHEET_DEFAULTS.COMISION, ...(s.COMISION || {}) },
+      COLS: { ...SHEET_DEFAULTS.COLS, ...(s.COLS || {}) } };
     // migrar letras guardadas por versiones anteriores a nombres de encabezado
     if (LETTER_TO_HEADER[c.USD_COL]) c.USD_COL = LETTER_TO_HEADER[c.USD_COL];
     if (LETTER_TO_HEADER[c.COMISION.col]) c.COMISION.col = LETTER_TO_HEADER[c.COMISION.col];
@@ -356,23 +368,7 @@ function findInMap(name, hmap){
   return undefined;
 }
 
-/* Resuelve el índice de una columna: primero por encabezado, después por letra */
-function resolveCol(spec, hmap){
-  const byHeader = findInMap(spec.header, hmap);
-  if (byHeader !== undefined) return { idx: byHeader, byHeader: true };
-  return { idx: colToIndex(spec.fallback), byHeader: false };
-}
-
-/* Resuelve un nombre de encabezado suelto (config USD/Comisión) */
-function resolveHeaderName(name, hmap){
-  const idx = findInMap(name, hmap);
-  if (idx !== undefined) return idx;
-  // fallback: si coincide con alguna COLS conocida, usar su letra
-  for (const k in COLS){
-    if (normHeader(COLS[k].header) === normHeader(name)) return colToIndex(COLS[k].fallback);
-  }
-  return -1;
-}
+/* (la resolución de columnas usa los encabezados configurados por negocio: cfg.COLS) */
 
 function parseCSV(text){
   const rows = []; let row = [], field = "", inQ = false;
@@ -474,7 +470,7 @@ function countContainers(v){
    Google a veces omite filas vacías al exportar, así que el número de
    fila configurado puede no coincidir con la posición real en el CSV. */
 function findHeaderRow(rows, cfg){
-  const expected = Object.values(COLS).map(c => c.header);
+  const expected = [...Object.values(cfg.COLS), cfg.USD_COL, cfg.COMISION.col];
   const limit = Math.min(rows.length, Math.max(cfg.HEADER_ROW + 8, 12));
   let best = -1, bestScore = 0;
   for (let i = 0; i < limit; i++){
@@ -490,21 +486,22 @@ function buildRecords(rows, cfg, bizKey){
   const headerRowIdx = findHeaderRow(rows, cfg);
   const hmap = headerMap(rows[headerRowIdx]);
   const C = {}, missing = [];
-  for (const k in COLS){
-    const r = resolveCol(COLS[k], hmap);
-    C[k] = r.idx;
-    if (!r.byHeader) missing.push(COLS[k].header);
+  for (const k in cfg.COLS){
+    const idx = findInMap(cfg.COLS[k], hmap);
+    if (idx !== undefined) C[k] = idx;
+    else { C[k] = COL_FALLBACK[k] !== undefined ? colToIndex(COL_FALLBACK[k]) : -1; missing.push(cfg.COLS[k]); }
   }
   // ETD y Tns son críticas: sin sus encabezados, mejor avisar que adivinar
-  const critical = ["ETD", "Tns"].filter(h => missing.includes(h));
+  const critical = [cfg.COLS.etd, cfg.COLS.tns].filter(h => missing.includes(h));
   if (critical.length && Object.keys(hmap).length){
     const found = Object.keys(hmap).slice(0, 12).join(", ") || "(ninguno)";
     throw new Error(`No encuentro los encabezados ${critical.map(h => `"${h}"`).join(", ")}. En la fila detectada como encabezados leí: ${found}.`);
   }
-  let usdIdx = resolveHeaderName(cfg.USD_COL, hmap);
-  const comIdx = resolveHeaderName(cfg.COMISION.col, hmap);
-  if (usdIdx < 0) usdIdx = colToIndex("AG");
+  let usdIdx = findInMap(cfg.USD_COL, hmap);
+  if (usdIdx === undefined) usdIdx = colToIndex("AG");
   // si no existe el encabezado de comisión, mejor 0 visible que sumar otra columna en silencio
+  let comIdx = findInMap(cfg.COMISION.col, hmap);
+  if (comIdx === undefined) comIdx = -1;
   const recs = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++){
     const r = rows[i]; if (!r) continue;
@@ -899,8 +896,13 @@ function render(){
 
   const years = yearsAvailable();
   if (!years.length){
+    for (const k in charts){ charts[k].destroy(); delete charts[k]; }
     document.getElementById("kpis").innerHTML = "";
-    document.getElementById("prodTable").innerHTML = '<p style="color:var(--muted)">Sin datos para mostrar.</p>';
+    const unconfigured = UI.biz !== TOTAL_KEY && CONFIG[UI.biz] && !CONFIG[UI.biz].SHEET_ID;
+    document.getElementById("prodTable").innerHTML = unconfigured
+      ? '<p style="color:var(--muted)">Este negocio todavía no tiene planilla configurada. Tocá <b>⚙️ Config</b>, elegí el negocio y cargale su Sheet ID (y en la pestaña "Columnas" los encabezados si son distintos).</p>'
+      : '<p style="color:var(--muted)">Sin datos para mostrar.</p>';
+    document.getElementById("footer").textContent = "";
     return;
   }
   if (!years.includes(UI.year)) UI.year = years[0];
@@ -969,8 +971,9 @@ function render(){
   renderProductCompare(a, b, yA, yB);
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
+  const cc = CONFIG[UI.biz] || CONFIG.axt;
   document.getElementById("footer").textContent =
-    `${bizName} · Mes/año según "ETD" · USD = "${CONFIG.axt.USD_COL}" · Comisión = "${CONFIG.axt.COMISION.col}" (${CONFIG.axt.COMISION.mode})${UI.filter.mode !== "todos" ? " · FILTRO DE PRODUCTOS ACTIVO" : ""}${UI.split && !splitCharts ? " · 🌿 el desglose NOP/Conv en gráficos aplica con hasta 2 años (los KPIs sí lo muestran)" : ""}${demoMode ? " · DATOS DEMO" : ""}`;
+    `${bizName} · Mes/año según "${cc.COLS.etd}" · USD = "${cc.USD_COL}" · Comisión = "${cc.COMISION.col}" (${cc.COMISION.mode})${UI.biz === TOTAL_KEY ? " · cada negocio usa sus propias columnas configuradas" : ""}${UI.filter.mode !== "todos" ? " · FILTRO DE PRODUCTOS ACTIVO" : ""}${UI.split && !splitCharts ? " · 🌿 el desglose NOP/Conv en gráficos aplica con hasta 2 años (los KPIs sí lo muestran)" : ""}${demoMode ? " · DATOS DEMO" : ""}`;
 }
 
 /* ---------- controles ---------- */
@@ -988,6 +991,8 @@ function renderTabs(){
   el.querySelectorAll(".tab").forEach(tab => {
     tab.onclick = () => {
       UI.biz = tab.dataset.key;
+      const bz = BUSINESSES.find(b => b.key === UI.biz);
+      if (bz && bz.status === "active") cfgBizKey = UI.biz;   // ⚙️ Config abre en este negocio
       saveUI();
       renderTabs(); renderControls(); render();
     };
@@ -1131,9 +1136,24 @@ function fillConfigForm(){
   document.getElementById("cfgSheetName").value = c.SHEET_NAME;
   document.getElementById("cfgHeaderRow").value = c.HEADER_ROW;
   document.getElementById("cfgDateFormat").value = c.DATE_FORMAT;
-  document.getElementById("cfgUsdCol").value = c.USD_COL;
   document.getElementById("cfgComMode").value = c.COMISION.mode;
+  document.getElementById("cfgColEtd").value = c.COLS.etd;
+  document.getElementById("cfgColTns").value = c.COLS.tns;
+  document.getElementById("cfgColProduct").value = c.COLS.product;
+  document.getElementById("cfgColContainers").value = c.COLS.containers;
+  document.getElementById("cfgColNegocio").value = c.COLS.negocio;
+  document.getElementById("cfgColUsd").value = c.USD_COL;
+  document.getElementById("cfgColCom").value = c.COMISION.col;
 }
+
+function showCfgTab(which){
+  document.getElementById("cfgTabSheet").style.display = which === "sheet" ? "" : "none";
+  document.getElementById("cfgTabCols").style.display = which === "cols" ? "" : "none";
+  document.getElementById("cfgTabBtnSheet").classList.toggle("active", which === "sheet");
+  document.getElementById("cfgTabBtnCols").classList.toggle("active", which === "cols");
+}
+document.getElementById("cfgTabBtnSheet").onclick = () => showCfgTab("sheet");
+document.getElementById("cfgTabBtnCols").onclick = () => showCfgTab("cols");
 
 function openConfig(){
   const selBiz = document.getElementById("cfgBiz");
@@ -1143,6 +1163,7 @@ function openConfig(){
   selBiz.value = cfgBizKey;
   selBiz.onchange = () => { cfgBizKey = selBiz.value; fillConfigForm(); };
   fillConfigForm();
+  showCfgTab("sheet");
   modalBg.classList.add("open");
 }
 function closeConfig(){ modalBg.classList.remove("open"); }
@@ -1166,14 +1187,24 @@ document.getElementById("cfgSave").onclick = async () => {
   const m = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);   // acepta URL completa
   if (m) id = m[1];
   const g = raw.match(/[#&?]gid=(\d+)/);                          // extrae el gid de la URL
+  const txt = elId => document.getElementById(elId).value.trim();
+  const D = SHEET_DEFAULTS;
   CONFIG[cfgBizKey] = {
     SHEET_ID: id,
     GID: g ? g[1] : (CONFIG[cfgBizKey].GID || ""),
-    SHEET_NAME: document.getElementById("cfgSheetName").value.trim() || "Hoja1",
+    SHEET_NAME: txt("cfgSheetName") || "Hoja1",
     HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
-    USD_COL: document.getElementById("cfgUsdCol").value,
-    COMISION: { mode: document.getElementById("cfgComMode").value, col: "Monto LT" },
+    USD_COL: txt("cfgColUsd") || D.USD_COL,
+    COMISION: { mode: document.getElementById("cfgComMode").value, col: txt("cfgColCom") || D.COMISION.col },
+    COLS: {
+      negocio:       txt("cfgColNegocio")    || D.COLS.negocio,
+      tns:           txt("cfgColTns")        || D.COLS.tns,
+      product:       txt("cfgColProduct")    || D.COLS.product,
+      containers:    txt("cfgColContainers") || D.COLS.containers,
+      consolidacion: CONFIG[cfgBizKey].COLS.consolidacion || D.COLS.consolidacion,
+      etd:           txt("cfgColEtd")        || D.COLS.etd,
+    },
   };
   persistConfig();
   closeConfig();
