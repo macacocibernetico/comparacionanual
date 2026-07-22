@@ -634,23 +634,28 @@ async function fetchBiz(key){
   const errs = [];
   const urlJson = `${base}/gviz/tq?tqx=out:json&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`;
   const urlExport = `${base}/export?format=csv&gid=${encodeURIComponent(cfg.GID || "0")}&t=${Date.now()}`;
-  let recsJson = null;
+  let recsJson = null, recsFull = null;
   try { recsJson = await tryFetch(urlJson, gvizJsonToRows); }
   catch(e){ errs.push(e); }
-  // El export solo participa si el GID está configurado explícitamente:
-  // sin GID apuntaría a la primera pestaña de la planilla, que puede ser otra.
-  if (cfg.GID){
-    let recsFull = null;
-    try { recsFull = await tryFetch(urlExport, parseCSV); }
-    catch(e){ errs.push(e); }
-    if (recsJson && recsFull){
-      return recsFull.length > recsJson.length
-        ? { recs: recsFull, src: "completo, filtro activo en Sheets" }
-        : { recs: recsJson, src: "valores exactos" };
+  try { recsFull = await tryFetch(urlExport, parseCSV); }
+  catch(e){ errs.push(e); }
+  if (recsJson && recsFull){
+    // Sin GID, el export apunta a la primera pestaña: verificar que sea la MISMA
+    // pestaña comparando operaciones (referencia + mes + toneladas). Si no coincide,
+    // se descarta el export para no mezclar datos de otra pestaña.
+    let sameTab = true;
+    if (!cfg.GID){
+      const recKey = r => `${r.negocio}|${r.year}-${r.month}|${r.tns}`;
+      const keys = new Set(recsFull.map(recKey));
+      const hits = recsJson.filter(r => keys.has(recKey(r))).length;
+      sameTab = recsJson.length > 0 && hits / recsJson.length >= 0.8;
     }
-    if (recsFull) return { recs: recsFull, src: "export" };
+    if (sameTab && recsFull.length > recsJson.length)
+      return { recs: recsFull, src: "completo, filtro activo en Sheets" };
+    return { recs: recsJson, src: "valores exactos" };
   }
-  if (recsJson) return { recs: recsJson, src: cfg.GID ? "valores exactos" : "valores exactos, sin GID" };
+  if (recsJson) return { recs: recsJson, src: "valores exactos" };
+  if (recsFull && cfg.GID) return { recs: recsFull, src: "export" };
   // últimos recursos si todo falló
   const fallbacks = [
     [urlExport, parseCSV, "export"],
@@ -946,8 +951,11 @@ function render(){
     for (const k in charts){ charts[k].destroy(); delete charts[k]; }
     document.getElementById("kpis").innerHTML = "";
     const unconfigured = UI.biz !== TOTAL_KEY && CONFIG[UI.biz] && !CONFIG[UI.biz].SHEET_ID;
+    const filteredOut = !unconfigured && getRecordsUnfiltered().length > 0;
     document.getElementById("prodTable").innerHTML = unconfigured
       ? '<p style="color:var(--muted)">Este negocio todavía no tiene planilla configurada. Tocá <b>⚙️ Config</b>, elegí el negocio y cargale su Sheet ID (y en la pestaña "Columnas" los encabezados si son distintos).</p>'
+      : filteredOut
+      ? '<p style="color:var(--muted)">El filtro de productos activo está dejando afuera todas las cargas de esta vista. Tocá <b>🎛 Productos</b> y elegí "Todos".</p>'
       : '<p style="color:var(--muted)">Sin datos para mostrar.</p>';
     document.getElementById("footer").textContent = "";
     return;
