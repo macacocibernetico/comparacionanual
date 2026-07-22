@@ -192,8 +192,16 @@
     <div id="cfgTabSheet">
       <label>Sheet ID <span style="color:var(--muted)">(o pegá la URL completa de la planilla)</span></label>
       <input id="cfgSheetId" placeholder="1AbC…" autocomplete="off">
-      <label>Nombre de la pestaña</label>
-      <input id="cfgSheetName" placeholder="Hoja1" autocomplete="off">
+      <div class="row">
+        <div>
+          <label>Nombre de la pestaña</label>
+          <input id="cfgSheetName" placeholder="Hoja1" autocomplete="off">
+        </div>
+        <div>
+          <label>GID de la pestaña <span style="color:var(--muted)">(#gid=… en la URL)</span></label>
+          <input id="cfgGid" placeholder="0" autocomplete="off">
+        </div>
+      </div>
       <div class="row">
         <div>
           <label>Fila de encabezados</label>
@@ -607,30 +615,53 @@ async function fetchCsvText(url){
   return text;
 }
 
-/* Intenta varios endpoints de Google en orden. gviz con headers=N devuelve los
-   encabezados como etiquetas de texto (no los vacía por el tipo de la columna,
-   que es lo que pasa con headers=0 en columnas de fechas/números como ETD o Tns). */
+/* Lee la planilla combinando dos endpoints de Google:
+   - gviz JSON: valores crudos sin redondeo de formato… pero respeta el filtro
+     activo en Sheets (solo manda las filas visibles).
+   - export CSV: manda TODAS las filas aunque haya un filtro activo, pero con los
+     valores como se muestran en pantalla.
+   Si el export trae más filas que gviz, hay un filtro ocultando datos → se usa
+   el export completo. Si traen lo mismo, se usa gviz (máxima precisión). */
 async function fetchBiz(key){
   const cfg = CONFIG[key];
   const base = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}`;
   const sheetQ = encodeURIComponent(cfg.SHEET_NAME);
-  const attempts = [
-    // 1º: gviz JSON → valores crudos, sin redondeo del formato de celda (máxima precisión)
-    { url: `${base}/gviz/tq?tqx=out:json&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`, parse: gvizJsonToRows },
-    { url: `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`, parse: parseCSV },
-    { url: `${base}/export?format=csv&gid=${encodeURIComponent(cfg.GID || "0")}&t=${Date.now()}`, parse: parseCSV },
-    { url: `${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=0&t=${Date.now()}`, parse: parseCSV },
-  ];
-  let lastErr = null;
-  for (const a of attempts){
-    try {
-      const text = await fetchCsvText(a.url);
-      const recs = buildRecords(a.parse(text), cfg, key);
-      if (!recs.length) throw new Error("No se encontraron filas con fecha ETD válida.");
-      return recs;
-    } catch(e){ lastErr = e; }
+  const tryFetch = async (url, parse) => {
+    const recs = buildRecords(parse(await fetchCsvText(url)), cfg, key);
+    if (!recs.length) throw new Error("No se encontraron filas con fecha válida.");
+    return recs;
+  };
+  const errs = [];
+  const urlJson = `${base}/gviz/tq?tqx=out:json&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`;
+  const urlExport = `${base}/export?format=csv&gid=${encodeURIComponent(cfg.GID || "0")}&t=${Date.now()}`;
+  let recsJson = null;
+  try { recsJson = await tryFetch(urlJson, gvizJsonToRows); }
+  catch(e){ errs.push(e); }
+  // El export solo participa si el GID está configurado explícitamente:
+  // sin GID apuntaría a la primera pestaña de la planilla, que puede ser otra.
+  if (cfg.GID){
+    let recsFull = null;
+    try { recsFull = await tryFetch(urlExport, parseCSV); }
+    catch(e){ errs.push(e); }
+    if (recsJson && recsFull){
+      return recsFull.length > recsJson.length
+        ? { recs: recsFull, src: "completo, filtro activo en Sheets" }
+        : { recs: recsJson, src: "valores exactos" };
+    }
+    if (recsFull) return { recs: recsFull, src: "export" };
   }
-  throw lastErr;
+  if (recsJson) return { recs: recsJson, src: cfg.GID ? "valores exactos" : "valores exactos, sin GID" };
+  // últimos recursos si todo falló
+  const fallbacks = [
+    [urlExport, parseCSV, "export"],
+    [`${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`, parseCSV, "csv"],
+    [`${base}/gviz/tq?tqx=out:csv&sheet=${sheetQ}&headers=0&t=${Date.now()}`, parseCSV, "csv"],
+  ];
+  for (const [u, p, s] of fallbacks){
+    try { return { recs: await tryFetch(u, p), src: s }; }
+    catch(e){ errs.push(e); }
+  }
+  throw errs[errs.length - 1] || new Error("No se pudo cargar la planilla.");
 }
 
 async function loadData(){
@@ -650,9 +681,13 @@ async function loadData(){
     return;
   }
   status.textContent = "Cargando planillas…";
-  const errors = [];
+  const errors = [], srcInfo = {};
   await Promise.all(configured.map(async b => {
-    try { DATA[b.key] = await fetchBiz(b.key); }
+    try {
+      const r = await fetchBiz(b.key);
+      DATA[b.key] = r.recs;
+      srcInfo[b.key] = r.src;
+    }
     catch(e){ errors.push(`<b>${b.name}:</b> ${e.message}`); }
   }));
   if (errors.length){
@@ -660,8 +695,13 @@ async function loadData(){
     banner.className = "banner err";
     banner.innerHTML = "❌ Error al cargar: " + errors.join(" · ");
   }
-  const n = Object.values(DATA).reduce((s, r) => s + r.length, 0);
-  status.textContent = `${Object.keys(DATA).length} negocio(s) cargado(s) · ${n} operaciones · actualizado ${new Date().toLocaleTimeString("es-AR")}`;
+  const parts = configured
+    .filter(b => DATA[b.key])
+    .map(b => {
+      const yrs = [...new Set(DATA[b.key].map(r => r.year))].sort();
+      return `${b.name}: ${DATA[b.key].length} ops, ${yrs[0]}–${yrs[yrs.length - 1]} (${srcInfo[b.key]})`;
+    });
+  status.textContent = `${parts.join(" · ")} · actualizado ${new Date().toLocaleTimeString("es-AR")}`;
 }
 
 /* ¿Aplica la clasificación NOP/Conv en la vista actual? (Total sí, porque incluye a AXT) */
@@ -1142,6 +1182,7 @@ function fillConfigForm(){
   const c = CONFIG[cfgBizKey];
   document.getElementById("cfgSheetId").value = c.SHEET_ID;
   document.getElementById("cfgSheetName").value = c.SHEET_NAME;
+  document.getElementById("cfgGid").value = c.GID || "";
   document.getElementById("cfgHeaderRow").value = c.HEADER_ROW;
   document.getElementById("cfgDateFormat").value = c.DATE_FORMAT;
   document.getElementById("cfgComMode").value = c.COMISION.mode;
@@ -1196,10 +1237,11 @@ document.getElementById("cfgSave").onclick = async () => {
   if (m) id = m[1];
   const g = raw.match(/[#&?]gid=(\d+)/);                          // extrae el gid de la URL
   const txt = elId => document.getElementById(elId).value.trim();
+  const gidField = txt("cfgGid").replace(/\D/g, "");
   const D = SHEET_DEFAULTS;
   CONFIG[cfgBizKey] = {
     SHEET_ID: id,
-    GID: g ? g[1] : (CONFIG[cfgBizKey].GID || ""),
+    GID: g ? g[1] : gidField,
     SHEET_NAME: txt("cfgSheetName") || "Hoja1",
     HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
