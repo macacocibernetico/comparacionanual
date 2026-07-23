@@ -43,6 +43,7 @@
 
   .banner{background:#3a2f14;border:1px solid #6b5620;color:#f0d48a;padding:10px 14px;border-radius:10px;margin-bottom:18px;font-size:.88rem}
   .banner.err{background:#3a1717;border-color:#6b2020;color:#f0a0a0}
+  .banner.ytd{background:#14293a;border-color:#20506b;color:#8ac6f0}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;overflow:hidden}
@@ -145,6 +146,7 @@
 </header>
 
 <div id="banner" class="banner" style="display:none"></div>
+<div id="ytdNote" class="banner ytd" style="display:none"></div>
 
 <div class="soonview" id="soonView">
   <div class="icon">🚧</div>
@@ -229,11 +231,11 @@
       </div>
       <div class="row">
         <div><label>Producto</label><input id="cfgColProduct" placeholder="Product"></div>
-        <div><label>Contenedores</label><input id="cfgColContainers" placeholder="Containers"></div>
+        <div><label>Facturación (USD)</label><input id="cfgColUsd" placeholder="TOTAL FINAL"></div>
       </div>
       <div class="row">
-        <div><label>Facturación (USD)</label><input id="cfgColUsd" placeholder="TOTAL FINAL"></div>
         <div><label>Comisión</label><input id="cfgColCom" placeholder="Monto LT"></div>
+        <div></div>
       </div>
       <label>Referencia / nombre del negocio</label>
       <input id="cfgColNegocio" placeholder="Negocio">
@@ -285,6 +287,7 @@ const LETTER_TO_HEADER = { AG: "TOTAL FINAL", AC: "Total CFR", AF: "Price Serv" 
 const LS_KEY = "dashboardConfigV2";
 const UI_KEY = "dashboardUI";
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const TNS_POR_CONTENEDOR = 22;   // toneladas promedio por contenedor (para estimar cant. de contenedores)
 
 function loadConfig(){
   let saved = {};
@@ -537,7 +540,7 @@ function buildRecords(rows, cfg, bizKey){
   return recs;
 }
 
-function aggregate(recs, year){
+function aggregate(recs, year, maxMonth = 12){
   const byMonth = () => Array(12).fill(0);
   const agg = {
     tns: byMonth(), usd: byMonth(), com: byMonth(), etdCount: byMonth(),
@@ -545,7 +548,7 @@ function aggregate(recs, year){
     products: {}, prodTotals: {}, bizTotals: {},
   };
   for (const r of recs){
-    if (r.year === year){
+    if (r.year === year && r.month <= maxMonth){
       const m = r.month - 1;
       agg.tns[m] += r.tns; agg.usd[m] += r.usd; agg.com[m] += r.comision;
       agg.totTns += r.tns; agg.totUsd += r.usd; agg.totCom += r.comision;
@@ -555,8 +558,9 @@ function aggregate(recs, year){
       agg.prodTotals[r.product] = (agg.prodTotals[r.product] || 0) + r.tns;
       agg.bizTotals[r.biz] = (agg.bizTotals[r.biz] || 0) + r.tns;
     }
-    if (r.etd && r.etd.y === year) agg.etdCount[r.etd.mo - 1] += 1;
+    if (r.etd && r.etd.y === year && r.etd.mo <= maxMonth) agg.etdCount[r.etd.mo - 1] += 1;
   }
+  agg.contEst = agg.totTns / TNS_POR_CONTENEDOR;   // estimado: no hay dato real de contenedores
   return agg;
 }
 
@@ -744,8 +748,7 @@ function renderKpis(a, b, aN, aC, yA){
     ["Toneladas", "totTns", v => fmt1(v) + " t"],
     ["USD", "totUsd", fmtUsd],
     ["Comisión", "totCom", fmtUsd],
-    ["Contenedores", "totCont", fmt0],
-    ["Negocios", "totNeg", fmt0],
+    ["Contenedores (est.)", "contEst", v => "~" + fmt0(v)],
   ];
   document.getElementById("kpis").innerHTML = defs.map(([label, key, f]) => {
     const lines = [];
@@ -754,6 +757,8 @@ function renderKpis(a, b, aN, aC, yA){
       lines.push(`<div class="extra"><span style="color:var(--green)">🌿 NOP: ${f(aN[key])}</span> · Conv: ${f(aC[key])}</div>`);
     if (!b && !UI.split && bmSrc[key])
       lines.push(`<div class="extra">Mejor mes: ${bmSrc[key].name} (${f(bmSrc[key].value)})</div>`);
+    if (key === "contEst")
+      lines.push(`<div class="extra">estimado: toneladas ÷ ${TNS_POR_CONTENEDOR}</div>`);
     return `
     <div class="kpi ${(!b || UI.split) ? "solo" : ""}">
       <div class="label">${label} · ${yA}</div>
@@ -847,14 +852,15 @@ function openDetail(monthIdx, year, group){
   document.getElementById("detailTitle").textContent = `${MESES[monthIdx]} ${year} — ${recs.length} carga(s)${suffix}`;
   document.getElementById("detailSub").textContent =
     "Cargas con ETD en este mes, con los valores exactos que suma el dashboard.";
-  let tot = { tns: 0, usd: 0, com: 0, cont: 0 };
-  let html = "<table><tr><th>Negocio</th><th>Producto</th><th>ETD</th><th>Tns</th><th>USD</th><th>Comisión</th><th>Cont.</th></tr>";
+  let tot = { tns: 0, usd: 0, com: 0 };
+  let html = "<table><tr><th>Negocio</th><th>Producto</th><th>ETD</th><th>Tns</th><th>USD</th><th>Comisión</th></tr>";
   for (const r of recs){
-    tot.tns += r.tns; tot.usd += r.usd; tot.com += r.comision; tot.cont += r.containers;
+    tot.tns += r.tns; tot.usd += r.usd; tot.com += r.comision;
     html += `<tr><td>${r.negocio || "—"}</td><td>${r.product}</td><td>${fmtDate(r.etd)}</td>
-      <td>${fmt3(r.tns)}</td><td>${fmtUsd(r.usd)}</td><td>${fmtUsd(r.comision)}</td><td>${fmt0(r.containers)}</td></tr>`;
+      <td>${fmt3(r.tns)}</td><td>${fmtUsd(r.usd)}</td><td>${fmtUsd(r.comision)}</td></tr>`;
   }
-  html += `<tr class="total"><td>Total</td><td></td><td></td><td>${fmt3(tot.tns)}</td><td>${fmtUsd(tot.usd)}</td><td>${fmtUsd(tot.com)}</td><td>${fmt0(tot.cont)}</td></tr></table>`;
+  html += `<tr class="total"><td>Total</td><td></td><td></td><td>${fmt3(tot.tns)}</td><td>${fmtUsd(tot.usd)}</td><td>${fmtUsd(tot.com)}</td></tr>
+    <tr class="total"><td>Contenedores (est.)</td><td></td><td></td><td>~${fmt0(tot.tns / TNS_POR_CONTENEDOR)}</td><td></td><td></td></tr></table>`;
   document.getElementById("detailTable").innerHTML = html;
   detailBg.classList.add("open");
 }
@@ -941,6 +947,7 @@ function render(){
     dashView.style.display = "none";
     document.getElementById("soonTitle").textContent = biz.name + " — Próximamente";
     document.getElementById("footer").textContent = "";
+    document.getElementById("ytdNote").style.display = "none";
     return;
   }
   soonView.style.display = "none";
@@ -958,6 +965,7 @@ function render(){
       ? '<p style="color:var(--muted)">El filtro de productos activo está dejando afuera todas las cargas de esta vista. Tocá <b>🎛 Productos</b> y elegí "Todos".</p>'
       : '<p style="color:var(--muted)">Sin datos para mostrar.</p>';
     document.getElementById("footer").textContent = "";
+    document.getElementById("ytdNote").style.display = "none";
     return;
   }
   if (!years.includes(UI.year)) UI.year = years[0];
@@ -975,8 +983,21 @@ function render(){
   }
   cmpYears.sort((x, y) => y - x);
 
-  const a = aggregate(recs, yA);
-  const aggCmp = new Map(cmpYears.map(y => [y, aggregate(recs, y)]));
+  // Comparación "a la misma fecha" (year-to-date): si estoy comparando y el año
+  // en curso está involucrado, corto todos los años hasta el último mes con datos
+  // del año en curso, para no comparar 7 meses contra 12.
+  const nowY = new Date().getFullYear(), nowM = new Date().getMonth() + 1;
+  const involvesCurrent = cmpYears.length > 0 && (yA === nowY || cmpYears.includes(nowY));
+  let cutoff = 12, ytd = false;
+  if (involvesCurrent){
+    const mesesCur = recs.filter(r => r.year === nowY && r.month <= nowM).map(r => r.month);
+    cutoff = Math.min(nowM, mesesCur.length ? Math.max(...mesesCur) : nowM);
+    ytd = cutoff < 12;
+  }
+  const MM = ytd ? cutoff : 12;
+
+  const a = aggregate(recs, yA, MM);
+  const aggCmp = new Map(cmpYears.map(y => [y, aggregate(recs, y, MM)]));
   // para KPIs y tabla de productos: comparar contra el año anterior disponible
   const lower = cmpYears.filter(y => y < yA);
   const yB = lower.length ? Math.max(...lower) : (cmpYears.length ? Math.max(...cmpYears) : null);
@@ -989,8 +1010,17 @@ function render(){
   if (splitOn){
     const nopRecs = recs.filter(r => isNOP(r.product));
     const convRecs = recs.filter(r => !isNOP(r.product));
-    aN = aggregate(nopRecs, yA); aC = aggregate(convRecs, yA);
-    if (splitCharts && yB != null){ bN = aggregate(nopRecs, yB); bC = aggregate(convRecs, yB); }
+    aN = aggregate(nopRecs, yA, MM); aC = aggregate(convRecs, yA, MM);
+    if (splitCharts && yB != null){ bN = aggregate(nopRecs, yB, MM); bC = aggregate(convRecs, yB, MM); }
+  }
+
+  // aviso de comparación year-to-date
+  const ytdNote = document.getElementById("ytdNote");
+  if (ytd){
+    ytdNote.style.display = "";
+    ytdNote.innerHTML = `📅 Comparación <b>a misma fecha</b>: mostrando enero–${MESES[cutoff - 1]} de cada año (el ${nowY} está en curso), para comparar períodos equivalentes.`;
+  } else {
+    ytdNote.style.display = "none";
   }
 
   const MUTED = ["#8b96ab77", "#f7a44f55", "#e06ae055", "#6ae0d855", "#f0d45a55", "#9b7af055"];
@@ -1197,7 +1227,6 @@ function fillConfigForm(){
   document.getElementById("cfgColEtd").value = c.COLS.etd;
   document.getElementById("cfgColTns").value = c.COLS.tns;
   document.getElementById("cfgColProduct").value = c.COLS.product;
-  document.getElementById("cfgColContainers").value = c.COLS.containers;
   document.getElementById("cfgColNegocio").value = c.COLS.negocio;
   document.getElementById("cfgColUsd").value = c.USD_COL;
   document.getElementById("cfgColCom").value = c.COMISION.col;
@@ -1256,12 +1285,12 @@ document.getElementById("cfgSave").onclick = async () => {
     USD_COL: txt("cfgColUsd") || D.USD_COL,
     COMISION: { mode: document.getElementById("cfgComMode").value, col: txt("cfgColCom") || D.COMISION.col },
     COLS: {
-      negocio:       txt("cfgColNegocio")    || D.COLS.negocio,
-      tns:           txt("cfgColTns")        || D.COLS.tns,
-      product:       txt("cfgColProduct")    || D.COLS.product,
-      containers:    txt("cfgColContainers") || D.COLS.containers,
+      negocio:       txt("cfgColNegocio") || D.COLS.negocio,
+      tns:           txt("cfgColTns")     || D.COLS.tns,
+      product:       txt("cfgColProduct") || D.COLS.product,
+      containers:    CONFIG[cfgBizKey].COLS.containers || D.COLS.containers,
       consolidacion: CONFIG[cfgBizKey].COLS.consolidacion || D.COLS.consolidacion,
-      etd:           txt("cfgColEtd")        || D.COLS.etd,
+      etd:           txt("cfgColEtd")     || D.COLS.etd,
     },
   };
   persistConfig();
