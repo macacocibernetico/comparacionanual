@@ -106,6 +106,11 @@
   .checklist input{accent-color:var(--accent)}
   #btnFilter.filtering{border-color:var(--accent2);color:var(--accent2)}
   #btnSplit.active{background:linear-gradient(135deg,#3ecf8e,#4f8ef7);border-color:transparent;color:#fff;font-weight:600}
+  /* Selector de colores */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap}
+  .swatch{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 12px}
+  .swatch span{font-size:.86rem;font-weight:600}
+  .swatch input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer}
 </style>
 </head>
 <body>
@@ -120,6 +125,7 @@
     </div>
     <button id="btnSplit" title="Desglosar todo en NOP vs Convencional">🌿 NOP vs Conv</button>
     <button id="btnFilter">🎛 Productos: Todos</button>
+    <button id="btnColors" title="Cambiar colores de los años">🎨 Colores</button>
     <span id="compareWrap" style="display:none">
       <label style="color:var(--muted);font-size:.85rem">vs </label>
       <select id="selCompare"></select>
@@ -141,6 +147,12 @@
       <button id="fltInvert">Invertir</button>
     </div>
     <div class="checklist" id="prodChecks"></div>
+  </div>
+  <div class="filterpanel" id="colorPanel" style="display:none">
+    <div class="swatches" id="yearSwatches"></div>
+    <div class="checkactions" style="margin-top:10px">
+      <button id="colReset">↺ Restaurar colores por defecto</button>
+    </div>
   </div>
   <div class="sub" id="statusLine">Cargando…</div>
 </header>
@@ -580,6 +592,30 @@ const fmtDate = d => d ? `${d.d ?? "?"}/${d.mo}/${d.y}` : "—";
 
 const PALETTE = ["#4f8ef7","#f7a44f","#3ecf8e","#e06ae0","#f0d45a","#6ae0d8","#f06a6a","#9b7af0","#7fc95b","#f78fb0","#5ba3c9","#c9a35b"];
 const CHART_COLORS = { chTns: "#4f8ef7", chUsd: "#3ecf8e", chCom: "#f7a44f", chEtd: "#9b7af0" };
+
+/* Colores por año: bien distintos entre sí (no apagados) para distinguir barras.
+   Se asignan por posición del año (más reciente primero) y son editables en vivo. */
+const YEAR_COLORS_DEFAULT = ["#4f8ef7", "#f7a44f", "#3ecf8e", "#e06ae0", "#f0d45a", "#6ae0d8", "#f06a6a", "#9b7af0"];
+const NOP_COLORS_DEFAULT = { nop: "#3ecf8e", conv: "#4f8ef7" };
+const COLORS_KEY = "dashboardColors";
+
+function loadColors(){
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(COLORS_KEY)) || {}; } catch(e){}
+  return {
+    years: { ...(saved.years || {}) },                  // { 2026: "#hex", ... }
+    nop: { ...NOP_COLORS_DEFAULT, ...(saved.nop || {}) },
+  };
+}
+let COLORS = loadColors();
+function saveColors(){ localStorage.setItem(COLORS_KEY, JSON.stringify(COLORS)); }
+
+/* Color de un año: el personalizado, o el default según su posición en la lista */
+function yearColor(year, orderedYears){
+  if (COLORS.years[year]) return COLORS.years[year];
+  const i = Math.max(0, (orderedYears || []).indexOf(year));
+  return YEAR_COLORS_DEFAULT[i % YEAR_COLORS_DEFAULT.length];
+}
 
 let DATA = {};        // bizKey -> records
 let charts = {};
@@ -1023,24 +1059,27 @@ function render(){
     ytdNote.style.display = "none";
   }
 
-  const MUTED = ["#8b96ab77", "#f7a44f55", "#e06ae055", "#6ae0d855", "#f0d45a55", "#9b7af055"];
+  // orden de referencia para asignar colores por año (más reciente primero)
+  const colorOrder = [yA, ...cmpYears];
+  const cNop = COLORS.nop.nop, cConv = COLORS.nop.conv;
   const mk = (id, key, opts) => {
     let series;
     if (splitCharts && yB != null && bN){
       series = [
-        { label: `${yA} 🌿NOP`, data: aN[key], color: "#3ecf8e", stack: "A", year: yA, group: "nop" },
-        { label: `${yA} Conv`,  data: aC[key], color: "#4f8ef7", stack: "A", year: yA, group: "conv" },
-        { label: `${yB} 🌿NOP`, data: bN[key], color: "#3ecf8e59", stack: "B", year: yB, group: "nop" },
-        { label: `${yB} Conv`,  data: bC[key], color: "#4f8ef759", stack: "B", year: yB, group: "conv" },
+        { label: `${yA} 🌿NOP`, data: aN[key], color: cNop, stack: "A", year: yA, group: "nop" },
+        { label: `${yA} Conv`,  data: aC[key], color: cConv, stack: "A", year: yA, group: "conv" },
+        { label: `${yB} 🌿NOP`, data: bN[key], color: cNop + "70", stack: "B", year: yB, group: "nop" },
+        { label: `${yB} Conv`,  data: bC[key], color: cConv + "70", stack: "B", year: yB, group: "conv" },
       ];
     } else if (splitCharts){
       series = [
-        { label: "🌿 NOP", data: aN[key], color: "#3ecf8e", year: yA, group: "nop" },
-        { label: "Convencional", data: aC[key], color: "#4f8ef7", year: yA, group: "conv" },
+        { label: "🌿 NOP", data: aN[key], color: cNop, year: yA, group: "nop" },
+        { label: "Convencional", data: aC[key], color: cConv, year: yA, group: "conv" },
       ];
     } else {
-      series = [{ label: String(yA), data: a[key], color: CHART_COLORS[id] || "#4f8ef7", year: yA }];
-      cmpYears.forEach((y, i) => series.push({ label: String(y), data: aggCmp.get(y)[key], color: MUTED[i % MUTED.length], year: y }));
+      // un color propio y distinto por año (editable desde 🎨 Colores)
+      series = [{ label: String(yA), data: a[key], color: yearColor(yA, colorOrder), year: yA }];
+      cmpYears.forEach(y => series.push({ label: String(y), data: aggCmp.get(y)[key], color: yearColor(y, colorOrder), year: y }));
     }
     makeChart(id, series, opts);
   };
@@ -1097,7 +1136,12 @@ function renderControls(){
   btnSplit.style.display = (isSoon || !bizAllowsSplit()) ? "none" : "";
   btnSplit.classList.toggle("active", !!UI.split);
   btnSplit.onclick = () => { UI.split = !UI.split; saveUI(); renderControls(); render(); };
-  if (isSoon) document.getElementById("filterPanel").style.display = "none";
+  document.getElementById("btnColors").style.display = isSoon ? "none" : "";
+  if (isSoon){
+    document.getElementById("filterPanel").style.display = "none";
+    document.getElementById("colorPanel").style.display = "none";
+  }
+  if (document.getElementById("colorPanel").style.display !== "none") renderColorPanel();
   if (!years.includes(UI.year)) UI.year = years[0];
   const allActive = UI.mode === "comparar" && UI.compareSel === "all";
   pills.innerHTML = years.map(y => `<div class="pill ${y === UI.year ? "active" : ""}" data-y="${y}">${y}</div>`).join("")
@@ -1209,6 +1253,41 @@ document.getElementById("fltInvert").onclick = () => {
   const inv = prods.filter(p => !cur.includes(p));
   UI.filter = inv.length === prods.length ? { mode: "todos", sel: null } : { mode: "custom", sel: inv };
   refreshAfterFilter();
+};
+
+/* ---------- colores editables ---------- */
+
+function renderColorPanel(){
+  const years = yearsAvailable();
+  const box = document.getElementById("yearSwatches");
+  const items = years.map(y =>
+    `<label class="swatch"><span>${y}</span><input type="color" data-y="${y}" value="${yearColor(y, years)}"></label>`);
+  if (bizAllowsSplit()){
+    items.push(`<label class="swatch"><span>🌿 NOP</span><input type="color" data-g="nop" value="${COLORS.nop.nop}"></label>`);
+    items.push(`<label class="swatch"><span>Convencional</span><input type="color" data-g="conv" value="${COLORS.nop.conv}"></label>`);
+  }
+  box.innerHTML = items.join("");
+  box.querySelectorAll("input[type=color]").forEach(inp => {
+    inp.oninput = () => {
+      if (inp.dataset.y) COLORS.years[inp.dataset.y] = inp.value;
+      else COLORS.nop[inp.dataset.g] = inp.value;
+      saveColors();
+      render();
+    };
+  });
+}
+
+document.getElementById("btnColors").onclick = () => {
+  const panel = document.getElementById("colorPanel");
+  const open = panel.style.display !== "none";
+  panel.style.display = open ? "none" : "";
+  if (!open){ document.getElementById("filterPanel").style.display = "none"; renderColorPanel(); }
+};
+document.getElementById("colReset").onclick = () => {
+  COLORS = { years: {}, nop: { ...NOP_COLORS_DEFAULT } };
+  saveColors();
+  renderColorPanel();
+  render();
 };
 
 /* ---------- config ---------- */
