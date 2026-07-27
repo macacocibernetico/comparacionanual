@@ -1138,6 +1138,25 @@ async function loadData(){
 /* ¿Hay desglose disponible en la vista actual? Solo dentro de un negocio; en Total no. */
 function bizAllowsSplit(){ return currentSplit() !== null; }
 
+/* Corrige un filtro heredado que no aplica a este negocio (o que vaciaría la vista).
+   Devuelve true si tuvo que corregirlo. */
+function sanitizeFilter(){
+  const f = UI.filter || (UI.filter = { mode: "todos", sel: null });
+  if (f.mode === "todos") return false;
+  const SP = currentSplit();
+  // modos de grupo que no existen en este negocio
+  const groupModes = ["a", "b", "nop", "conv"];
+  if (groupModes.includes(f.mode) && !SP){
+    UI.filter = { mode: "todos", sel: null }; saveUI(); return true;
+  }
+  // el filtro deja todo afuera pero el negocio sí tiene datos
+  const all = getRecordsUnfiltered();
+  if (all.length && !applyFilter(all).length){
+    UI.filter = { mode: "todos", sel: null }; saveUI(); return true;
+  }
+  return false;
+}
+
 function getRecordsUnfiltered(){
   if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
   return DATA[UI.biz] || [];
@@ -1473,6 +1492,11 @@ function render(){
   soonView.style.display = "none";
   dashView.style.display = "";
 
+  const healed = sanitizeFilter();
+  if (healed){
+    document.getElementById("btnFilter").textContent = filterLabel();
+    document.getElementById("btnFilter").classList.remove("filtering");
+  }
   const years = yearsAvailable();
   if (!years.length){
     for (const k in charts){ charts[k].destroy(); delete charts[k]; }
@@ -1612,11 +1636,15 @@ function renderTabs(){
 }
 
 function renderControls(){
-  const years = yearsAvailable();
+  let years = yearsAvailable();
+  if (!years.length) years = [...new Set(getRecordsUnfiltered().map(r => r.year))].sort((a, b) => b - a);
   const pills = document.getElementById("yearPills");
   const biz = BUSINESSES.find(b => b.key === UI.biz);
   const isSoon = biz && biz.status === "soon";
-  const noData = years.length === 0;
+  // ¡importante! si el negocio tiene datos, los controles se muestran siempre:
+  // ocultarlos dejaría al usuario sin forma de quitar un filtro que vació la vista.
+  const hasAnyData = getRecordsUnfiltered().length > 0;
+  const noData = years.length === 0 && !hasAnyData;
   const hide = isSoon || noData;
   // se ocultan los GRUPOS completos (con su etiqueta) para no dejar rótulos huérfanos
   document.getElementById("grpYear").style.display = hide ? "none" : "";
