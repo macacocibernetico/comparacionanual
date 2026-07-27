@@ -1294,6 +1294,13 @@ function openDetail(monthIdx, year, group){
   document.getElementById("detailTitle").textContent = `${MESES[monthIdx]} ${year} — ${recs.length} carga(s)${suffix}`;
   document.getElementById("detailSub").textContent =
     "Cargas con ETD en este mes, con los valores exactos que suma el dashboard.";
+  if (!recs.length){
+    document.getElementById("detailSub").textContent = "";
+    document.getElementById("detailTable").innerHTML =
+      '<p class="empty">No hubo cargas con ETD en este mes' + (suffix ? " para " + suffix.replace(" · ", "") : "") + ".</p>";
+    detailBg.classList.add("open");
+    return;
+  }
   let tot = { tns: 0, usd: 0, com: 0 };
   let html = "<table><tr><th>Negocio</th><th>Producto</th><th>ETD</th><th>Tns</th><th>USD</th><th>Comisión</th></tr>";
   for (const r of recs){
