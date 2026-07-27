@@ -321,11 +321,7 @@
   <div class="panel" id="filterPanel" style="display:none">
     <h3>Filtro de productos</h3>
     <p class="phint">Afecta a todos los números, gráficos y tablas de la pantalla. Usá los accesos rápidos o tildá productos uno por uno.</p>
-    <div class="chips" id="filterChips" role="group" aria-label="Accesos rápidos de filtro">
-      <button class="chip" data-fmode="todos" type="button">Todos los productos</button>
-      <button class="chip" data-fmode="nop" type="button">🌿 Solo NOP</button>
-      <button class="chip" data-fmode="conv" type="button">Solo Convencional</button>
-    </div>
+    <div class="chips" id="filterChips" role="group" aria-label="Accesos rápidos de filtro"></div>
     <div class="checkactions">
       <button id="fltAll" type="button">Marcar todos</button>
       <button id="fltNone" type="button">Desmarcar todos</button>
@@ -491,8 +487,8 @@
            "soon"   = se muestra como próximamente
 =================================================== */
 const BUSINESSES = [
-  { key: "axt",       name: "AXT",       status: "active", nop: true  },   // nop: si existe la clasificación NOP/convencional
-  { key: "brokerage", name: "Brokerage", status: "active", nop: false },
+  { key: "axt",       name: "AXT",       status: "active", nop: true, split: "nop" },   // split: qué desglose ofrece cada negocio
+  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil" },
   { key: "buzaram",   name: "Buzaram",   status: "active", nop: false },
 ];
 const TOTAL_KEY = "total";
@@ -614,13 +610,48 @@ function cssVar(name){
 function isNOP(product){
   return /(^|[^a-z0-9])nop([^a-z0-9]|$)/i.test(String(product));
 }
+/* Brokerage: aceite y expeller (acepta inglés y español) */
+function isOil(product){ return /\b(oil|aceite)\b/i.test(String(product)); }
+function isExpeller(product){ return /expeller/i.test(String(product)); }
+function isOilOrExpeller(product){ return isOil(product) || isExpeller(product); }
+
+/* Configuración del desglose disponible en cada negocio.
+   Cada uno define su propio criterio; nunca se cruza entre negocios ni al Total. */
+const SPLITS = {
+  nop: {
+    button: "🌿 NOP vs Conv",
+    tip: "Separar en NOP y convencional",
+    tag: "Desglose NOP vs Convencional",
+    a: { key: "nop",  name: "NOP",          test: isNOP },
+    b: { key: "conv", name: "Convencional", test: p => !isNOP(p) },
+  },
+  oil: {
+    button: "🥜 Aceite+Expeller vs Otros",
+    tip: "Separar aceite y expeller del resto de los productos",
+    tag: "Desglose Aceite+Expeller vs Otros",
+    a: { key: "oilex", name: "Aceite + Expeller", test: isOilOrExpeller,
+         parts: [ { key: "oil", name: "Aceite", test: p => isOil(p) && !isExpeller(p) },
+                  { key: "exp", name: "Expeller", test: isExpeller } ] },
+    b: { key: "otros", name: "Otros productos", test: p => !isOilOrExpeller(p) },
+  },
+};
+
+/* Desglose que corresponde a la vista actual (null si no aplica) */
+function currentSplit(){
+  if (UI.biz === TOTAL_KEY) return null;
+  const b = BUSINESSES.find(x => x.key === UI.biz);
+  return b && b.split ? SPLITS[b.split] : null;
+}
 
 function applyFilter(recs){
   const f = UI.filter;
   if (!f || f.mode === "todos") return recs;
-  if (f.mode === "nop") return recs.filter(r => isNOP(r.product));
-  if (f.mode === "conv") return recs.filter(r => !isNOP(r.product));
   if (f.mode === "custom" && Array.isArray(f.sel)) return recs.filter(r => f.sel.includes(r.product));
+  const SP = currentSplit();
+  if (SP && f.mode === "a") return recs.filter(r => SP.a.test(r.product));
+  if (SP && f.mode === "b") return recs.filter(r => SP.b.test(r.product));
+  if (f.mode === "nop") return recs.filter(r => isNOP(r.product));          // compat. versiones previas
+  if (f.mode === "conv") return recs.filter(r => !isNOP(r.product));
   return recs;
 }
 
@@ -1019,13 +1050,8 @@ async function loadData(){
   status.innerHTML = `✅ ${parts.join(' <span class="dotsep">|</span> ')} <span class="dotsep">|</span> actualizado ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-/* ¿Aplica la clasificación NOP/Conv en la vista actual?
-   Solo en la pestaña de un negocio que la tenga (AXT); en Total no. */
-function bizAllowsSplit(){
-  if (UI.biz === TOTAL_KEY) return false;
-  const b = BUSINESSES.find(x => x.key === UI.biz);
-  return !!b && b.nop === true;
-}
+/* ¿Hay desglose disponible en la vista actual? Solo dentro de un negocio; en Total no. */
+function bizAllowsSplit(){ return currentSplit() !== null; }
 
 function getRecordsUnfiltered(){
   if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
@@ -1049,7 +1075,7 @@ function deltaHtml(cur, prev){
   return `<span class="delta ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}% vs año comp.</span>`;
 }
 
-function renderKpis(a, b, aN, aC, yA){
+function renderKpis(a, b, aN, aC, yA, SP, aParts){
   const bmSrc = { totTns: bestMonth(a.tns), totUsd: bestMonth(a.usd), totCom: bestMonth(a.com) };
   const defs = [
     ["Toneladas", "totTns", v => fmt1(v) + " t"],
@@ -1060,8 +1086,11 @@ function renderKpis(a, b, aN, aC, yA){
   document.getElementById("kpis").innerHTML = defs.map(([label, key, f]) => {
     const lines = [];
     if (b) lines.push(`<div>${deltaHtml(a[key], b[key])}</div>`);
-    if (UI.split && aN && aC)
-      lines.push(`<div class="extra"><span style="color:var(--green)">🌿 NOP: ${f(aN[key])}</span> · Conv: ${f(aC[key])}</div>`);
+    if (UI.split && aN && aC && SP){
+      lines.push(`<div class="extra"><span style="color:${COLORS.nop.nop}">■</span> ${SP.a.name}: <b style="color:var(--text);font-weight:600">${f(aN[key])}</b> · <span style="color:${COLORS.nop.conv}">■</span> ${SP.b.name}: <b style="color:var(--text);font-weight:600">${f(aC[key])}</b></div>`);
+      if (aParts && aParts.length)
+        lines.push(`<div class="extra" style="opacity:.85">${aParts.map(pt => `${pt.name}: ${f(pt.agg[key])}`).join(" · ")}</div>`);
+    }
     if (!b && !UI.split && bmSrc[key])
       lines.push(`<div class="extra">Mejor mes: ${bmSrc[key].name} (${f(bmSrc[key].value)})</div>`);
     if (key === "contEst")
@@ -1153,10 +1182,11 @@ detailBg.onclick = e => { if (e.target === detailBg) detailBg.classList.remove("
 
 function openDetail(monthIdx, year, group){
   let recs = getRecords().filter(r => r.year === year && r.month === monthIdx + 1);
-  if (group === "nop") recs = recs.filter(r => isNOP(r.product));
-  if (group === "conv") recs = recs.filter(r => !isNOP(r.product));
+  const SPd = currentSplit();
+  if (SPd && group === "a") recs = recs.filter(r => SPd.a.test(r.product));
+  if (SPd && group === "b") recs = recs.filter(r => SPd.b.test(r.product));
   recs.sort((a, b) => (a.etd?.d || 0) - (b.etd?.d || 0));
-  const suffix = group === "nop" ? " · 🌿 NOP" : group === "conv" ? " · Convencional" : "";
+  const suffix = SPd && group === "a" ? " · " + SPd.a.name : SPd && group === "b" ? " · " + SPd.b.name : "";
   document.getElementById("detailTitle").textContent = `${MESES[monthIdx]} ${year} — ${recs.length} carga(s)${suffix}`;
   document.getElementById("detailSub").textContent =
     "Cargas con ETD en este mes, con los valores exactos que suma el dashboard.";
@@ -1327,7 +1357,7 @@ function renderContext(s){
   if (UI.filter.mode !== "todos")
     tags.push(`<span class="ctag act">🎛 ${filterLabel().replace("🎛 Productos: ", "Productos: ")}<button type="button" data-clear="filter" title="Quitar el filtro de productos" aria-label="Quitar el filtro de productos">×</button></span>`);
   if (s.splitOn)
-    tags.push(`<span class="ctag act">🌿 Desglose NOP vs Convencional${s.splitCharts ? "" : " (solo en los totales)"}<button type="button" data-clear="split" title="Quitar el desglose" aria-label="Quitar el desglose NOP">×</button></span>`);
+    tags.push(`<span class="ctag act">${s.SP ? s.SP.tag : "Desglose"}${s.splitCharts ? "" : " (solo en los totales)"}<button type="button" data-clear="split" title="Quitar el desglose" aria-label="Quitar el desglose">×</button></span>`);
   el.innerHTML = tags.join("");
   el.querySelectorAll("button[data-clear]").forEach(b => {
     b.onclick = () => {
@@ -1403,14 +1433,18 @@ function render(){
   const b = yB != null ? aggCmp.get(yB) : null;
 
   // desglose NOP/Conv (solo donde existe la clasificación; en gráficos hasta 2 años, en KPIs siempre)
-  const splitOn = UI.split && bizAllowsSplit();
+  const SP = currentSplit();
+  const splitOn = UI.split && !!SP;
   const splitCharts = splitOn && cmpYears.length <= 1;
-  let aN = null, aC = null, bN = null, bC = null;
+  let aN = null, aC = null, bN = null, bC = null, aParts = null;
   if (splitOn){
-    const nopRecs = recs.filter(r => isNOP(r.product));
-    const convRecs = recs.filter(r => !isNOP(r.product));
-    aN = aggregate(nopRecs, yA, MM); aC = aggregate(convRecs, yA, MM);
-    if (splitCharts && yB != null){ bN = aggregate(nopRecs, yB, MM); bC = aggregate(convRecs, yB, MM); }
+    const recsA = recs.filter(r => SP.a.test(r.product));
+    const recsB = recs.filter(r => SP.b.test(r.product));
+    aN = aggregate(recsA, yA, MM); aC = aggregate(recsB, yA, MM);
+    if (splitCharts && yB != null){ bN = aggregate(recsA, yB, MM); bC = aggregate(recsB, yB, MM); }
+    // componentes internos del grupo A (ej: aceite y expeller por separado)
+    if (SP.a.parts)
+      aParts = SP.a.parts.map(pt => ({ name: pt.name, agg: aggregate(recs.filter(r => pt.test(r.product)), yA, MM) }));
   }
 
   // aviso de comparación year-to-date
@@ -1425,19 +1459,20 @@ function render(){
   // orden de referencia para asignar colores por año (más reciente primero)
   const colorOrder = [yA, ...cmpYears];
   const cNop = COLORS.nop.nop, cConv = COLORS.nop.conv;
+  const nameA = SP ? SP.a.name : "", nameB = SP ? SP.b.name : "";
   const mk = (id, key, opts) => {
     let series;
     if (splitCharts && yB != null && bN){
       series = [
-        { label: `${yA} 🌿NOP`, data: aN[key], color: cNop, stack: "A", year: yA, group: "nop" },
-        { label: `${yA} Conv`,  data: aC[key], color: cConv, stack: "A", year: yA, group: "conv" },
-        { label: `${yB} 🌿NOP`, data: bN[key], color: cNop + "70", stack: "B", year: yB, group: "nop" },
-        { label: `${yB} Conv`,  data: bC[key], color: cConv + "70", stack: "B", year: yB, group: "conv" },
+        { label: `${yA} · ${nameA}`, data: aN[key], color: cNop, stack: "A", year: yA, group: "a" },
+        { label: `${yA} · ${nameB}`, data: aC[key], color: cConv, stack: "A", year: yA, group: "b" },
+        { label: `${yB} · ${nameA}`, data: bN[key], color: cNop + "70", stack: "B", year: yB, group: "a" },
+        { label: `${yB} · ${nameB}`, data: bC[key], color: cConv + "70", stack: "B", year: yB, group: "b" },
       ];
     } else if (splitCharts){
       series = [
-        { label: "🌿 NOP", data: aN[key], color: cNop, year: yA, group: "nop" },
-        { label: "Convencional", data: aC[key], color: cConv, year: yA, group: "conv" },
+        { label: nameA, data: aN[key], color: cNop, year: yA, group: "a" },
+        { label: nameB, data: aC[key], color: cConv, year: yA, group: "b" },
       ];
     } else {
       // un color propio y distinto por año (editable desde 🎨 Colores)
@@ -1447,7 +1482,7 @@ function render(){
     makeChart(id, series, opts);
   };
 
-  renderKpis(a, b, aN, aC, yA);
+  renderKpis(a, b, aN, aC, yA, SP, aParts);
   mk("chTns", "tns");
   mk("chUsd", "usd", { usd: true });
   mk("chCom", "com", { usd: true });
@@ -1457,7 +1492,7 @@ function render(){
   renderProductChart(a, yA);
   renderProductTable(a, yA);
   renderProductCompare(a, b, yA, yB);
-  renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length });
+  renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
   const cc = CONFIG[UI.biz] || CONFIG.axt;
@@ -1482,6 +1517,7 @@ function renderTabs(){
   el.querySelectorAll(".tab").forEach(tab => {
     tab.onclick = () => {
       UI.biz = tab.dataset.key;
+      if (["a","b","nop","conv"].includes(UI.filter.mode) ) UI.filter = { mode: "todos", sel: null };
       const bz = BUSINESSES.find(b => b.key === UI.biz);
       if (bz && bz.status === "active") cfgBizKey = UI.biz;   // ⚙️ Config abre en este negocio
       saveUI();
@@ -1503,8 +1539,10 @@ function renderControls(){
   document.getElementById("grpView").style.display = hide ? "none" : "";
   document.getElementById("btnFilter").style.display = hide ? "none" : "";
   const btnSplit = document.getElementById("btnSplit");
-  const canSplit = !hide && bizAllowsSplit();
+  const SPc = currentSplit();
+  const canSplit = !hide && !!SPc;
   btnSplit.style.display = canSplit ? "" : "none";
+  if (SPc){ btnSplit.textContent = SPc.button; btnSplit.title = SPc.tip; }
   btnSplit.classList.toggle("active", !!UI.split && canSplit);
   btnSplit.setAttribute("aria-pressed", String(!!UI.split && canSplit));
   btnSplit.onclick = () => { UI.split = !UI.split; saveUI(); renderControls(); render(); };
@@ -1572,6 +1610,9 @@ function allProducts(){
 
 function filterLabel(){
   const f = UI.filter;
+  const SP = currentSplit();
+  if (f.mode === "a") return "🎛 Productos: " + (SP ? SP.a.name : "grupo A");
+  if (f.mode === "b") return "🎛 Productos: " + (SP ? SP.b.name : "grupo B");
   if (f.mode === "nop") return "🎛 Productos: Solo NOP";
   if (f.mode === "conv") return "🎛 Productos: Solo Convencional";
   if (f.mode === "custom"){
@@ -1592,6 +1633,12 @@ function refreshAfterFilter(){
 
 function renderFilterPanel(){
   const panel = document.getElementById("filterPanel");
+  const SP = currentSplit();
+  // accesos rápidos: dependen del desglose que tenga este negocio
+  const quick = [{ m: "todos", label: "Todos los productos" }];
+  if (SP){ quick.push({ m: "a", label: "Solo " + SP.a.name }, { m: "b", label: "Solo " + SP.b.name }); }
+  document.getElementById("filterChips").innerHTML = quick
+    .map(q => `<button class="chip" data-fmode="${q.m}" type="button">${q.label}</button>`).join("");
   // chips activos
   panel.querySelectorAll(".chip").forEach(ch => {
     ch.classList.toggle("active", UI.filter.mode === ch.dataset.fmode);
@@ -1600,13 +1647,15 @@ function renderFilterPanel(){
   // checklist
   const prods = allProducts();
   const sel = UI.filter.mode === "custom" ? (UI.filter.sel || [])
+    : (SP && UI.filter.mode === "a") ? prods.filter(SP.a.test)
+    : (SP && UI.filter.mode === "b") ? prods.filter(SP.b.test)
     : UI.filter.mode === "nop" ? prods.filter(isNOP)
     : UI.filter.mode === "conv" ? prods.filter(p => !isNOP(p))
     : prods;   // todos
   const box = document.getElementById("prodChecks");
   box.innerHTML = prods.map(p => `
     <label><input type="checkbox" value="${p.replace(/"/g, "&quot;")}" ${sel.includes(p) ? "checked" : ""}>
-    ${isNOP(p) ? "🌿 " : ""}${p}</label>`).join("");
+    ${SP && SP.a.test(p) ? (SP.a.key === "nop" ? "🌿 " : "🥜 ") : ""}${p}</label>`).join("");
   box.querySelectorAll("input").forEach(inp => {
     inp.onchange = () => {
       const chosen = [...box.querySelectorAll("input:checked")].map(i => i.value);
@@ -1631,7 +1680,10 @@ document.getElementById("fltAll").onclick = () => { UI.filter = { mode: "todos",
 document.getElementById("fltNone").onclick = () => { UI.filter = { mode: "custom", sel: [] }; refreshAfterFilter(); };
 document.getElementById("fltInvert").onclick = () => {
   const prods = allProducts();
+  const SPi = currentSplit();
   const cur = UI.filter.mode === "custom" ? (UI.filter.sel || [])
+    : (SPi && UI.filter.mode === "a") ? prods.filter(SPi.a.test)
+    : (SPi && UI.filter.mode === "b") ? prods.filter(SPi.b.test)
     : UI.filter.mode === "nop" ? prods.filter(isNOP)
     : UI.filter.mode === "conv" ? prods.filter(p => !isNOP(p))
     : prods;
@@ -1647,9 +1699,10 @@ function renderColorPanel(){
   const box = document.getElementById("yearSwatches");
   const items = years.map(y =>
     `<label class="swatch"><span>${y}</span><input type="color" data-y="${y}" value="${yearColor(y, years)}"></label>`);
-  if (bizAllowsSplit()){
-    items.push(`<label class="swatch"><span>🌿 NOP</span><input type="color" data-g="nop" value="${COLORS.nop.nop}"></label>`);
-    items.push(`<label class="swatch"><span>Convencional</span><input type="color" data-g="conv" value="${COLORS.nop.conv}"></label>`);
+  const SPs = currentSplit();
+  if (SPs){
+    items.push(`<label class="swatch"><span>${SPs.a.name}</span><input type="color" data-g="nop" value="${COLORS.nop.nop}"></label>`);
+    items.push(`<label class="swatch"><span>${SPs.b.name}</span><input type="color" data-g="conv" value="${COLORS.nop.conv}"></label>`);
   }
   box.innerHTML = items.join("");
   box.querySelectorAll("input[type=color]").forEach(inp => {
