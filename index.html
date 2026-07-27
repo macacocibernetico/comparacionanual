@@ -256,6 +256,82 @@
   #btnFilter.filtering{background:var(--accent-soft);color:var(--accent)}
   #btnSplit.active{background:var(--text);color:var(--bg);font-weight:600}
 
+  /* ---------- Menú inferior (mobile) ---------- */
+  #btnMenu{display:none}
+  .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:120;opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
+  .sheet-bg.open{opacity:1;pointer-events:auto}
+  html[data-theme="dark"] .sheet-bg{background:rgba(0,0,0,.6)}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:121;background:var(--panel);
+    border-radius:22px 22px 0 0;padding:10px 18px calc(24px + env(safe-area-inset-bottom));
+    transform:translateY(100%);transition:transform .38s var(--ease);
+    box-shadow:0 -8px 40px rgba(0,0,0,.2);max-height:82vh;overflow-y:auto
+  }
+  .sheet.open{transform:translateY(0)}
+  .sheet .grabber{width:38px;height:5px;border-radius:3px;background:var(--border2);margin:0 auto 14px}
+  .sheet h3{font-size:1.05rem;font-weight:600;margin-bottom:14px;letter-spacing:-.02em}
+  .sheet .slot{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+  .sheet .slot > .glabel{color:var(--faint);font-size:.72rem;font-weight:500}
+  .sheet .grow{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+  .sheet .grow button{width:100%;text-align:left;padding:14px 16px;font-size:.95rem;border-radius:12px;background:var(--panel2);min-height:48px}
+  .sheet .grow button:active{background:var(--panel3)}
+  .sheet #themeRow{display:block;margin-bottom:18px}
+  .sheet #themeRow button{width:100%;height:auto;border-radius:12px;padding:14px 16px;font-size:.95rem;text-align:left;min-height:48px;background:var(--panel2)}
+  .sheet .closebar{display:flex;justify-content:center;padding-top:4px}
+  .sheet .closebar button{width:100%;padding:14px;font-size:.95rem;font-weight:600;border-radius:12px;min-height:48px}
+
+  /* ---------- Ajustes para pantallas chicas ---------- */
+  @media(max-width:720px){
+    body{padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+    .topbar{gap:8px;margin-bottom:14px}
+    .topbar h1{font-size:1.3rem}
+    .topbar .tagline{display:none}
+    #btnMenu{display:inline-flex}
+    #btnTheme{display:none}          /* pasa al menú */
+    .toolbar{padding:12px 12px;gap:14px;border-radius:12px}
+    .group{width:100%}
+    /* tabs y años en carrusel horizontal, sin romper la grilla */
+    .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:100%}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;padding:10px 16px;min-height:44px}
+    .yearpills{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;max-width:100%}
+    .yearpills::-webkit-scrollbar{display:none}
+    .pill{flex:0 0 auto;padding:10px 15px;min-height:44px;font-size:.9rem}
+    .pillhint{flex:0 0 auto;white-space:nowrap}
+    .seg{width:100%}
+    .seg button{flex:1;padding:11px 12px;min-height:44px;font-size:.9rem}
+    /* KPIs de a dos, más compactos */
+    .kpis{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .kpi{padding:14px}
+    .kpi .value{font-size:1.4rem}
+    .kpi .label{font-size:.72rem}
+    .kpi .extra{font-size:.7rem}
+    .grid{gap:12px}
+    .card{padding:16px 14px;border-radius:12px}
+    .card h2{font-size:.94rem}
+    .card .csub{font-size:.75rem;margin-bottom:12px}
+    .chartbox{height:230px}
+    .chartbox.tall{height:270px}
+    /* la tabla avisa que se desliza */
+    .tablewrap{position:relative}
+    .tablewrap::after{content:"";position:absolute;top:0;right:0;bottom:0;width:26px;pointer-events:none;background:linear-gradient(to right,transparent,var(--panel))}
+    .scrollhint{color:var(--faint);font-size:.72rem;margin-bottom:6px}
+    .context{gap:6px;margin-bottom:14px}
+    .ctag{font-size:.75rem;padding:5px 11px}
+    .ctag button{padding:6px;margin:-6px -4px -6px 0}   /* área táctil cómoda */
+    .panel{padding:15px 14px}
+    .checklist{grid-template-columns:1fr;max-height:46vh}
+    .checklist label{padding:11px 10px;min-height:44px}
+    .modal{padding:20px 18px;border-radius:18px;max-height:92vh}
+    .modal .actions{position:sticky;bottom:-20px;background:var(--panel);padding:12px 0 0;margin-top:18px}
+    .modal .actions button{flex:1;min-height:46px}
+    .swatch{padding:10px 13px;min-height:44px}
+    .chip{padding:10px 15px;min-height:44px}
+    .checkactions button{padding:10px 13px;min-height:44px}
+    footer{font-size:.7rem}
+  }
+  @media(max-width:380px){ .kpis{grid-template-columns:1fr} }
+
   /* Colores */
   .swatches{display:flex;gap:9px;flex-wrap:wrap}
   .swatch{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:var(--r-sm);padding:8px 13px;transition:background .25s var(--ease)}
@@ -270,7 +346,8 @@
     <h1>Dashboard de Negocios</h1>
     <span class="tagline">Volumen, facturación y comisiones por mes de embarque</span>
     <div class="right">
-      <button id="btnTheme" class="iconbtn" type="button" aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro">◐</button>
+      <span id="themeRow"><button id="btnTheme" class="iconbtn" type="button" aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro">◐</button></span>
+      <button id="btnMenu" class="iconbtn" type="button" aria-label="Abrir menú de opciones" aria-expanded="false" aria-controls="sheet" title="Más opciones">☰</button>
     </div>
   </div>
 
@@ -405,6 +482,14 @@
 </div>
 
 <footer id="footer"></footer>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Opciones del dashboard">
+  <div class="grabber" aria-hidden="true"></div>
+  <h3>Opciones</h3>
+  <div id="sheetSlots"></div>
+  <div class="closebar"><button id="sheetClose" type="button" class="primary">Listo</button></div>
+</div>
 
 <div class="modal-bg" id="detailBg">
   <div class="modal wide">
@@ -588,7 +673,7 @@ function applyTheme(t){
   document.documentElement.setAttribute("data-theme", t);
   const btn = document.getElementById("btnTheme");
   if (btn){
-    btn.textContent = t === "dark" ? "☀︎" : "☾";
+    btn.textContent = isMobile() ? (t === "dark" ? "☀︎  Modo claro" : "☾  Modo oscuro") : (t === "dark" ? "☀︎" : "☾");
     btn.setAttribute("aria-label", t === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro");
   }
   if (typeof charts !== "undefined") { try { render(); } catch(e){} }
@@ -1666,6 +1751,7 @@ function renderFilterPanel(){
 }
 
 document.getElementById("btnFilter").onclick = () => {
+  if (isMobile()) closeSheet();
   const panel = document.getElementById("filterPanel");
   const open = panel.style.display !== "none";
   panel.style.display = open ? "none" : "";
@@ -1716,6 +1802,7 @@ function renderColorPanel(){
 }
 
 document.getElementById("btnColors").onclick = () => {
+  if (isMobile()) closeSheet();
   const panel = document.getElementById("colorPanel");
   const open = panel.style.display !== "none";
   panel.style.display = open ? "none" : "";
@@ -1785,7 +1872,7 @@ function persistConfig(){
   localStorage.setItem(LS_KEY, JSON.stringify(out));
 }
 
-document.getElementById("btnConfig").onclick = openConfig;
+document.getElementById("btnConfig").onclick = () => { closeSheet(); openConfig(); };
 document.getElementById("cfgCancel").onclick = closeConfig;
 modalBg.onclick = e => { if (e.target === modalBg) closeConfig(); };
 
@@ -1830,11 +1917,64 @@ document.getElementById("cfgClear").onclick = async () => {
 
 /* ---------- init ---------- */
 
+/* ---------- Adaptación a pantallas chicas ----------
+   En mobile, "Ajustes de vista" y "Datos" se mudan a una hoja inferior para
+   que la pantalla arranque mostrando datos y no una pared de botones.
+   Se MUEVEN los mismos nodos, así los handlers y estados siguen intactos. */
+const MOBILE_Q = "(max-width:720px)";
+let sheetMode = null;   // "mobile" | "desktop"
+
+function isMobile(){
+  return typeof matchMedia === "function" ? matchMedia(MOBILE_Q).matches : false;
+}
+
+function layoutForViewport(){
+  const mode = isMobile() ? "mobile" : "desktop";
+  if (mode === sheetMode) return;
+  sheetMode = mode;
+  const slots = document.getElementById("sheetSlots");
+  const toolbar = document.querySelector(".toolbar");
+  const grpView = document.getElementById("grpView");
+  const grpData = document.getElementById("grpData");
+  const themeRow = document.getElementById("themeRow");
+  if (!slots || !toolbar) return;
+  if (mode === "mobile"){
+    [grpView, grpData].forEach(g => { if (g){ g.classList.add("slot"); slots.appendChild(g); } });
+    if (themeRow) slots.appendChild(themeRow);
+  } else {
+    closeSheet();
+    [grpView, grpData].forEach(g => { if (g){ g.classList.remove("slot"); toolbar.appendChild(g); } });
+    if (themeRow) document.querySelector(".topbar .right").appendChild(themeRow);
+  }
+}
+
+function openSheet(){
+  layoutForViewport();
+  document.getElementById("sheet").classList.add("open");
+  document.getElementById("sheetBg").classList.add("open");
+  document.getElementById("btnMenu").setAttribute("aria-expanded", "true");
+}
+function closeSheet(){
+  const sh = document.getElementById("sheet"), bg = document.getElementById("sheetBg");
+  if (sh) sh.classList.remove("open");
+  if (bg) bg.classList.remove("open");
+  const bm = document.getElementById("btnMenu");
+  if (bm) bm.setAttribute("aria-expanded", "false");
+}
+document.getElementById("btnMenu").onclick = openSheet;
+document.getElementById("sheetClose").onclick = closeSheet;
+document.getElementById("sheetBg").onclick = closeSheet;
+if (typeof matchMedia === "function"){
+  const mq = matchMedia(MOBILE_Q);
+  (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(layoutForViewport);
+}
+
 /* Cerrar modales con Escape */
 window.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
   document.getElementById("detailBg").classList.remove("open");
   document.getElementById("modalBg").classList.remove("open");
+  closeSheet();
 });
 
 async function init(){
@@ -1852,7 +1992,8 @@ document.getElementById("btnTheme").onclick = () => {
 };
 applyTheme(THEME);
 
-document.getElementById("btnReload").onclick = init;
+layoutForViewport();
+document.getElementById("btnReload").onclick = () => { closeSheet(); init(); };
 init();
 if (!Object.values(CONFIG).some(c => c.SHEET_ID)) setTimeout(openConfig, 400);
 </script>
