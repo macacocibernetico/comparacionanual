@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Anual — Negocios</title>
+<link rel="preconnect" href="https://docs.google.com" crossorigin>
+<link rel="dns-prefetch" href="https://docs.google.com">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   /* ============ Paleta clara (por defecto) ============ */
@@ -1060,11 +1063,15 @@ async function fetchBiz(key){
   const errs = [];
   const urlJson = `${base}/gviz/tq?tqx=out:json&sheet=${sheetQ}&headers=${cfg.HEADER_ROW}&t=${Date.now()}`;
   const urlExport = `${base}/export?format=csv&gid=${encodeURIComponent(cfg.GID || "0")}&t=${Date.now()}`;
-  let recsJson = null, recsFull = null;
-  try { recsJson = await tryFetch(urlJson, gvizJsonToRows); }
-  catch(e){ errs.push(e); }
-  try { recsFull = await tryFetch(urlExport, parseCSV); }
-  catch(e){ errs.push(e); }
+  // Se piden los dos a la vez: el tiempo total pasa a ser el del más lento, no la suma.
+  const [rJson, rFull] = await Promise.allSettled([
+    tryFetch(urlJson, gvizJsonToRows),
+    tryFetch(urlExport, parseCSV),
+  ]);
+  let recsJson = rJson.status === "fulfilled" ? rJson.value : null;
+  let recsFull = rFull.status === "fulfilled" ? rFull.value : null;
+  if (rJson.status === "rejected") errs.push(rJson.reason);
+  if (rFull.status === "rejected") errs.push(rFull.reason);
   if (recsJson && recsFull){
     // Sin GID, el export apunta a la primera pestaña: verificar que sea la MISMA
     // pestaña comparando operaciones (referencia + mes + toneladas). Si no coincide,
@@ -1095,6 +1102,33 @@ async function fetchBiz(key){
   throw errs[errs.length - 1] || new Error("No se pudo cargar la planilla.");
 }
 
+/* ---------- Caché de datos (apertura instantánea) ----------
+   Se guarda lo último leído de cada planilla. Al abrir, se pinta eso de inmediato
+   y en paralelo se refresca contra Google; cuando llega, se vuelve a pintar. */
+const CACHE_KEY = "dashboardCache";
+const CACHE_MAX_AGE = 12 * 60 * 60 * 1000;   // 12 h
+
+function readCache(){
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY));
+    if (!c || !c.biz) return null;
+    return c;
+  } catch(e){ return null; }
+}
+function writeCache(data, srcInfo){
+  try {
+    const payload = JSON.stringify({ ts: Date.now(), biz: data, src: srcInfo });
+    if (payload.length < 3_000_000) localStorage.setItem(CACHE_KEY, payload);
+  } catch(e){ /* sin espacio: seguimos sin caché */ }
+}
+function cacheAgeText(ts){
+  const min = Math.round((Date.now() - ts) / 60000);
+  if (min < 1) return "hace instantes";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`;
+}
+
 async function loadData(){
   const status = document.getElementById("statusLine");
   const banner = document.getElementById("banner");
@@ -1111,7 +1145,9 @@ async function loadData(){
     status.innerHTML = "🧪 Datos de ejemplo — todavía no hay planillas conectadas";
     return;
   }
-  status.innerHTML = "⏳ Leyendo planillas de Google Sheets…";
+  status.innerHTML = paintedFromCache
+    ? '<span style="opacity:.75">↻ Actualizando en segundo plano…</span>'
+    : "⏳ Leyendo planillas de Google Sheets…";
   const errors = [], srcInfo = {};
   await Promise.all(configured.map(async b => {
     try {
@@ -1126,6 +1162,7 @@ async function loadData(){
     banner.className = "banner err";
     banner.innerHTML = "<span>❌</span><span><b>No se pudo cargar una planilla.</b><br>" + errors.join("<br>") + "</span>";
   }
+  writeCache(DATA, srcInfo);
   const parts = configured
     .filter(b => DATA[b.key])
     .map(b => {
@@ -1223,7 +1260,7 @@ function makeChart(id, series, opts = {}){
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      animation: { duration: 550, easing: "easeOutQuart" },
+      animation: { duration: paintedFromCache ? 0 : 550, easing: "easeOutQuart" },
       onClick: (e, els) => {
         if (!els || !els.length) return;
         const s = series[els[0].datasetIndex];
@@ -1939,7 +1976,7 @@ document.getElementById("cfgSave").onclick = async () => {
   };
   persistConfig();
   closeConfig();
-  await init();
+  await init({ force: true });
 };
 
 document.getElementById("cfgClear").onclick = async () => {
@@ -1947,7 +1984,8 @@ document.getElementById("cfgClear").onclick = async () => {
   localStorage.removeItem("dashboardConfig");
   CONFIG = loadConfig();
   closeConfig();
-  await init();
+  try { localStorage.removeItem(CACHE_KEY); } catch(e){}
+  await init({ force: true });
 };
 
 /* ---------- init ---------- */
@@ -2012,13 +2050,36 @@ window.addEventListener("keydown", e => {
   closeSheet();
 });
 
-async function init(){
-  await loadData();
+let paintedFromCache = false;
+
+/* Pinta la pantalla con lo que haya (caché o datos frescos) */
+function paint(){
   renderTabs();
   document.getElementById("btnFilter").textContent = filterLabel();
   document.getElementById("btnFilter").classList.toggle("filtering", UI.filter.mode !== "todos");
   renderControls();
   render();
+}
+
+/* Arranque: si hay caché reciente, se muestra YA y el refresco ocurre atrás. */
+async function init(opts){
+  const force = opts && opts.force;
+  paintedFromCache = false;
+  const cached = force ? null : readCache();
+  const hasConfig = BUSINESSES.some(b => b.status === "active" && CONFIG[b.key].SHEET_ID);
+  if (cached && hasConfig && Date.now() - cached.ts < CACHE_MAX_AGE && Object.keys(cached.biz || {}).length){
+    DATA = cached.biz; demoMode = false; paintedFromCache = true;
+    const n = Object.values(DATA).reduce((s, r) => s + r.length, 0);
+    document.getElementById("statusLine").innerHTML =
+      `⚡ ${fmt0(n)} cargas desde la última lectura (${cacheAgeText(cached.ts)}) · <span style="opacity:.75">actualizando…</span>`;
+    paint();
+    // cede el hilo para que el navegador pinte antes de salir a la red
+    await new Promise(r => (typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame(() => requestAnimationFrame(r))
+      : setTimeout(r, 0)));
+  }
+  await loadData();
+  paint();
 }
 document.getElementById("btnTheme").onclick = () => {
   THEME = THEME === "dark" ? "light" : "dark";
@@ -2028,7 +2089,7 @@ document.getElementById("btnTheme").onclick = () => {
 applyTheme(THEME);
 
 layoutForViewport();
-document.getElementById("btnReload").onclick = () => { closeSheet(); init(); };
+document.getElementById("btnReload").onclick = () => { closeSheet(); init({ force: true }); };
 init();
 if (!Object.values(CONFIG).some(c => c.SHEET_ID)) setTimeout(openConfig, 400);
 </script>
