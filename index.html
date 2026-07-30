@@ -502,10 +502,14 @@
     <div class="card wide" id="consSection">
       <h2>Consolidación — producto, mes y destino <span id="lblConsYear" class="clickable">2026</span></h2>
       <p class="csub">Esta sección usa la fecha de <b>Consolidación</b> (no la de ETD, como el resto del tablero). Respeta el año elegido arriba y el filtro de productos.</p>
+      <div class="seg" id="consMetric" role="group" aria-label="Métrica de la sección Consolidación" style="margin-bottom:16px">
+        <button type="button" data-cm="tns" title="Ver toneladas">Toneladas</button>
+        <button type="button" data-cm="usd" title="Ver facturación en dólares">Facturación USD</button>
+      </div>
       <div class="chartbox tall" style="margin-bottom:22px"><canvas id="chConsProd" aria-label="Toneladas por producto y mes según consolidación" role="img"></canvas></div>
-      <h3 class="subhead">Detalle mensual por producto</h3>
+      <h3 class="subhead" id="consH1">Detalle mensual por producto</h3>
       <div class="tablewrap" id="consTable"></div>
-      <h3 class="subhead">Toneladas de cada producto por destino</h3>
+      <h3 class="subhead" id="consH2">Toneladas de cada producto por destino</h3>
       <div class="tablewrap" id="portTable"></div>
       <h3 class="subhead">Participación de cada destino</h3>
       <div class="chartbox" id="portChartBox"><canvas id="chPort" aria-label="Toneladas por destino" role="img"></canvas></div>
@@ -691,6 +695,7 @@ function loadUI(){
   if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", sel: null };
   if (ui.mode === "grupos"){ ui.mode = "solo"; ui.split = true; }   // migración del modo viejo
   if (typeof ui.split !== "boolean") ui.split = false;
+  if (ui.consMetric !== "usd") ui.consMetric = "tns";
   // migración del selector viejo (compareSel) al conjunto de años tildados
   if (!Array.isArray(ui.cmpSet)){
     const v = ui.compareSel;
@@ -1445,7 +1450,10 @@ function renderTrend(recs){
 function aggregateByConsolidacion(recs, year, maxMonth = 12){
   const byMonth = () => Array(12).fill(0);
   const out = { products: {}, prodTotals: {}, months: byMonth(), total: 0,
-                ports: {}, portTotals: {}, n: 0 };
+                ports: {}, portTotals: {}, n: 0,
+                // mismas cajas, en dólares (columna de facturación configurada)
+                uProducts: {}, uProdTotals: {}, uMonths: byMonth(), uTotal: 0,
+                uPorts: {}, uPortTotals: {} };
   for (const r of recs){
     const c = r.consolidacion;
     if (!c || c.y !== year || c.mo > maxMonth) continue;
@@ -1458,6 +1466,15 @@ function aggregateByConsolidacion(recs, year, maxMonth = 12){
     if (!out.ports[p]) out.ports[p] = {};
     out.ports[p][pt] = (out.ports[p][pt] || 0) + r.tns;
     out.portTotals[pt] = (out.portTotals[pt] || 0) + r.tns;
+    // facturación
+    if (!out.uProducts[p]) out.uProducts[p] = byMonth();
+    out.uProducts[p][m] += r.usd;
+    out.uProdTotals[p] = (out.uProdTotals[p] || 0) + r.usd;
+    out.uMonths[m] += r.usd;
+    out.uTotal += r.usd;
+    if (!out.uPorts[p]) out.uPorts[p] = {};
+    out.uPorts[p][pt] = (out.uPorts[p][pt] || 0) + r.usd;
+    out.uPortTotals[pt] = (out.uPortTotals[pt] || 0) + r.usd;
     out.n++;
   }
   return out;
@@ -1475,8 +1492,31 @@ function renderConsolidacion(recs, year, maxMonth){
   sect.style.display = "";
   const a = aggregateByConsolidacion(recs, year, maxMonth);
   document.getElementById("lblConsYear").textContent = year;
-  const prods = Object.keys(a.prodTotals).sort((x, y) => a.prodTotals[y] - a.prodTotals[x]);
-  const ports = Object.keys(a.portTotals).sort((x, y) => a.portTotals[y] - a.portTotals[x]);
+
+  // métrica activa: toneladas o facturación
+  const M = UI.consMetric === "usd" ? "usd" : "tns";
+  document.querySelectorAll("#consMetric button").forEach(btn => {
+    const on = btn.dataset.cm === M;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.onclick = () => { UI.consMetric = btn.dataset.cm; saveUI(); render(); };
+  });
+  const usd = M === "usd";
+  const V = {
+    products:   usd ? a.uProducts   : a.products,
+    prodTotals: usd ? a.uProdTotals : a.prodTotals,
+    months:     usd ? a.uMonths     : a.months,
+    total:      usd ? a.uTotal      : a.total,
+    ports:      usd ? a.uPorts      : a.ports,
+    portTotals: usd ? a.uPortTotals : a.portTotals,
+  };
+  const fmtV = v => usd ? fmtUsd(v) : fmt1(v);
+  const unit = usd ? "USD" : "Tns";
+
+  const prods = Object.keys(V.prodTotals).sort((x, y) => V.prodTotals[y] - V.prodTotals[x]);
+  const ports = Object.keys(V.portTotals).sort((x, y) => V.portTotals[y] - V.portTotals[x]);
+  document.getElementById("consH1").textContent = usd ? "Facturación mensual por producto" : "Detalle mensual por producto";
+  document.getElementById("consH2").textContent = usd ? "Facturación de cada producto por destino" : "Toneladas de cada producto por destino";
 
   // gráfico apilado producto × mes
   if (charts.chConsProd){ charts.chConsProd.destroy(); delete charts.chConsProd; }
@@ -1484,16 +1524,16 @@ function renderConsolidacion(recs, year, maxMonth){
     charts.chConsProd = new Chart(document.getElementById("chConsProd"), {
       type: "bar",
       data: { labels: MESES, datasets: prods.map((p, i) => ({
-        label: p, data: a.products[p], backgroundColor: PALETTE[i % PALETTE.length],
+        label: p, data: V.products[p], backgroundColor: PALETTE[i % PALETTE.length],
         borderRadius: 5, borderSkipped: false, maxBarThickness: 46, stack: "c" })) },
       options: {
         responsive: true, maintainAspectRatio: false,
         animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
         plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
-          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t` } } },
+          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmtV(c.parsed.y)}` } } },
         scales: { x: { stacked: true, ticks: { color: cssVar("--tick") }, grid: { display: false } },
                   y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
-                       title: { display: true, text: "Tns", color: cssVar("--tick") } } },
+                       title: { display: true, text: unit, color: cssVar("--tick") } } },
       },
     });
   }
@@ -1510,24 +1550,24 @@ function renderConsolidacion(recs, year, maxMonth){
   document.getElementById("portChartBox").style.display = "";
   let h = "<table><tr><th>Producto</th>" + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
   for (const p of prods)
-    h += `<tr><td>${p}</td>` + a.products[p].map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") +
-         `<td><b>${fmt1(a.prodTotals[p])}</b></td></tr>`;
-  h += `<tr class="total"><td>Total</td>` + a.months.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") +
-       `<td>${fmt1(a.total)}</td></tr></table>`;
+    h += `<tr><td>${p}</td>` + V.products[p].map(v => `<td>${v ? fmtV(v) : ""}</td>`).join("") +
+         `<td><b>${fmtV(V.prodTotals[p])}</b></td></tr>`;
+  h += `<tr class="total"><td>Total</td>` + V.months.map(v => `<td>${v ? fmtV(v) : ""}</td>`).join("") +
+       `<td>${fmtV(V.total)}</td></tr></table>`;
   consEl.innerHTML = h;
 
   // tabla producto × destino
   let ph = "<table><tr><th>Producto</th>" + ports.map(x => `<th>${x}</th>`).join("") + "<th>Total</th></tr>";
   for (const p of prods){
     ph += `<tr><td>${p}</td>` + ports.map(x => {
-      const v = (a.ports[p] || {})[x] || 0;
-      return `<td>${v ? fmt1(v) : ""}</td>`;
-    }).join("") + `<td><b>${fmt1(a.prodTotals[p])}</b></td></tr>`;
+      const v = (V.ports[p] || {})[x] || 0;
+      return `<td>${v ? fmtV(v) : ""}</td>`;
+    }).join("") + `<td><b>${fmtV(V.prodTotals[p])}</b></td></tr>`;
   }
-  ph += `<tr class="total"><td>Total</td>` + ports.map(x => `<td>${fmt1(a.portTotals[x])}</td>`).join("") +
-        `<td>${fmt1(a.total)}</td></tr>`;
+  ph += `<tr class="total"><td>Total</td>` + ports.map(x => `<td>${fmtV(V.portTotals[x])}</td>`).join("") +
+        `<td>${fmtV(V.total)}</td></tr>`;
   ph += `<tr><td style="color:var(--faint)">% del total</td>` + ports.map(x =>
-        `<td style="color:var(--faint)">${a.total ? (a.portTotals[x] / a.total * 100).toFixed(1).replace(".", ",") + "%" : ""}</td>`).join("") +
+        `<td style="color:var(--faint)">${V.total ? (V.portTotals[x] / V.total * 100).toFixed(1).replace(".", ",") + "%" : ""}</td>`).join("") +
         `<td style="color:var(--faint)">100%</td></tr></table>`;
   document.getElementById("portTable").innerHTML = ph;
 
@@ -1535,13 +1575,13 @@ function renderConsolidacion(recs, year, maxMonth){
   if (charts.chPort){ charts.chPort.destroy(); delete charts.chPort; }
   charts.chPort = new Chart(document.getElementById("chPort"), {
     type: "bar",
-    data: { labels: ports, datasets: [{ data: ports.map(x => a.portTotals[x]),
+    data: { labels: ports, datasets: [{ data: ports.map(x => V.portTotals[x]),
       backgroundColor: ports.map((_, i) => PALETTE[i % PALETTE.length]), borderRadius: 6, borderSkipped: false, maxBarThickness: 30 }] },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
       animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
       plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: c => ` ${fmt1(c.parsed.x)} t · ${a.total ? (c.parsed.x / a.total * 100).toFixed(1).replace(".", ",") : 0}%` } } },
+        tooltip: { callbacks: { label: c => ` ${fmtV(c.parsed.x)} · ${V.total ? (c.parsed.x / V.total * 100).toFixed(1).replace(".", ",") : 0}%` } } },
       scales: { x: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") } },
                 y: { ticks: { color: cssVar("--tick") }, grid: { display: false } } },
     },
