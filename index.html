@@ -641,6 +641,10 @@
       </div>
       <label for="cfgColCobroEst">Fecha de cobro estimada <span style="color:var(--faint);font-weight:400">— se usa cuando la de cobro está vacía</span></label>
       <input id="cfgColCobroEst" placeholder="Fecha estimada">
+      <div class="row">
+        <div><label for="cfgColFlete">Flete (monto)</label><input id="cfgColFlete" placeholder="total flete"></div>
+        <div><label for="cfgColBroker">Comisión devengada</label><input id="cfgColBroker" placeholder="Comision Broker"></div>
+      </div>
     </div>
     <div class="actions">
       <button class="danger" id="cfgClear" type="button" title="Borra la configuración guardada de todos los negocios">Borrar todo</button>
@@ -683,12 +687,14 @@ const SHEET_DEFAULTS = {
     port:          "Port",
     packing:       "Packing",
     cobro:         "Fecha de cobro",
-    cobroEst:      "Fecha estimada",         // destino
+    cobroEst:      "Fecha estimada",
+    flete:         "total flete",
+    comBroker:     "Comision Broker",         // destino
     etd:           "ETD",          // fecha que define mes/año
   },
 };
 /* Fallback por letra, solo si el encabezado no aparece (estructura original AXT) */
-const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", packing: "D", containers: "F", consolidacion: "K", port: "N", etd: "L", cobro: "AU", cobroEst: "AT" };
+const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", packing: "D", containers: "F", consolidacion: "K", port: "N", etd: "L", cobro: "AU", cobroEst: "AT", flete: "AO", comBroker: "AF" };
 /* migración de configs viejas que guardaban letras */
 const LETTER_TO_HEADER = { AG: "TOTAL FINAL", AC: "Total CFR", AF: "Price Serv" };
 const LS_KEY = "dashboardConfigV2";
@@ -1068,6 +1074,8 @@ function buildRecords(rows, cfg, bizKey){
   const sepTns = forced || detectDecimalSep(colValues(C.tns));
   const sepUsd = forced || detectDecimalSep(colValues(usdIdx));
   const sepCom = forced || detectDecimalSep(colValues(comIdx));
+  const sepFlete = forced || detectDecimalSep(colValues(C.flete));
+  const sepBroker = forced || detectDecimalSep(colValues(C.comBroker));
   const recs = [];
   for (let i = headerRowIdx + 1; i < rows.length; i++){
     const r = rows[i]; if (!r) continue;
@@ -1093,6 +1101,8 @@ function buildRecords(rows, cfg, bizKey){
       port: String(r[C.port] ?? "").trim() || "(sin destino)",
       packing: String(r[C.packing] ?? "").trim(),
       cobro: parseDate(r[C.cobro], cfg.DATE_FORMAT) || parseDate(r[C.cobroEst], cfg.DATE_FORMAT),
+      flete: C.flete >= 0 ? Math.abs(parseNumber(r[C.flete], sepFlete)) : 0,
+      comBroker: C.comBroker >= 0 ? Math.abs(parseNumber(r[C.comBroker], sepBroker)) : 0,
       negocio: String(r[C.negocio] ?? "").trim(),
     });
   }
@@ -1699,9 +1709,9 @@ function diasCobro(r){
 function aggGruposComerciales(recs, year, maxMonth = 12, minMonth = 1){
   const rows = new Map();   // clave → { label, orden, tns, usd, dias:[], cargas, sinFecha }
   const add = (key, label, orden, r) => {
-    if (!rows.has(key)) rows.set(key, { label, orden, tns: 0, usd: 0, dias: [], cargas: 0, sinFecha: 0 });
+    if (!rows.has(key)) rows.set(key, { label, orden, tns: 0, usd: 0, flete: 0, broker: 0, dias: [], cargas: 0, sinFecha: 0 });
     const g = rows.get(key);
-    g.tns += r.tns; g.usd += r.usd; g.cargas++;
+    g.tns += r.tns; g.usd += r.usd; g.flete += r.flete || 0; g.broker += r.comBroker || 0; g.cargas++;
     const d = diasCobro(r);
     if (d === null) g.sinFecha++; else g.dias.push(d);
   };
@@ -1749,19 +1759,25 @@ function renderGrupos(recs, year, maxMonth){
   }
   const tTns = gs.reduce((s, g) => s + g.tns, 0);
   const tUsd = gs.reduce((s, g) => s + g.usd, 0);
-  const tCar = gs.reduce((s, g) => s + g.cargas, 0);
+  const tFle = gs.reduce((s, g) => s + g.flete, 0);
+  const tBro = gs.reduce((s, g) => s + g.broker, 0);
   const allD = gs.flatMap(g => g.dias);
   const totalSinFecha = gs.reduce((s, g) => s + g.sinFecha, 0);
-  let h = `<table><tr><th>Grupo</th><th>Cargas</th><th>Toneladas</th><th>Facturación</th><th>USD / t</th><th>Días prom. de cobro</th></tr>`;
+  // los pagos se muestran en negativo
+  const neg = v => v ? `<span style="color:var(--red)">−${fmtUsd(v).replace("US$ ", "US$ ")}</span>` : "—";
+  let h = `<table><tr><th>Grupo</th><th>Toneladas</th><th>Facturación</th><th>Fletes</th><th>Comisión devengada</th><th>USD / t</th><th>Días prom. de cobro</th></tr>`;
   for (const g of gs){
-    h += `<tr><td>${g.label}</td><td>${fmt0(g.cargas)}</td><td>${fmt1(g.tns)}</td><td>${fmtUsd(g.usd)}</td>
+    h += `<tr><td>${g.label}</td><td>${fmt1(g.tns)}</td><td>${fmtUsd(g.usd)}</td>
+      <td>${neg(g.flete)}</td><td>${neg(g.broker)}</td>
       <td>${g.usdPorTon === null ? "—" : fmtUsd(g.usdPorTon)}</td>
       <td>${g.diasProm === null ? '<span style="color:var(--faint)">sin fecha</span>' : fmt0(g.diasProm) + " d"}${g.sinFecha ? `<span style="color:var(--faint);font-size:.72rem"> (${g.sinFecha} s/f)</span>` : ""}</td></tr>`;
   }
-  h += `<tr class="total"><td>Total</td><td>${fmt0(tCar)}</td><td>${fmt1(tTns)}</td><td>${fmtUsd(tUsd)}</td>
+  h += `<tr class="total"><td>Total</td><td>${fmt1(tTns)}</td><td>${fmtUsd(tUsd)}</td>
+        <td>${neg(tFle)}</td><td>${neg(tBro)}</td>
         <td>${tTns ? fmtUsd(tUsd / tTns) : "—"}</td>
         <td>${allD.length ? fmt0(allD.reduce((a, v) => a + v, 0) / allD.length) + " d" : "—"}</td></tr></table>`;
   h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.55">
+        Fletes y comisión devengada se muestran <b>en negativo</b> porque son pagos (columnas “total flete” y “Comision Broker”).<br>
         Días de cobro: diferencia entre <b>Consolidación</b> y <b>Fecha de cobro</b> de cada carga (si está vacía se usa <b>Fecha estimada</b>), promediada carga por carga dentro del grupo.
         ${totalSinFecha ? `<br>“s/f” = cargas sin ninguna de las dos fechas, excluidas del promedio (${totalSinFecha} en total).` : ""}</p>`;
   document.getElementById("gruposTable").innerHTML = h;
@@ -2372,6 +2388,8 @@ function fillConfigForm(){
   document.getElementById("cfgColPacking").value = c.COLS.packing || "Packing";
   document.getElementById("cfgColCobro").value = c.COLS.cobro || "Fecha de cobro";
   document.getElementById("cfgColCobroEst").value = c.COLS.cobroEst || "Fecha estimada";
+  document.getElementById("cfgColFlete").value = c.COLS.flete || "total flete";
+  document.getElementById("cfgColBroker").value = c.COLS.comBroker || "Comision Broker";
   document.getElementById("cfgColCons").value = c.COLS.consolidacion;
   document.getElementById("cfgColPort").value = c.COLS.port;
   document.getElementById("cfgColUsd").value = c.USD_COL;
