@@ -335,6 +335,9 @@
   }
   @media(max-width:380px){ .kpis{grid-template-columns:1fr} }
 
+  .subhead{font-size:.85rem;font-weight:600;color:var(--muted);margin:22px 0 10px;letter-spacing:-.01em}
+  .subhead:first-of-type{margin-top:0}
+
   /* Tendencia: una fila por métrica, escalas independientes */
   .trendgrid{display:grid;gap:18px}
   .trendcell .tlabel{display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
@@ -496,6 +499,18 @@
       <p class="csub">Toneladas exportadas de cada producto, mes por mes, con totales.</p>
       <div class="tablewrap" id="prodTable"></div>
     </div>
+    <div class="card wide" id="consSection">
+      <h2>Consolidación — producto, mes y destino <span id="lblConsYear" class="clickable">2026</span></h2>
+      <p class="csub">Esta sección usa la fecha de <b>Consolidación</b> (no la de ETD, como el resto del tablero). Respeta el año elegido arriba y el filtro de productos.</p>
+      <div class="chartbox tall" style="margin-bottom:22px"><canvas id="chConsProd" aria-label="Toneladas por producto y mes según consolidación" role="img"></canvas></div>
+      <h3 class="subhead">Detalle mensual por producto</h3>
+      <div class="tablewrap" id="consTable"></div>
+      <h3 class="subhead">Toneladas de cada producto por destino</h3>
+      <div class="tablewrap" id="portTable"></div>
+      <h3 class="subhead">Participación de cada destino</h3>
+      <div class="chartbox" id="portChartBox"><canvas id="chPort" aria-label="Toneladas por destino" role="img"></canvas></div>
+    </div>
+
     <div class="card wide" id="compareCard">
       <h2>Comparación anual por producto</h2>
       <p class="csub">Diferencia en toneladas y porcentaje de cada producto entre los dos años comparados.</p>
@@ -586,6 +601,10 @@
         <div><label for="cfgColCom">Comisión</label><input id="cfgColCom" placeholder="Monto LT"></div>
         <div><label for="cfgColNegocio">Referencia de la carga</label><input id="cfgColNegocio" placeholder="Negocio"></div>
       </div>
+      <div class="row">
+        <div><label for="cfgColCons">Fecha de consolidación</label><input id="cfgColCons" placeholder="Consolidación"></div>
+        <div><label for="cfgColPort">Destino (puerto)</label><input id="cfgColPort" placeholder="Port"></div>
+      </div>
     </div>
     <div class="actions">
       <button class="danger" id="cfgClear" type="button" title="Borra la configuración guardada de todos los negocios">Borrar todo</button>
@@ -601,7 +620,7 @@
            "soon"   = se muestra como próximamente
 =================================================== */
 const BUSINESSES = [
-  { key: "axt",       name: "AXT",       status: "active", nop: true, split: "nop" },   // split: qué desglose ofrece cada negocio
+  { key: "axt",       name: "AXT",       status: "active", nop: true, split: "nop", consViews: true },   // split: qué desglose ofrece cada negocio
   { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil" },
   { key: "buzaram",   name: "Buzaram",   status: "active", nop: false },
 ];
@@ -625,11 +644,12 @@ const SHEET_DEFAULTS = {
     product:       "Product",
     containers:    "Containers",
     consolidacion: "Consolidación",
+    port:          "Port",         // destino
     etd:           "ETD",          // fecha que define mes/año
   },
 };
 /* Fallback por letra, solo si el encabezado no aparece (estructura original AXT) */
-const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", containers: "F", consolidacion: "K", etd: "L" };
+const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", containers: "F", consolidacion: "K", port: "N", etd: "L" };
 /* migración de configs viejas que guardaban letras */
 const LETTER_TO_HEADER = { AG: "TOTAL FINAL", AC: "Total CFR", AF: "Price Serv" };
 const LS_KEY = "dashboardConfigV2";
@@ -1008,23 +1028,25 @@ function buildRecords(rows, cfg, bizKey){
   for (let i = headerRowIdx + 1; i < rows.length; i++){
     const r = rows[i]; if (!r) continue;
     const etd = parseDate(r[C.etd], cfg.DATE_FORMAT);   // el mes/año lo define ETD
+    const cons = parseDate(r[C.consolidacion], cfg.DATE_FORMAT);
     const tns = parseNumber(r[C.tns], sepTns);
     const product = String(r[C.product] ?? "").trim();
-    if (!etd && !tns && !product) continue;
-    if (!etd) continue;
+    if (!etd && !cons && !tns && !product) continue;
+    if (!etd && !cons) continue;   // sin ninguna fecha no se puede ubicar en el tiempo
     const com = comIdx < 0 ? 0 : (cfg.COMISION.mode === "porTon"
       ? parseNumber(r[comIdx], sepCom) * tns
       : parseNumber(r[comIdx], sepCom));
     recs.push({
       biz: bizKey,
-      year: etd.y, month: etd.mo,
+      year: etd ? etd.y : undefined, month: etd ? etd.mo : undefined,
       tns,
       product: product || "(sin producto)",
       usd: parseNumber(r[usdIdx], sepUsd),
       comision: com,
       containers: countContainers(r[C.containers]),
       etd,
-      consolidacion: parseDate(r[C.consolidacion], cfg.DATE_FORMAT),
+      consolidacion: cons,
+      port: String(r[C.port] ?? "").trim() || "(sin destino)",
       negocio: String(r[C.negocio] ?? "").trim(),
     });
   }
@@ -1418,6 +1440,114 @@ function renderTrend(recs){
   line("chTrendCom", com, "#ff9500", true);
 }
 
+/* ================= Vista por CONSOLIDACIÓN =================
+   Agrupa por la fecha de Consolidación (no ETD): producto × mes y producto × destino. */
+function aggregateByConsolidacion(recs, year, maxMonth = 12){
+  const byMonth = () => Array(12).fill(0);
+  const out = { products: {}, prodTotals: {}, months: byMonth(), total: 0,
+                ports: {}, portTotals: {}, n: 0 };
+  for (const r of recs){
+    const c = r.consolidacion;
+    if (!c || c.y !== year || c.mo > maxMonth) continue;
+    const m = c.mo - 1, p = r.product, pt = r.port || "(sin destino)";
+    if (!out.products[p]) out.products[p] = byMonth();
+    out.products[p][m] += r.tns;
+    out.prodTotals[p] = (out.prodTotals[p] || 0) + r.tns;
+    out.months[m] += r.tns;
+    out.total += r.tns;
+    if (!out.ports[p]) out.ports[p] = {};
+    out.ports[p][pt] = (out.ports[p][pt] || 0) + r.tns;
+    out.portTotals[pt] = (out.portTotals[pt] || 0) + r.tns;
+    out.n++;
+  }
+  return out;
+}
+
+function renderConsolidacion(recs, year, maxMonth){
+  // solo en los negocios que declaran consViews (AXT); en el resto, oculta la sección
+  const sect = document.getElementById("consSection");
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  if (!bz || bz.consViews !== true){
+    sect.style.display = "none";
+    ["chConsProd", "chPort"].forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
+    return;
+  }
+  sect.style.display = "";
+  const a = aggregateByConsolidacion(recs, year, maxMonth);
+  document.getElementById("lblConsYear").textContent = year;
+  const prods = Object.keys(a.prodTotals).sort((x, y) => a.prodTotals[y] - a.prodTotals[x]);
+  const ports = Object.keys(a.portTotals).sort((x, y) => a.portTotals[y] - a.portTotals[x]);
+
+  // gráfico apilado producto × mes
+  if (charts.chConsProd){ charts.chConsProd.destroy(); delete charts.chConsProd; }
+  if (prods.length){
+    charts.chConsProd = new Chart(document.getElementById("chConsProd"), {
+      type: "bar",
+      data: { labels: MESES, datasets: prods.map((p, i) => ({
+        label: p, data: a.products[p], backgroundColor: PALETTE[i % PALETTE.length],
+        borderRadius: 5, borderSkipped: false, maxBarThickness: 46, stack: "c" })) },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
+          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t` } } },
+        scales: { x: { stacked: true, ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                  y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
+                       title: { display: true, text: "Tns", color: cssVar("--tick") } } },
+      },
+    });
+  }
+
+  // tabla producto × mes
+  const consEl = document.getElementById("consTable");
+  if (!prods.length){
+    consEl.innerHTML = '<p class="empty">No hay cargas con fecha de consolidación en ' + year + '.</p>';
+    document.getElementById("portTable").innerHTML = "";
+    document.getElementById("portChartBox").style.display = "none";
+    if (charts.chPort){ charts.chPort.destroy(); delete charts.chPort; }
+    return;
+  }
+  document.getElementById("portChartBox").style.display = "";
+  let h = "<table><tr><th>Producto</th>" + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
+  for (const p of prods)
+    h += `<tr><td>${p}</td>` + a.products[p].map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") +
+         `<td><b>${fmt1(a.prodTotals[p])}</b></td></tr>`;
+  h += `<tr class="total"><td>Total</td>` + a.months.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") +
+       `<td>${fmt1(a.total)}</td></tr></table>`;
+  consEl.innerHTML = h;
+
+  // tabla producto × destino
+  let ph = "<table><tr><th>Producto</th>" + ports.map(x => `<th>${x}</th>`).join("") + "<th>Total</th></tr>";
+  for (const p of prods){
+    ph += `<tr><td>${p}</td>` + ports.map(x => {
+      const v = (a.ports[p] || {})[x] || 0;
+      return `<td>${v ? fmt1(v) : ""}</td>`;
+    }).join("") + `<td><b>${fmt1(a.prodTotals[p])}</b></td></tr>`;
+  }
+  ph += `<tr class="total"><td>Total</td>` + ports.map(x => `<td>${fmt1(a.portTotals[x])}</td>`).join("") +
+        `<td>${fmt1(a.total)}</td></tr>`;
+  ph += `<tr><td style="color:var(--faint)">% del total</td>` + ports.map(x =>
+        `<td style="color:var(--faint)">${a.total ? (a.portTotals[x] / a.total * 100).toFixed(1).replace(".", ",") + "%" : ""}</td>`).join("") +
+        `<td style="color:var(--faint)">100%</td></tr></table>`;
+  document.getElementById("portTable").innerHTML = ph;
+
+  // barras horizontales por destino
+  if (charts.chPort){ charts.chPort.destroy(); delete charts.chPort; }
+  charts.chPort = new Chart(document.getElementById("chPort"), {
+    type: "bar",
+    data: { labels: ports, datasets: [{ data: ports.map(x => a.portTotals[x]),
+      backgroundColor: ports.map((_, i) => PALETTE[i % PALETTE.length]), borderRadius: 6, borderSkipped: false, maxBarThickness: 30 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${fmt1(c.parsed.x)} t · ${a.total ? (c.parsed.x / a.total * 100).toFixed(1).replace(".", ",") : 0}%` } } },
+      scales: { x: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") } },
+                y: { ticks: { color: cssVar("--tick") }, grid: { display: false } } },
+    },
+  });
+}
+
 /* ---- detalle mensual (auditoría) ---- */
 const detailBg = document.getElementById("detailBg");
 document.getElementById("detailClose").onclick = () => detailBg.classList.remove("open");
@@ -1633,6 +1763,8 @@ function render(){
     document.getElementById("footer").textContent = "";
     document.getElementById("ytdNote").style.display = "none";
     document.getElementById("contextBar").innerHTML = "";
+    document.getElementById("consTable").innerHTML = "";
+    document.getElementById("portTable").innerHTML = "";
     return;
   }
   soonView.style.display = "none";
@@ -1657,6 +1789,8 @@ function render(){
     document.getElementById("footer").textContent = "";
     document.getElementById("ytdNote").style.display = "none";
     document.getElementById("contextBar").innerHTML = "";
+    document.getElementById("consTable").innerHTML = "";
+    document.getElementById("portTable").innerHTML = "";
     return;
   }
   if (!years.includes(UI.year)) UI.year = years[0];
@@ -1747,6 +1881,7 @@ function render(){
   renderProductChart(a, yA);
   renderProductTable(a, yA);
   renderProductCompare(a, b, yA, yB);
+  renderConsolidacion(recs, yA, MM);
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
@@ -2012,6 +2147,10 @@ function fillConfigForm(){
   document.getElementById("cfgColTns").value = c.COLS.tns;
   document.getElementById("cfgColProduct").value = c.COLS.product;
   document.getElementById("cfgColNegocio").value = c.COLS.negocio;
+  document.getElementById("cfgColCons").value = c.COLS.consolidacion;
+  document.getElementById("cfgColPort").value = c.COLS.port || "Port";
+  document.getElementById("cfgColCons").value = c.COLS.consolidacion;
+  document.getElementById("cfgColPort").value = c.COLS.port;
   document.getElementById("cfgColUsd").value = c.USD_COL;
   document.getElementById("cfgColCom").value = c.COMISION.col;
 }
@@ -2074,7 +2213,8 @@ document.getElementById("cfgSave").onclick = async () => {
       tns:           txt("cfgColTns")     || D.COLS.tns,
       product:       txt("cfgColProduct") || D.COLS.product,
       containers:    CONFIG[cfgBizKey].COLS.containers || D.COLS.containers,
-      consolidacion: CONFIG[cfgBizKey].COLS.consolidacion || D.COLS.consolidacion,
+      consolidacion: txt("cfgColCons")    || D.COLS.consolidacion,
+      port:          txt("cfgColPort")    || D.COLS.port,
       etd:           txt("cfgColEtd")     || D.COLS.etd,
     },
   };
