@@ -538,6 +538,16 @@
     <div class="card wide" id="gruposCard" style="display:none">
       <h2>Grupos comerciales — <span id="lblGruposYear" class="clickable"></span></h2>
       <p class="csub">Blancheados separados por región de destino, y pastas y roasted por tipo de packing. Toneladas consolidadas, facturación y cuántos días tarda en cobrarse cada grupo. Usa la fecha de <b>Consolidación</b> y respeta el año, el filtro y el <b>rango de meses</b> elegido arriba.</p>
+      <div class="consbar">
+        <div class="rangebox">
+          <label for="gruposFrom">Meses</label>
+          <select id="gruposFrom" aria-label="Mes desde"></select>
+          <span class="rdash">→</span>
+          <select id="gruposTo" aria-label="Mes hasta"></select>
+          <button type="button" id="gruposAll" class="mini" title="Ver los 12 meses">Todo el año</button>
+          <button type="button" id="gruposYtd" class="mini" title="Desde enero hasta el último mes con datos">Hasta hoy</button>
+        </div>
+      </div>
       <div class="tablewrap" id="gruposTable"></div>
     </div>
 
@@ -1496,6 +1506,23 @@ function renderTrend(recs){
   line("chTrendCom", com, "#ff9500", true);
 }
 
+/* Cablea un par de selectores de rango (hay uno en la sección y otro en la tarjeta
+   de grupos; ambos leen y escriben el mismo estado, así quedan siempre sincronizados) */
+function wireRange(idFrom, idTo, idAll, idYtd, RG, recs, year){
+  const selF = document.getElementById(idFrom), selT = document.getElementById(idTo);
+  if (!selF || !selT) return;
+  const opts = sel => MESES.map((m, i) => `<option value="${i + 1}"${(i + 1) === sel ? " selected" : ""}>${m}</option>`).join("");
+  selF.innerHTML = opts(RG.from); selT.innerHTML = opts(RG.to);
+  selF.onchange = () => { UI.consFrom = +selF.value; if (UI.consFrom > UI.consTo) UI.consTo = UI.consFrom; saveUI(); render(); };
+  selT.onchange = () => { UI.consTo = +selT.value; if (UI.consTo < UI.consFrom) UI.consFrom = UI.consTo; saveUI(); render(); };
+  const bAll = document.getElementById(idAll), bYtd = document.getElementById(idYtd);
+  if (bAll) bAll.onclick = () => { UI.consFrom = 1; UI.consTo = 12; saveUI(); render(); };
+  if (bYtd) bYtd.onclick = () => {
+    const meses = recs.filter(r => r.consolidacion && r.consolidacion.y === year).map(r => r.consolidacion.mo);
+    UI.consFrom = 1; UI.consTo = meses.length ? Math.max(...meses) : 12; saveUI(); render();
+  };
+}
+
 /* Rango de meses elegido en el selector, intersectado con el corte a misma fecha */
 function consRange(maxMonth){
   const from = Math.max(1, Math.min(12, UI.consFrom || 1));
@@ -1559,17 +1586,8 @@ function renderConsolidacion(recs, year, maxMonth){
   const a = aggregateByConsolidacion(recs, year, RG.to, RG.from);
   document.getElementById("lblConsYear").textContent = year;
 
-  // selector de meses
-  const selF = document.getElementById("consFrom"), selT = document.getElementById("consTo");
-  const opts = sel => MESES.map((m, i) => `<option value="${i + 1}"${(i + 1) === sel ? " selected" : ""}>${m}</option>`).join("");
-  selF.innerHTML = opts(RG.from); selT.innerHTML = opts(RG.to);
-  selF.onchange = () => { UI.consFrom = +selF.value; if (UI.consFrom > UI.consTo) UI.consTo = UI.consFrom; saveUI(); render(); };
-  selT.onchange = () => { UI.consTo = +selT.value; if (UI.consTo < UI.consFrom) UI.consFrom = UI.consTo; saveUI(); render(); };
-  document.getElementById("consAll").onclick = () => { UI.consFrom = 1; UI.consTo = 12; saveUI(); render(); };
-  document.getElementById("consYtd").onclick = () => {
-    const conMes = recs.filter(r => r.consolidacion && r.consolidacion.y === year).map(r => r.consolidacion.mo);
-    UI.consFrom = 1; UI.consTo = conMes.length ? Math.max(...conMes) : 12; saveUI(); render();
-  };
+  // selector de meses de la sección
+  wireRange("consFrom", "consTo", "consAll", "consYtd", RG, recs, year);
 
   // métrica activa: toneladas o facturación
   const M = UI.consMetric === "usd" ? "usd" : "tns";
@@ -1751,6 +1769,7 @@ function renderGrupos(recs, year, maxMonth){
   const RG = consRange(maxMonth);
   document.getElementById("lblGruposYear").textContent =
     (RG.from === 1 && RG.to === 12) ? year : `${MESES[RG.from - 1]} a ${MESES[RG.to - 1]} ${year}`;
+  wireRange("gruposFrom", "gruposTo", "gruposAll", "gruposYtd", RG, recs, year);
   const gs = aggGruposComerciales(recs, year, RG.to, RG.from);
   if (!gs.length){
     document.getElementById("gruposTable").innerHTML =
