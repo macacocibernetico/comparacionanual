@@ -515,6 +515,12 @@
       <div class="chartbox" id="portChartBox"><canvas id="chPort" aria-label="Toneladas por destino" role="img"></canvas></div>
     </div>
 
+    <div class="card wide" id="gruposCard" style="display:none">
+      <h2>Grupos comerciales — <span id="lblGruposYear" class="clickable"></span></h2>
+      <p class="csub">Blancheados separados por región de destino, y pastas y roasted por tipo de packing. Toneladas consolidadas, facturación y cuántos días tarda en cobrarse cada grupo. Usa la fecha de <b>Consolidación</b> y respeta el año y el filtro de arriba.</p>
+      <div class="tablewrap" id="gruposTable"></div>
+    </div>
+
     <div class="card wide" id="compareCard">
       <h2>Comparación anual por producto</h2>
       <p class="csub">Diferencia en toneladas y porcentaje de cada producto entre los dos años comparados.</p>
@@ -609,6 +615,12 @@
         <div><label for="cfgColCons">Fecha de consolidación</label><input id="cfgColCons" placeholder="Consolidación"></div>
         <div><label for="cfgColPort">Destino (puerto)</label><input id="cfgColPort" placeholder="Port"></div>
       </div>
+      <div class="row">
+        <div><label for="cfgColPacking">Packing</label><input id="cfgColPacking" placeholder="Packing"></div>
+        <div><label for="cfgColCobro">Fecha de cobro</label><input id="cfgColCobro" placeholder="Fecha de cobro"></div>
+      </div>
+      <label for="cfgColCobroEst">Fecha de cobro estimada <span style="color:var(--faint);font-weight:400">— se usa cuando la de cobro está vacía</span></label>
+      <input id="cfgColCobroEst" placeholder="Fecha estimada">
     </div>
     <div class="actions">
       <button class="danger" id="cfgClear" type="button" title="Borra la configuración guardada de todos los negocios">Borrar todo</button>
@@ -648,12 +660,15 @@ const SHEET_DEFAULTS = {
     product:       "Product",
     containers:    "Containers",
     consolidacion: "Consolidación",
-    port:          "Port",         // destino
+    port:          "Port",
+    packing:       "Packing",
+    cobro:         "Fecha de cobro",
+    cobroEst:      "Fecha estimada",         // destino
     etd:           "ETD",          // fecha que define mes/año
   },
 };
 /* Fallback por letra, solo si el encabezado no aparece (estructura original AXT) */
-const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", containers: "F", consolidacion: "K", port: "N", etd: "L" };
+const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", packing: "D", containers: "F", consolidacion: "K", port: "N", etd: "L", cobro: "AU", cobroEst: "AT" };
 /* migración de configs viejas que guardaban letras */
 const LETTER_TO_HEADER = { AG: "TOTAL FINAL", AC: "Total CFR", AF: "Price Serv" };
 const LS_KEY = "dashboardConfigV2";
@@ -1052,6 +1067,8 @@ function buildRecords(rows, cfg, bizKey){
       etd,
       consolidacion: cons,
       port: String(r[C.port] ?? "").trim() || "(sin destino)",
+      packing: String(r[C.packing] ?? "").trim(),
+      cobro: parseDate(r[C.cobro], cfg.DATE_FORMAT) || parseDate(r[C.cobroEst], cfg.DATE_FORMAT),
       negocio: String(r[C.negocio] ?? "").trim(),
     });
   }
@@ -1588,6 +1605,114 @@ function renderConsolidacion(recs, year, maxMonth){
   });
 }
 
+/* ================= Grupos comerciales de AXT =================
+   Blancheados por región de destino · pastas y roasted por packing.
+   Siempre según la fecha de Consolidación. */
+const PUERTOS_USA_CAN = ["norfolk", "new york", "newark", "toronto", "montreal", "vancouver", "houston", "savannah", "charleston", "baltimore", "oakland", "los angeles", "long beach", "miami"];
+const PUERTOS_EUROPA  = ["livorno", "napoli", "naples", "genova", "genoa", "rotterdam", "hamburgo", "hamburg", "amberes", "antwerp", "antwerpen", "barcelona", "valencia", "le havre", "algeciras", "bilbao", "lisboa", "lisbon", "gioia tauro", "la spezia", "koper", "marsella", "marseille", "felixstowe", "southampton", "london", "gdansk", "aarhus", "goteborg", "gotemburgo", "bremerhaven", "vado", "salerno", "trieste", "venecia", "venice", "sines", "leixoes", "dublin", "cork", "helsinki", "oslo", "riga", "constanza", "pireo", "piraeus", "tarragona", "setubal", "vigo", "santander", "dunkerque", "zeebrugge", "immingham", "liverpool", "tilbury", "rouen", "nantes", "bordeaux"];
+
+function regionDestino(port){
+  const p = normHeader(port);
+  if (PUERTOS_USA_CAN.some(x => p.includes(x))) return "usa";
+  if (PUERTOS_EUROPA.some(x => p.includes(x))) return "eu";
+  return "otro";
+}
+/* Packing normalizado a las variantes que se usan en la planilla */
+function normPacking(pk){
+  const p = normHeader(pk);
+  if (!p) return "(sin packing)";
+  if (/big\s*bag|bigbag|maxi\s*saco/.test(p)) return "Big bags";
+  if (/balde/.test(p)) return "Baldes";
+  if (/box|caja/.test(p)) return "Boxes";
+  if (/pote|pot\b|tarr/.test(p)) return "Potes";
+  if (/bolsa|bag|saco/.test(p)) return "Bolsas";
+  if (/tambor|drum/.test(p)) return "Tambores";
+  if (/granel|bulk/.test(p)) return "Granel";
+  return String(pk).trim();
+}
+const esBlancheado = pr => /blanched|blanchead/.test(normHeader(pr));
+const esPasta      = pr => /paste|pasta/.test(normHeader(pr));
+const esRoasted    = pr => /roasted|tostad/.test(normHeader(pr));
+
+/* Días entre consolidación y cobro (o fecha estimada si no hay cobro) */
+function diasCobro(r){
+  const c = r.consolidacion, k = r.cobro;
+  if (!c || !k || !c.d || !k.d) return null;
+  const a = Date.UTC(c.y, c.mo - 1, c.d), b2 = Date.UTC(k.y, k.mo - 1, k.d);
+  const d = Math.round((b2 - a) / 86400000);
+  return isFinite(d) ? d : null;
+}
+
+/* Arma las filas de la vista por grupos comerciales */
+function aggGruposComerciales(recs, year, maxMonth = 12){
+  const rows = new Map();   // clave → { label, orden, tns, usd, dias:[], cargas, sinFecha }
+  const add = (key, label, orden, r) => {
+    if (!rows.has(key)) rows.set(key, { label, orden, tns: 0, usd: 0, dias: [], cargas: 0, sinFecha: 0 });
+    const g = rows.get(key);
+    g.tns += r.tns; g.usd += r.usd; g.cargas++;
+    const d = diasCobro(r);
+    if (d === null) g.sinFecha++; else g.dias.push(d);
+  };
+  for (const r of recs){
+    const c = r.consolidacion;
+    if (!c || c.y !== year || c.mo > maxMonth) continue;
+    const pr = r.product;
+    if (esBlancheado(pr)){
+      const reg = regionDestino(r.port);
+      if (reg === "usa") add("bl-usa", "Blancheado NOP USA/CANADA", 1, r);
+      else if (reg === "eu") add("bl-eu", "Blancheado NOP Europa", 2, r);
+      else add("bl-otro", "Blancheado NOP — otros destinos", 3, r);
+    } else if (esPasta(pr)){
+      const pk = normPacking(r.packing);
+      add("pa-" + pk, "Peanut paste · " + pk, 4, r);
+    } else if (esRoasted(pr)){
+      const pk = normPacking(r.packing);
+      add("ro-" + pk, "Roasted peanuts · " + pk, 5, r);
+    } else {
+      add("otros", "Otros productos", 9, r);
+    }
+  }
+  const out = [...rows.values()].map(g => ({
+    ...g,
+    diasProm: g.dias.length ? g.dias.reduce((a, v) => a + v, 0) / g.dias.length : null,
+    usdPorTon: g.tns ? g.usd / g.tns : null,
+  }));
+  out.sort((a, b) => a.orden - b.orden || b.tns - a.tns);
+  return out;
+}
+
+function renderGrupos(recs, year, maxMonth){
+  const card = document.getElementById("gruposCard");
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  if (!bz || bz.consViews !== true){ card.style.display = "none"; return; }
+  card.style.display = "";
+  document.getElementById("lblGruposYear").textContent = year;
+  const gs = aggGruposComerciales(recs, year, maxMonth);
+  if (!gs.length){
+    document.getElementById("gruposTable").innerHTML =
+      '<p class="empty">No hay cargas con fecha de Consolidación en ' + year + '.</p>';
+    return;
+  }
+  const tTns = gs.reduce((s, g) => s + g.tns, 0);
+  const tUsd = gs.reduce((s, g) => s + g.usd, 0);
+  const tCar = gs.reduce((s, g) => s + g.cargas, 0);
+  const allD = gs.flatMap(g => g.dias);
+  const totalSinFecha = gs.reduce((s, g) => s + g.sinFecha, 0);
+  let h = `<table><tr><th>Grupo</th><th>Cargas</th><th>Toneladas</th><th>Facturación</th><th>USD / t</th><th>Días prom. de cobro</th></tr>`;
+  for (const g of gs){
+    h += `<tr><td>${g.label}</td><td>${fmt0(g.cargas)}</td><td>${fmt1(g.tns)}</td><td>${fmtUsd(g.usd)}</td>
+      <td>${g.usdPorTon === null ? "—" : fmtUsd(g.usdPorTon)}</td>
+      <td>${g.diasProm === null ? '<span style="color:var(--faint)">sin fecha</span>' : fmt0(g.diasProm) + " d"}${g.sinFecha ? `<span style="color:var(--faint);font-size:.72rem"> (${g.sinFecha} s/f)</span>` : ""}</td></tr>`;
+  }
+  h += `<tr class="total"><td>Total</td><td>${fmt0(tCar)}</td><td>${fmt1(tTns)}</td><td>${fmtUsd(tUsd)}</td>
+        <td>${tTns ? fmtUsd(tUsd / tTns) : "—"}</td>
+        <td>${allD.length ? fmt0(allD.reduce((a, v) => a + v, 0) / allD.length) + " d" : "—"}</td></tr></table>`;
+  h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.55">
+        Días de cobro: diferencia entre <b>Consolidación</b> y <b>Fecha de cobro</b> de cada carga (si está vacía se usa <b>Fecha estimada</b>), promediada carga por carga dentro del grupo.
+        ${totalSinFecha ? `<br>“s/f” = cargas sin ninguna de las dos fechas, excluidas del promedio (${totalSinFecha} en total).` : ""}</p>`;
+  document.getElementById("gruposTable").innerHTML = h;
+}
+
 /* ---- detalle mensual (auditoría) ---- */
 const detailBg = document.getElementById("detailBg");
 document.getElementById("detailClose").onclick = () => detailBg.classList.remove("open");
@@ -1922,6 +2047,7 @@ function render(){
   renderProductTable(a, yA);
   renderProductCompare(a, b, yA, yB);
   renderConsolidacion(recs, yA, MM);
+  renderGrupos(recs, yA, MM);
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
@@ -2189,6 +2315,9 @@ function fillConfigForm(){
   document.getElementById("cfgColNegocio").value = c.COLS.negocio;
   document.getElementById("cfgColCons").value = c.COLS.consolidacion;
   document.getElementById("cfgColPort").value = c.COLS.port || "Port";
+  document.getElementById("cfgColPacking").value = c.COLS.packing || "Packing";
+  document.getElementById("cfgColCobro").value = c.COLS.cobro || "Fecha de cobro";
+  document.getElementById("cfgColCobroEst").value = c.COLS.cobroEst || "Fecha estimada";
   document.getElementById("cfgColCons").value = c.COLS.consolidacion;
   document.getElementById("cfgColPort").value = c.COLS.port;
   document.getElementById("cfgColUsd").value = c.USD_COL;
