@@ -338,6 +338,16 @@
   .subhead{font-size:.85rem;font-weight:600;color:var(--muted);margin:22px 0 10px;letter-spacing:-.01em}
   .subhead:first-of-type{margin-top:0}
 
+  /* Barra de controles de la sección Consolidación */
+  .consbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .rangebox{display:flex;gap:7px;align-items:center;flex-wrap:wrap;background:var(--panel2);border-radius:10px;padding:5px 10px}
+  .rangebox label{color:var(--faint);font-size:.75rem;font-weight:600;margin-right:1px}
+  .rangebox select{background:var(--panel);border:1px solid var(--border);padding:5px 9px;font-size:.82rem;border-radius:8px}
+  .rangebox .rdash{color:var(--faint);font-size:.8rem}
+  .rangebox .mini{background:transparent;padding:5px 9px;font-size:.76rem;color:var(--muted)}
+  .rangebox .mini:hover{background:var(--panel);color:var(--text)}
+  @media(max-width:720px){ .consbar{gap:10px} .rangebox{width:100%;justify-content:flex-start} .rangebox select{flex:1;min-height:40px} .rangebox .mini{min-height:40px} }
+
   /* Tendencia: una fila por métrica, escalas independientes */
   .trendgrid{display:grid;gap:18px}
   .trendcell .tlabel{display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
@@ -502,9 +512,19 @@
     <div class="card wide" id="consSection">
       <h2>Consolidación — producto, mes y destino <span id="lblConsYear" class="clickable">2026</span></h2>
       <p class="csub">Esta sección usa la fecha de <b>Consolidación</b> (no la de ETD, como el resto del tablero). Respeta el año elegido arriba y el filtro de productos.</p>
-      <div class="seg" id="consMetric" role="group" aria-label="Métrica de la sección Consolidación" style="margin-bottom:16px">
-        <button type="button" data-cm="tns" title="Ver toneladas">Toneladas</button>
-        <button type="button" data-cm="usd" title="Ver facturación en dólares">Facturación USD</button>
+      <div class="consbar">
+        <div class="seg" id="consMetric" role="group" aria-label="Métrica de la sección Consolidación">
+          <button type="button" data-cm="tns" title="Ver toneladas">Toneladas</button>
+          <button type="button" data-cm="usd" title="Ver facturación en dólares">Facturación USD</button>
+        </div>
+        <div class="rangebox">
+          <label for="consFrom">Meses</label>
+          <select id="consFrom" aria-label="Mes desde"></select>
+          <span class="rdash">→</span>
+          <select id="consTo" aria-label="Mes hasta"></select>
+          <button type="button" id="consAll" class="mini" title="Ver los 12 meses">Todo el año</button>
+          <button type="button" id="consYtd" class="mini" title="Desde enero hasta el último mes con datos">Hasta hoy</button>
+        </div>
       </div>
       <div class="chartbox tall" style="margin-bottom:22px"><canvas id="chConsProd" aria-label="Toneladas por producto y mes según consolidación" role="img"></canvas></div>
       <h3 class="subhead" id="consH1">Detalle mensual por producto</h3>
@@ -517,7 +537,7 @@
 
     <div class="card wide" id="gruposCard" style="display:none">
       <h2>Grupos comerciales — <span id="lblGruposYear" class="clickable"></span></h2>
-      <p class="csub">Blancheados separados por región de destino, y pastas y roasted por tipo de packing. Toneladas consolidadas, facturación y cuántos días tarda en cobrarse cada grupo. Usa la fecha de <b>Consolidación</b> y respeta el año y el filtro de arriba.</p>
+      <p class="csub">Blancheados separados por región de destino, y pastas y roasted por tipo de packing. Toneladas consolidadas, facturación y cuántos días tarda en cobrarse cada grupo. Usa la fecha de <b>Consolidación</b> y respeta el año, el filtro y el <b>rango de meses</b> elegido arriba.</p>
       <div class="tablewrap" id="gruposTable"></div>
     </div>
 
@@ -711,6 +731,10 @@ function loadUI(){
   if (ui.mode === "grupos"){ ui.mode = "solo"; ui.split = true; }   // migración del modo viejo
   if (typeof ui.split !== "boolean") ui.split = false;
   if (ui.consMetric !== "usd") ui.consMetric = "tns";
+  // rango de meses de las vistas por Consolidación (1..12)
+  ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
+  ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
+  if (ui.consFrom > ui.consTo){ const t = ui.consFrom; ui.consFrom = ui.consTo; ui.consTo = t; }
   // migración del selector viejo (compareSel) al conjunto de años tildados
   if (!Array.isArray(ui.cmpSet)){
     const v = ui.compareSel;
@@ -1462,9 +1486,22 @@ function renderTrend(recs){
   line("chTrendCom", com, "#ff9500", true);
 }
 
+/* Rango de meses elegido en el selector, intersectado con el corte a misma fecha */
+function consRange(maxMonth){
+  const from = Math.max(1, Math.min(12, UI.consFrom || 1));
+  const to = Math.min(maxMonth || 12, Math.max(1, Math.min(12, UI.consTo || 12)));
+  return { from, to: Math.max(from, to) };
+}
+function consMonthIdx(maxMonth){
+  const { from, to } = consRange(maxMonth);
+  const out = [];
+  for (let m = from; m <= to; m++) out.push(m - 1);
+  return out;
+}
+
 /* ================= Vista por CONSOLIDACIÓN =================
    Agrupa por la fecha de Consolidación (no ETD): producto × mes y producto × destino. */
-function aggregateByConsolidacion(recs, year, maxMonth = 12){
+function aggregateByConsolidacion(recs, year, maxMonth = 12, minMonth = 1){
   const byMonth = () => Array(12).fill(0);
   const out = { products: {}, prodTotals: {}, months: byMonth(), total: 0,
                 ports: {}, portTotals: {}, n: 0,
@@ -1473,7 +1510,7 @@ function aggregateByConsolidacion(recs, year, maxMonth = 12){
                 uPorts: {}, uPortTotals: {} };
   for (const r of recs){
     const c = r.consolidacion;
-    if (!c || c.y !== year || c.mo > maxMonth) continue;
+    if (!c || c.y !== year || c.mo > maxMonth || c.mo < minMonth) continue;
     const m = c.mo - 1, p = r.product, pt = r.port || "(sin destino)";
     if (!out.products[p]) out.products[p] = byMonth();
     out.products[p][m] += r.tns;
@@ -1507,8 +1544,22 @@ function renderConsolidacion(recs, year, maxMonth){
     return;
   }
   sect.style.display = "";
-  const a = aggregateByConsolidacion(recs, year, maxMonth);
+  const RG = consRange(maxMonth);
+  const MI = consMonthIdx(maxMonth);            // índices de mes visibles
+  const a = aggregateByConsolidacion(recs, year, RG.to, RG.from);
   document.getElementById("lblConsYear").textContent = year;
+
+  // selector de meses
+  const selF = document.getElementById("consFrom"), selT = document.getElementById("consTo");
+  const opts = sel => MESES.map((m, i) => `<option value="${i + 1}"${(i + 1) === sel ? " selected" : ""}>${m}</option>`).join("");
+  selF.innerHTML = opts(RG.from); selT.innerHTML = opts(RG.to);
+  selF.onchange = () => { UI.consFrom = +selF.value; if (UI.consFrom > UI.consTo) UI.consTo = UI.consFrom; saveUI(); render(); };
+  selT.onchange = () => { UI.consTo = +selT.value; if (UI.consTo < UI.consFrom) UI.consFrom = UI.consTo; saveUI(); render(); };
+  document.getElementById("consAll").onclick = () => { UI.consFrom = 1; UI.consTo = 12; saveUI(); render(); };
+  document.getElementById("consYtd").onclick = () => {
+    const conMes = recs.filter(r => r.consolidacion && r.consolidacion.y === year).map(r => r.consolidacion.mo);
+    UI.consFrom = 1; UI.consTo = conMes.length ? Math.max(...conMes) : 12; saveUI(); render();
+  };
 
   // métrica activa: toneladas o facturación
   const M = UI.consMetric === "usd" ? "usd" : "tns";
@@ -1532,16 +1583,17 @@ function renderConsolidacion(recs, year, maxMonth){
 
   const prods = Object.keys(V.prodTotals).sort((x, y) => V.prodTotals[y] - V.prodTotals[x]);
   const ports = Object.keys(V.portTotals).sort((x, y) => V.portTotals[y] - V.portTotals[x]);
-  document.getElementById("consH1").textContent = usd ? "Facturación mensual por producto" : "Detalle mensual por producto";
-  document.getElementById("consH2").textContent = usd ? "Facturación de cada producto por destino" : "Toneladas de cada producto por destino";
+  const rangoTxt = (RG.from === 1 && RG.to === 12) ? "" : ` · ${MESES[RG.from - 1]} a ${MESES[RG.to - 1]}`;
+  document.getElementById("consH1").textContent = (usd ? "Facturación mensual por producto" : "Detalle mensual por producto") + rangoTxt;
+  document.getElementById("consH2").textContent = (usd ? "Facturación de cada producto por destino" : "Toneladas de cada producto por destino") + rangoTxt;
 
   // gráfico apilado producto × mes
   if (charts.chConsProd){ charts.chConsProd.destroy(); delete charts.chConsProd; }
   if (prods.length){
     charts.chConsProd = new Chart(document.getElementById("chConsProd"), {
       type: "bar",
-      data: { labels: MESES, datasets: prods.map((p, i) => ({
-        label: p, data: V.products[p], backgroundColor: PALETTE[i % PALETTE.length],
+      data: { labels: MI.map(m => MESES[m]), datasets: prods.map((p, i) => ({
+        label: p, data: MI.map(m => V.products[p][m]), backgroundColor: PALETTE[i % PALETTE.length],
         borderRadius: 5, borderSkipped: false, maxBarThickness: 46, stack: "c" })) },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -1558,18 +1610,18 @@ function renderConsolidacion(recs, year, maxMonth){
   // tabla producto × mes
   const consEl = document.getElementById("consTable");
   if (!prods.length){
-    consEl.innerHTML = '<p class="empty">No hay cargas con fecha de consolidación en ' + year + '.</p>';
+    consEl.innerHTML = '<p class="empty">No hay cargas con fecha de consolidación en ' + (MI.length === 12 ? year : MESES[RG.from-1] + '–' + MESES[RG.to-1] + ' de ' + year) + '.</p>';
     document.getElementById("portTable").innerHTML = "";
     document.getElementById("portChartBox").style.display = "none";
     if (charts.chPort){ charts.chPort.destroy(); delete charts.chPort; }
     return;
   }
   document.getElementById("portChartBox").style.display = "";
-  let h = "<table><tr><th>Producto</th>" + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
+  let h = "<table><tr><th>Producto</th>" + MI.map(m => `<th>${MESES[m]}</th>`).join("") + "<th>Total</th></tr>";
   for (const p of prods)
-    h += `<tr><td>${p}</td>` + V.products[p].map(v => `<td>${v ? fmtV(v) : ""}</td>`).join("") +
+    h += `<tr><td>${p}</td>` + MI.map(m => { const v = V.products[p][m]; return `<td>${v ? fmtV(v) : ""}</td>`; }).join("") +
          `<td><b>${fmtV(V.prodTotals[p])}</b></td></tr>`;
-  h += `<tr class="total"><td>Total</td>` + V.months.map(v => `<td>${v ? fmtV(v) : ""}</td>`).join("") +
+  h += `<tr class="total"><td>Total</td>` + MI.map(m => { const v = V.months[m]; return `<td>${v ? fmtV(v) : ""}</td>`; }).join("") +
        `<td>${fmtV(V.total)}</td></tr></table>`;
   consEl.innerHTML = h;
 
@@ -1644,7 +1696,7 @@ function diasCobro(r){
 }
 
 /* Arma las filas de la vista por grupos comerciales */
-function aggGruposComerciales(recs, year, maxMonth = 12){
+function aggGruposComerciales(recs, year, maxMonth = 12, minMonth = 1){
   const rows = new Map();   // clave → { label, orden, tns, usd, dias:[], cargas, sinFecha }
   const add = (key, label, orden, r) => {
     if (!rows.has(key)) rows.set(key, { label, orden, tns: 0, usd: 0, dias: [], cargas: 0, sinFecha: 0 });
@@ -1655,7 +1707,7 @@ function aggGruposComerciales(recs, year, maxMonth = 12){
   };
   for (const r of recs){
     const c = r.consolidacion;
-    if (!c || c.y !== year || c.mo > maxMonth) continue;
+    if (!c || c.y !== year || c.mo > maxMonth || c.mo < minMonth) continue;
     const pr = r.product;
     if (esBlancheado(pr)){
       const reg = regionDestino(r.port);
@@ -1686,11 +1738,13 @@ function renderGrupos(recs, year, maxMonth){
   const bz = BUSINESSES.find(x => x.key === UI.biz);
   if (!bz || bz.consViews !== true){ card.style.display = "none"; return; }
   card.style.display = "";
-  document.getElementById("lblGruposYear").textContent = year;
-  const gs = aggGruposComerciales(recs, year, maxMonth);
+  const RG = consRange(maxMonth);
+  document.getElementById("lblGruposYear").textContent =
+    (RG.from === 1 && RG.to === 12) ? year : `${MESES[RG.from - 1]} a ${MESES[RG.to - 1]} ${year}`;
+  const gs = aggGruposComerciales(recs, year, RG.to, RG.from);
   if (!gs.length){
     document.getElementById("gruposTable").innerHTML =
-      '<p class="empty">No hay cargas con fecha de Consolidación en ' + year + '.</p>';
+      '<p class="empty">No hay cargas con fecha de Consolidación en el período elegido.</p>';
     return;
   }
   const tTns = gs.reduce((s, g) => s + g.tns, 0);
