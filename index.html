@@ -196,6 +196,11 @@
   tr.total td,tr.total td:first-child{font-weight:600;border-top:1.5px solid var(--border2);background:var(--panel2)}
   .tablewrap{overflow-x:auto}
   .empty{color:var(--faint);font-size:.87rem;padding:26px 18px;text-align:center;line-height:1.7}
+  tr.rowlink{cursor:pointer}
+  tr.rowlink:hover td,tr.rowlink:hover td:first-child{background:var(--accent-soft)}
+  tr.rowlink .chev{color:var(--faint);font-weight:600;transition:transform .2s var(--ease),color .2s var(--ease);display:inline-block}
+  tr.rowlink:hover .chev{color:var(--accent);transform:translateX(3px)}
+  tr.rowlink:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   footer{color:var(--faint);font-size:.75rem;margin-top:30px;text-align:center;line-height:1.7}
 
   /* Próximamente */
@@ -1727,8 +1732,9 @@ function diasCobro(r){
 function aggGruposComerciales(recs, year, maxMonth = 12, minMonth = 1){
   const rows = new Map();   // clave → { label, orden, tns, usd, dias:[], cargas, sinFecha }
   const add = (key, label, orden, r) => {
-    if (!rows.has(key)) rows.set(key, { label, orden, tns: 0, usd: 0, flete: 0, broker: 0, dias: [], cargas: 0, sinFecha: 0 });
+    if (!rows.has(key)) rows.set(key, { key, label, orden, tns: 0, usd: 0, flete: 0, broker: 0, dias: [], cargas: 0, sinFecha: 0, recs: [] });
     const g = rows.get(key);
+    g.recs.push(r);
     g.tns += r.tns; g.usd += r.usd; g.flete += r.flete || 0; g.broker += r.comBroker || 0; g.cargas++;
     const d = diasCobro(r);
     if (d === null) g.sinFecha++; else g.dias.push(d);
@@ -1771,6 +1777,7 @@ function renderGrupos(recs, year, maxMonth){
     (RG.from === 1 && RG.to === 12) ? year : `${MESES[RG.from - 1]} a ${MESES[RG.to - 1]} ${year}`;
   wireRange("gruposFrom", "gruposTo", "gruposAll", "gruposYtd", RG, recs, year);
   const gs = aggGruposComerciales(recs, year, RG.to, RG.from);
+  LAST_GRUPOS = new Map(gs.map(g => [g.key, g]));
   if (!gs.length){
     document.getElementById("gruposTable").innerHTML =
       '<p class="empty">No hay cargas con fecha de Consolidación en el período elegido.</p>';
@@ -1786,17 +1793,15 @@ function renderGrupos(recs, year, maxMonth){
   const neg = v => v ? `<span style="color:var(--red)">−${fmtUsd(v)}</span>` : "—";
   const netoTxt = v => `<b style="color:${v >= 0 ? "var(--green)" : "var(--red)"}">${v < 0 ? "−" : ""}${fmtUsd(Math.abs(v))}</b>`;
   const tNeto = tUsd - tFle - tBro;
-  let h = `<table><tr><th>Grupo</th><th>Toneladas</th><th>Facturación</th><th>USD / t</th><th>Fletes</th><th>Comisión devengada</th><th>Total neto</th><th>Días prom. de cobro</th></tr>`;
+  let h = `<table><tr><th>Grupo</th><th>Toneladas</th><th>Facturación</th><th>Fletes</th><th>Comisión devengada</th><th>Total neto</th><th>Días prom. de cobro</th></tr>`;
   for (const g of gs){
     const neto = g.usd - g.flete - g.broker;
-    h += `<tr><td>${g.label}</td><td>${fmt1(g.tns)}</td><td>${fmtUsd(g.usd)}</td>
-      <td>${g.usdPorTon === null ? "—" : fmtUsd(g.usdPorTon)}</td>
+    h += `<tr class="rowlink" data-grp="${g.key}" tabindex="0" role="button" title="Ver el detalle de las cargas de este grupo"><td>${g.label} <span class="chev">›</span></td><td>${fmt1(g.tns)}</td><td>${fmtUsd(g.usd)}</td>
       <td>${neg(g.flete)}</td><td>${neg(g.broker)}</td>
       <td>${netoTxt(neto)}</td>
       <td>${g.diasProm === null ? '<span style="color:var(--faint)">sin fecha</span>' : fmt0(g.diasProm) + " d"}${g.sinFecha ? `<span style="color:var(--faint);font-size:.72rem"> (${g.sinFecha} s/f)</span>` : ""}</td></tr>`;
   }
   h += `<tr class="total"><td>Total</td><td>${fmt1(tTns)}</td><td>${fmtUsd(tUsd)}</td>
-        <td>${tTns ? fmtUsd(tUsd / tTns) : "—"}</td>
         <td>${neg(tFle)}</td><td>${neg(tBro)}</td>
         <td>${netoTxt(tNeto)}</td>
         <td>${allD.length ? fmt0(allD.reduce((a, v) => a + v, 0) / allD.length) + " d" : "—"}</td></tr></table>`;
@@ -1806,6 +1811,51 @@ function renderGrupos(recs, year, maxMonth){
         Días de cobro: diferencia entre <b>Consolidación</b> y <b>Fecha de cobro</b> de cada carga (si está vacía se usa <b>Fecha estimada</b>), promediada carga por carga dentro del grupo.
         ${totalSinFecha ? `<br>“s/f” = cargas sin ninguna de las dos fechas, excluidas del promedio (${totalSinFecha} en total).` : ""}</p>`;
   document.getElementById("gruposTable").innerHTML = h;
+  document.getElementById("gruposTable").querySelectorAll("tr.rowlink").forEach(tr => {
+    const open = () => openGrupoDetail(tr.dataset.grp);
+    tr.onclick = open;
+    tr.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); } };
+  });
+}
+
+/* Detalle de un grupo comercial: cada carga con sus días de cobro y sus montos */
+let LAST_GRUPOS = new Map();
+
+function openGrupoDetail(key){
+  const g = LAST_GRUPOS.get(key);
+  if (!g) return;
+  const rs = [...g.recs].sort((a, b) => {
+    const ka = a.consolidacion ? a.consolidacion.y * 10000 + a.consolidacion.mo * 100 + (a.consolidacion.d || 0) : 0;
+    const kb = b.consolidacion ? b.consolidacion.y * 10000 + b.consolidacion.mo * 100 + (b.consolidacion.d || 0) : 0;
+    return ka - kb;
+  });
+  document.getElementById("detailTitle").textContent = `${g.label} — ${rs.length} carga(s)`;
+  const neto = g.usd - g.flete - g.broker;
+  document.getElementById("detailSub").innerHTML =
+    `Toneladas <b>${fmt1(g.tns)}</b> · Facturación <b>${fmtUsd(g.usd)}</b> · Fletes <b style="color:var(--red)">−${fmtUsd(g.flete)}</b> · Comisión <b style="color:var(--red)">−${fmtUsd(g.broker)}</b> · Neto <b style="color:${neto >= 0 ? "var(--green)" : "var(--red)"}">${neto < 0 ? "−" : ""}${fmtUsd(Math.abs(neto))}</b>` +
+    (g.diasProm === null ? "" : ` · Cobro promedio <b>${fmt0(g.diasProm)} días</b>`) +
+    (g.sinFecha ? ` <span style="color:var(--faint)">(${g.sinFecha} carga(s) sin fecha de cobro)</span>` : "");
+  let h = `<table><tr><th>Ref.</th><th>Producto</th><th>Packing</th><th>Destino</th><th>Consolidación</th><th>Cobro</th><th>Días</th><th>Tns</th><th>Facturación</th><th>Flete</th><th>Comisión</th><th>Neto</th></tr>`;
+  for (const r of rs){
+    const d = diasCobro(r);
+    const n = r.usd - (r.flete || 0) - (r.comBroker || 0);
+    h += `<tr><td>${r.negocio || "—"}</td><td>${r.product}</td><td>${r.packing || "—"}</td><td>${r.port || "—"}</td>
+      <td>${fmtDate(r.consolidacion)}</td><td>${fmtDate(r.cobro)}</td>
+      <td>${d === null ? '<span style="color:var(--faint)">—</span>' : fmt0(d)}</td>
+      <td>${fmt1(r.tns)}</td><td>${fmtUsd(r.usd)}</td>
+      <td>${r.flete ? `<span style="color:var(--red)">−${fmtUsd(r.flete)}</span>` : "—"}</td>
+      <td>${r.comBroker ? `<span style="color:var(--red)">−${fmtUsd(r.comBroker)}</span>` : "—"}</td>
+      <td><b style="color:${n >= 0 ? "var(--green)" : "var(--red)"}">${n < 0 ? "−" : ""}${fmtUsd(Math.abs(n))}</b></td></tr>`;
+  }
+  h += `<tr class="total"><td>Total</td><td></td><td></td><td></td><td></td><td></td>
+        <td>${g.diasProm === null ? "—" : fmt0(g.diasProm)}</td>
+        <td>${fmt1(g.tns)}</td><td>${fmtUsd(g.usd)}</td>
+        <td><span style="color:var(--red)">−${fmtUsd(g.flete)}</span></td>
+        <td><span style="color:var(--red)">−${fmtUsd(g.broker)}</span></td>
+        <td><b style="color:${neto >= 0 ? "var(--green)" : "var(--red)"}">${neto < 0 ? "−" : ""}${fmtUsd(Math.abs(neto))}</b></td></tr></table>`;
+  h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.55">La columna <b>Días</b> es la diferencia entre Consolidación y la fecha de cobro de cada carga (si la de cobro está vacía se usa la fecha estimada). El promedio del grupo es el promedio de esos días, carga por carga.</p>`;
+  document.getElementById("detailTable").innerHTML = h;
+  detailBg.classList.add("open");
 }
 
 /* ---- detalle mensual (auditoría) ---- */
