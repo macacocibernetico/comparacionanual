@@ -201,6 +201,10 @@
   tr.rowlink .chev{color:var(--faint);font-weight:600;transition:transform .2s var(--ease),color .2s var(--ease);display:inline-block}
   tr.rowlink:hover .chev{color:var(--accent);transform:translateX(3px)}
   tr.rowlink:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  th.sortable{cursor:pointer;user-select:none;transition:color .2s var(--ease)}
+  th.sortable:hover{color:var(--accent)}
+  th.sortable .sarrow{color:var(--accent);font-size:.7rem}
+  th.sortable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   footer{color:var(--faint);font-size:.75rem;margin-top:30px;text-align:center;line-height:1.7}
 
   /* Próximamente */
@@ -360,16 +364,18 @@
   .chartbox.sm{height:150px}
   @media(max-width:720px){ .chartbox.sm{height:128px} .trendgrid{gap:14px} }
 
-  /* Encabezado que solo se ve en el PDF */
+  /* Encabezado y área que solo se usan al imprimir */
   .printhead{display:none}
+  #printArea{display:none}
 
   /* ---------- Impresión / PDF ---------- */
   @media print{
     @page{ size:A4 landscape; margin:12mm; }
     html,body{background:#fff!important;color:#111!important;padding:0!important;margin:0!important}
-    /* con .printing solo se imprime la tarjeta marcada */
+    /* con .printing se oculta todo el body salvo el área de impresión */
     body.printing > *{display:none!important}
-    body.printing .print-target{display:block!important}
+    body.printing > #printArea{display:block!important}
+    body.printing #printArea .print-target{display:block!important}
     .print-target{
       position:static!important;box-shadow:none!important;border:none!important;
       background:#fff!important;padding:0!important;margin:0!important;width:100%!important
@@ -617,6 +623,7 @@
 </div>
 
 <footer id="footer"></footer>
+<div id="printArea"></div>
 
 <div class="sheet-bg" id="sheetBg"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Opciones del dashboard">
@@ -811,6 +818,7 @@ function loadUI(){
   if (typeof ui.split !== "boolean") ui.split = false;
   if (ui.consMetric !== "usd") ui.consMetric = "tns";
   if (ui.partnerKind !== "importer") ui.partnerKind = "exporter";
+  if (!ui.partnerSort) ui.partnerSort = { by: "hist", dir: "desc" };   // by: "hist" | año
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1888,21 +1896,32 @@ function renderGrupos(recs, year, maxMonth){
    marca qué tarjeta imprimir y el CSS de @media print oculta todo lo demás. */
 function exportarPdf(cardId){
   const card = document.getElementById(cardId);
-  if (!card) return;
-  document.body.classList.add("printing");
-  card.classList.add("print-target");
+  const area = document.getElementById("printArea");
+  if (!card || !area) return;
+  // la tarjeta vive dentro de varios contenedores: para imprimirla se la mueve
+  // temporalmente a un área que SÍ es hija directa del body (si no, queda oculta).
+  const padre = card.parentNode, ancla = card.nextSibling;
+  let restaurado = false;
   const limpiar = () => {
+    if (restaurado) return;
+    restaurado = true;
     document.body.classList.remove("printing");
     card.classList.remove("print-target");
+    if (padre) padre.insertBefore(card, ancla || null);
     Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} });
   };
+  area.appendChild(card);
+  card.classList.add("print-target");
+  document.body.classList.add("printing");
+  Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} });
   if (typeof matchMedia === "function"){
     const mq = matchMedia("print");
-    const onChange = e => { if (!e.matches){ limpiar(); mq.removeEventListener && mq.removeEventListener("change", onChange); } };
-    mq.addEventListener && mq.addEventListener("change", onChange);
+    const onChange = e => { if (!e.matches) limpiar(); };
+    if (mq.addEventListener) mq.addEventListener("change", onChange);
+    else if (mq.addListener) mq.addListener(onChange);
   }
-  if (typeof window.onafterprint !== "undefined") window.onafterprint = limpiar;
-  setTimeout(() => { window.print(); setTimeout(limpiar, 1500); }, 120);
+  window.onafterprint = limpiar;
+  setTimeout(() => { window.print(); setTimeout(limpiar, 2000); }, 250);
 }
 
 /* ============ Exportadores / importadores (solo Brokerage) ============
@@ -1927,8 +1946,7 @@ function aggPartners(recs, campo){
     g.total += r.tns; g.cargas++; g.recs.push(r);
   }
   const ys = [...years].sort((a, b) => a - b);
-  const rows = [...byName.values()].sort((a, b) => b.total - a.total);
-  return { years: ys, rows, nowY, nowM };
+  return { years: ys, rows: [...byName.values()], nowY, nowM };
 }
 
 let LAST_PARTNERS = new Map();
@@ -1966,11 +1984,39 @@ function renderPartners(recs){
     return;
   }
 
-  // gráfico del año elegido arriba
+  // orden elegido: por histórico o por un año puntual
+  const SORT = UI.partnerSort || { by: "hist", dir: "desc" };
+  const valorOrden = r => SORT.by === "hist" ? r.total : (r.porAno[+SORT.by] || 0);
+  A.rows.sort((a, b) => {
+    const d = valorOrden(b) - valorOrden(a);
+    return SORT.dir === "asc" ? -d : d;
+  });
+
+  // gráfico del año elegido arriba (respeta el orden de la tabla)
   const yA = UI.year;
-  const delAno = A.rows.filter(r => (r.porAno[yA] || 0) > 0).sort((a, b) => (b.porAno[yA] || 0) - (a.porAno[yA] || 0));
+  const delAno = A.rows.filter(r => (r.porAno[yA] || 0) > 0);
   if (charts.chPartner) charts.chPartner.destroy();
   const tituloAno = yA === A.nowY ? `${yA} (a ${MESES[A.nowM - 1]})` : String(yA);
+  const totAno = delAno.reduce((s2, r) => s2 + (r.porAno[yA] || 0), 0);
+  /* Escribe las toneladas al final de cada barra (se ve en pantalla y en el PDF) */
+  const valoresPlugin = {
+    id: "valoresBarra",
+    afterDatasetsDraw(chart){
+      const { ctx } = chart;
+      const meta = chart.getDatasetMeta(0);
+      ctx.save();
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.font = "600 11px -apple-system, 'Segoe UI', system-ui, sans-serif";
+      ctx.fillStyle = document.body.classList.contains("printing") ? "#111" : cssVar("--text");
+      meta.data.forEach((bar, i) => {
+        const v = delAno[i] ? (delAno[i].porAno[yA] || 0) : 0;
+        if (!v) return;
+        const pctA = totAno ? (v / totAno * 100).toFixed(1).replace(".", ",") : "0";
+        ctx.fillText(`${fmt1(v)} t · ${pctA}%`, bar.x + 8, bar.y);
+      });
+      ctx.restore();
+    },
+  };
   charts.chPartner = new Chart(document.getElementById("chPartner"), {
     type: "bar",
     data: { labels: delAno.map(r => r.name), datasets: [{
@@ -1979,13 +2025,15 @@ function renderPartners(recs){
       borderRadius: 6, borderSkipped: false, maxBarThickness: 26 }] },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 92 } },        // espacio para la etiqueta
       animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
       plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: c => ` ${fmt1(c.parsed.x)} t` } } },
+        tooltip: { callbacks: { label: c => ` ${fmt1(c.parsed.x)} t · ${totAno ? (c.parsed.x / totAno * 100).toFixed(1).replace(".", ",") : 0}%` } } },
       scales: { x: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
-                     title: { display: true, text: "Tns · " + tituloAno, color: cssVar("--tick") } },
+                     title: { display: true, text: `Toneladas · ${tituloAno} · total ${fmt1(totAno)} t`, color: cssVar("--tick") } },
                 y: { ticks: { color: cssVar("--tick") }, grid: { display: false } } },
     },
+    plugins: [valoresPlugin],
   });
 
   // tabla histórica: una columna por año
@@ -1994,9 +2042,13 @@ function renderPartners(recs){
   const totGeneral = A.rows.reduce((s, r) => s + r.total, 0);
   const anoTxt = yA === A.nowY ? `${yA} (a ${MESES[A.nowM - 1]})` : String(yA);
   const pct = (v, t) => t ? (v / t * 100).toFixed(1).replace(".", ",") + "%" : "—";
+  const flecha = key => SORT.by === String(key) ? (SORT.dir === "asc" ? " ▲" : " ▼") : "";
+  const thSort = (key, label, tip) =>
+    `<th class="sortable" data-sort="${key}" tabindex="0" role="button" title="${tip}">${label}<span class="sarrow">${flecha(key)}</span></th>`;
   let h = `<table><tr><th>${campo === "exporter" ? "Exportador" : "Importador"}</th>` +
-    A.years.map(y => `<th>${y === A.nowY ? `${y}<span style="font-weight:400;color:var(--faint)"> a ${MESES[A.nowM - 1]}</span>` : y}</th>`).join("") +
-    `<th>Total histórico</th>` +
+    A.years.map(y => thSort(y, y === A.nowY ? `${y}<span style="font-weight:400;color:var(--faint)"> a ${MESES[A.nowM - 1]}</span>` : y,
+                            `Ordenar por toneladas de ${y}`)).join("") +
+    thSort("hist", "Total histórico", "Ordenar por el total de todos los años") +
     `<th title="Participación dentro del año ${anoTxt}">% de ${anoTxt}</th>` +
     `<th title="Participación sobre el total de todos los años">% del histórico</th></tr>`;
   for (const r of A.rows){
@@ -2012,12 +2064,23 @@ function renderPartners(recs){
   h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.55">
         <b>% de ${anoTxt}</b>: cuánto representa cada empresa dentro de ese año.
         <b>% del histórico</b>: cuánto representa sobre el total de todos los años (${fmt1(totGeneral)} t).
-        ${A.years.includes(A.nowY) ? `El año en curso incluye solo hasta ${MESES[A.nowM - 1]}.` : ""}</p>`;
+        ${A.years.includes(A.nowY) ? `El año en curso incluye solo hasta ${MESES[A.nowM - 1]}.` : ""}
+        Ordenado por <b>${SORT.by === "hist" ? "total histórico" : "toneladas de " + SORT.by}</b>, ${SORT.dir === "desc" ? "de mayor a menor" : "de menor a mayor"} — tocá cualquier encabezado de año o el histórico para cambiarlo.</p>`;
   tabla.innerHTML = h;
   tabla.querySelectorAll("tr.rowlink").forEach(tr => {
     const open = () => openPartnerDetail(tr.dataset.partner);
     tr.onclick = open;
     tr.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); } };
+  });
+  tabla.querySelectorAll("th.sortable").forEach(th => {
+    const orden = () => {
+      const key = th.dataset.sort;
+      const mismo = String(SORT.by) === key;
+      UI.partnerSort = { by: key, dir: mismo && SORT.dir === "desc" ? "asc" : "desc" };
+      saveUI(); render();
+    };
+    th.onclick = orden;
+    th.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); orden(); } };
   });
 }
 
