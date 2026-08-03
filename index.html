@@ -608,6 +608,15 @@
           <button type="button" data-pk="exporter" title="Toneladas exportadas por cada exportador">Exportadores</button>
           <button type="button" data-pk="importer" title="Toneladas importadas por cada importador">Importadores</button>
         </div>
+        <div class="rangebox">
+          <label for="partnerTop">En el gráfico</label>
+          <select id="partnerTop" aria-label="Cuántas empresas mostrar en el gráfico">
+            <option value="10">Top 10</option>
+            <option value="15">Top 15</option>
+            <option value="20">Top 20</option>
+            <option value="0">Todas</option>
+          </select>
+        </div>
         <button type="button" id="btnPartnerPdf" title="Exportar este cuadro a PDF">⤓ Exportar a PDF</button>
       </div>
       <div class="printhead" id="partnerPrintHead" aria-hidden="true"></div>
@@ -819,6 +828,7 @@ function loadUI(){
   if (ui.consMetric !== "usd") ui.consMetric = "tns";
   if (ui.partnerKind !== "importer") ui.partnerKind = "exporter";
   if (!ui.partnerSort) ui.partnerSort = { by: "hist", dir: "desc" };   // by: "hist" | año
+  ui.partnerTop = [0, 10, 15, 20].includes(+ui.partnerTop) ? +ui.partnerTop : 15;
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1892,8 +1902,123 @@ function renderGrupos(recs, year, maxMonth){
   });
 }
 
-/* Exporta una tarjeta a PDF usando la impresión del navegador (sin librerías):
-   marca qué tarjeta imprimir y el CSS de @media print oculta todo lo demás. */
+let LAST_PARTNER_PDF = null;
+
+/* Carga una librería del CDN una sola vez */
+function cargarScript(src){
+  return new Promise((ok, err) => {
+    if ([...document.querySelectorAll("script")].some(s2 => s2.src === src)) return ok();
+    const el = document.createElement("script");
+    el.src = src; el.onload = () => ok(); el.onerror = () => err(new Error("No se pudo cargar " + src));
+    document.head.appendChild(el);
+  });
+}
+
+/* Dibuja el gráfico en un canvas propio con colores de papel (negro sobre blanco) */
+function graficoParaPdf(g){
+  const alto = Math.max(220, g.labels.length * 30 + 90);
+  const cv = document.createElement("canvas");
+  cv.width = 1180; cv.height = alto;
+  const fondoBlanco = { id: "bg", beforeDraw(ch){ const c = ch.ctx; c.save(); c.fillStyle = "#ffffff"; c.fillRect(0, 0, ch.width, ch.height); c.restore(); } };
+  const etiquetas = { id: "vals", afterDatasetsDraw(ch){
+      const c = ch.ctx; c.save(); c.textAlign = "left"; c.textBaseline = "middle";
+      c.font = "600 13px Helvetica, Arial, sans-serif"; c.fillStyle = "#111";
+      ch.getDatasetMeta(0).data.forEach((bar, i) => {
+        const v = g.data[i]; if (!v) return;
+        const pc = g.total ? (v / g.total * 100).toFixed(1).replace(".", ",") : "0";
+        c.fillText(`${fmt1(v)} t · ${pc}%`, bar.x + 10, bar.y);
+      });
+      c.restore(); } };
+  const tmp = new Chart(cv, {
+    type: "bar",
+    data: { labels: g.labels, datasets: [{ data: g.data,
+      backgroundColor: g.labels.map((l, i) => String(l).startsWith("Otras (") ? "#8e8e93" : PALETTE[i % PALETTE.length]),
+      borderRadius: 4, borderSkipped: false, maxBarThickness: 22 }] },
+    options: {
+      indexAxis: "y", responsive: false, animation: false, devicePixelRatio: 2,
+      layout: { padding: { right: 130, left: 6, top: 6, bottom: 6 } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { color: "#333", font: { size: 12 } }, grid: { color: "#ddd" },
+             title: { display: true, text: "Toneladas", color: "#333", font: { size: 12 } } },
+        y: { ticks: { color: "#111", font: { size: 12 } }, grid: { display: false } },
+      },
+    },
+    plugins: [fondoBlanco, etiquetas],
+  });
+  const img = cv.toDataURL("image/png", 1);
+  tmp.destroy();
+  return { img, w: cv.width, h: cv.height };
+}
+
+/* Genera y descarga el PDF de la vista de exportadores/importadores */
+async function exportarPartnerPdf(){
+  const D = LAST_PARTNER_PDF;
+  const btn = document.getElementById("btnPartnerPdf");
+  if (!D){ return; }
+  const txtOrig = btn ? btn.textContent : "";
+  try {
+    if (btn){ btn.disabled = true; btn.textContent = "Generando PDF…"; }
+    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+    const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!JsPDF) throw new Error("jsPDF no disponible");
+    const doc = new JsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const W = doc.internal.pageSize.getWidth(), M = 12;
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(20);
+    doc.text(D.titulo, M, 16);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(110);
+    doc.text(D.sub, M, 22);
+    doc.text(`Total del año ${D.anoTxt}: ${fmt1(D.grafico.total)} t · Total histórico: ${fmt1(D.totGeneral)} t` +
+             (D.years.includes(D.nowY) ? ` · el año en curso incluye hasta ${D.nowMes}` : "") +
+             (D.grafico.otrasN ? ` · el gráfico agrupa ${D.grafico.otrasN} empresas menores en "Otras" (la tabla las lista todas)` : ""), M, 27);
+    doc.text(`Generado el ${new Date().toLocaleDateString("es-AR")}`, W - M, 27, { align: "right" });
+
+    // gráfico (con las toneladas escritas en cada barra)
+    let y = 32;
+    if (D.grafico.labels.length){
+      const g = graficoParaPdf(D.grafico);
+      const anchoMm = W - M * 2;
+      const altoMm = Math.min(115, anchoMm * g.h / g.w);
+      doc.addImage(g.img, "PNG", M, y, anchoMm, altoMm);
+      y += altoMm + 6;
+    }
+
+    // tabla
+    const head = [[D.colLabel,
+      ...D.years.map(a => a === D.nowY ? `${a} (a ${D.nowMes})` : String(a)),
+      "Total histórico", `% de ${D.anoTxt}`, "% del histórico"]];
+    const body = D.filas.map(f => [f.name,
+      ...f.porAno.map(v => v ? fmt1(v) : ""),
+      fmt1(f.total),
+      f.pctAno === null ? "—" : f.pctAno.toFixed(1).replace(".", ",") + "%",
+      f.pctHist === null ? "—" : f.pctHist.toFixed(1).replace(".", ",") + "%"]);
+    const foot = [["Total", ...D.totPorAno.map(v => fmt1(v)), fmt1(D.totGeneral),
+      D.totPorAno[D.years.indexOf(D.yA)] ? "100%" : "—", "100%"]];
+    doc.autoTable({
+      head, body, foot, startY: y, margin: { left: M, right: M },
+      styles: { fontSize: 8.5, cellPadding: 1.8, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 20, halign: "right" },
+      headStyles: { fillColor: [238, 238, 238], textColor: 20, fontStyle: "bold", halign: "right" },
+      footStyles: { fillColor: [246, 246, 246], textColor: 20, fontStyle: "bold", halign: "right" },
+      columnStyles: { 0: { halign: "left", cellWidth: "auto" } },
+      didParseCell: d => { if (d.column.index === 0) d.cell.styles.halign = "left"; },
+      theme: "grid",
+    });
+    const fin = doc.lastAutoTable ? doc.lastAutoTable.finalY : y;
+    doc.setFontSize(7.5); doc.setTextColor(120);
+    doc.text(`% de ${D.anoTxt}: participación dentro de ese año. % del histórico: participación sobre el total de todos los años.`,
+             M, Math.min(fin + 6, doc.internal.pageSize.getHeight() - 6));
+    doc.save(`${D.titulo.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_")}_${D.yA}.pdf`);
+  } catch(e){
+    // si el CDN no está disponible, se usa la impresión del navegador
+    exportarPdf("partnerCard");
+  } finally {
+    if (btn){ btn.disabled = false; btn.textContent = txtOrig || "⤓ Exportar a PDF"; }
+  }
+}
+
+/* Respaldo: imprime una tarjeta con el navegador (Guardar como PDF) */
 function exportarPdf(cardId){
   const card = document.getElementById(cardId);
   const area = document.getElementById("printArea");
@@ -1976,7 +2101,7 @@ function renderPartners(recs){
     `<p>Toneladas por empresa según fecha de ETD · Año destacado: ${UI.year}` +
     `${A.years.includes(A.nowY) ? ` (el año en curso incluye hasta ${MESES[A.nowM - 1]})` : ""}` +
     ` · Generado el ${new Date().toLocaleDateString("es-AR")}</p>`;
-  document.getElementById("btnPartnerPdf").onclick = () => exportarPdf("partnerCard");
+  document.getElementById("btnPartnerPdf").onclick = exportarPartnerPdf;
   const tabla = document.getElementById("partnerTable");
   if (!A.rows.length){
     tabla.innerHTML = `<p class="empty">La planilla no tiene datos de ${campo === "exporter" ? "exportador" : "importador"}.<br>Revisá el encabezado en <b>⚙️ Configurar → Columnas</b>.</p>`;
@@ -1998,6 +2123,29 @@ function renderPartners(recs){
   if (charts.chPartner) charts.chPartner.destroy();
   const tituloAno = yA === A.nowY ? `${yA} (a ${MESES[A.nowM - 1]})` : String(yA);
   const totAno = delAno.reduce((s2, r) => s2 + (r.porAno[yA] || 0), 0);
+
+  // el gráfico muestra las principales y agrupa el resto en "Otros"
+  const selTop = document.getElementById("partnerTop");
+  if (selTop){
+    selTop.value = String(UI.partnerTop);
+    selTop.onchange = () => { UI.partnerTop = +selTop.value; saveUI(); render(); };
+  }
+  const TOP = UI.partnerTop || 0;
+  const ordenAno = [...delAno].sort((a, b) => (b.porAno[yA] || 0) - (a.porAno[yA] || 0));
+  let gLabels, gData, otrasN = 0, otrasNombres = [];
+  if (TOP > 0 && ordenAno.length > TOP + 1){
+    const top = ordenAno.slice(0, TOP), resto = ordenAno.slice(TOP);
+    otrasN = resto.length;
+    otrasNombres = resto.map(r => r.name);
+    gLabels = [...top.map(r => r.name), `Otras (${otrasN})`];
+    gData = [...top.map(r => r.porAno[yA] || 0), resto.reduce((s2, r) => s2 + (r.porAno[yA] || 0), 0)];
+  } else {
+    gLabels = ordenAno.map(r => r.name);
+    gData = ordenAno.map(r => r.porAno[yA] || 0);
+  }
+  // altura según la cantidad de barras: así nunca quedan minúsculas
+  const cajaGraf = document.getElementById("chPartner").parentNode;
+  if (cajaGraf) cajaGraf.style.height = Math.max(200, gLabels.length * 30 + 70) + "px";
   /* Escribe las toneladas al final de cada barra (se ve en pantalla y en el PDF) */
   const valoresPlugin = {
     id: "valoresBarra",
@@ -2009,7 +2157,7 @@ function renderPartners(recs){
       ctx.font = "600 11px -apple-system, 'Segoe UI', system-ui, sans-serif";
       ctx.fillStyle = document.body.classList.contains("printing") ? "#111" : cssVar("--text");
       meta.data.forEach((bar, i) => {
-        const v = delAno[i] ? (delAno[i].porAno[yA] || 0) : 0;
+        const v = gData[i] || 0;
         if (!v) return;
         const pctA = totAno ? (v / totAno * 100).toFixed(1).replace(".", ",") : "0";
         ctx.fillText(`${fmt1(v)} t · ${pctA}%`, bar.x + 8, bar.y);
@@ -2019,9 +2167,9 @@ function renderPartners(recs){
   };
   charts.chPartner = new Chart(document.getElementById("chPartner"), {
     type: "bar",
-    data: { labels: delAno.map(r => r.name), datasets: [{
-      label: tituloAno, data: delAno.map(r => r.porAno[yA] || 0),
-      backgroundColor: delAno.map((_, i) => PALETTE[i % PALETTE.length]),
+    data: { labels: gLabels, datasets: [{
+      label: tituloAno, data: gData,
+      backgroundColor: gLabels.map((l, i) => l.startsWith("Otras (") ? "#8e8e93" : PALETTE[i % PALETTE.length]),
       borderRadius: 6, borderSkipped: false, maxBarThickness: 26 }] },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
@@ -2030,7 +2178,9 @@ function renderPartners(recs){
       plugins: { legend: { display: false },
         tooltip: { callbacks: { label: c => ` ${fmt1(c.parsed.x)} t · ${totAno ? (c.parsed.x / totAno * 100).toFixed(1).replace(".", ",") : 0}%` } } },
       scales: { x: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
-                     title: { display: true, text: `Toneladas · ${tituloAno} · total ${fmt1(totAno)} t`, color: cssVar("--tick") } },
+                     title: { display: true, color: cssVar("--tick"),
+                       text: `Toneladas · ${tituloAno} · total ${fmt1(totAno)} t` +
+                             (otrasN ? ` · mostrando las ${TOP} principales y "Otras (${otrasN})"` : "") } },
                 y: { ticks: { color: cssVar("--tick") }, grid: { display: false } } },
     },
     plugins: [valoresPlugin],
@@ -2065,8 +2215,28 @@ function renderPartners(recs){
         <b>% de ${anoTxt}</b>: cuánto representa cada empresa dentro de ese año.
         <b>% del histórico</b>: cuánto representa sobre el total de todos los años (${fmt1(totGeneral)} t).
         ${A.years.includes(A.nowY) ? `El año en curso incluye solo hasta ${MESES[A.nowM - 1]}.` : ""}
-        Ordenado por <b>${SORT.by === "hist" ? "total histórico" : "toneladas de " + SORT.by}</b>, ${SORT.dir === "desc" ? "de mayor a menor" : "de menor a mayor"} — tocá cualquier encabezado de año o el histórico para cambiarlo.</p>`;
+        Ordenado por <b>${SORT.by === "hist" ? "total histórico" : "toneladas de " + SORT.by}</b>, ${SORT.dir === "desc" ? "de mayor a menor" : "de menor a mayor"} — tocá cualquier encabezado de año o el histórico para cambiarlo.
+        ${otrasN ? `<br>El gráfico muestra las <b>${TOP} principales</b> de ${anoTxt} y agrupa las otras ${otrasN} en “Otras”; esta tabla incluye a todas.` : ""}</p>`;
   tabla.innerHTML = h;
+  // datos crudos para generar el PDF (sin depender del HTML)
+  LAST_PARTNER_PDF = {
+    titulo: `${(BUSINESSES.find(x => x.key === UI.biz) || {}).name || UI.biz} — ${campo === "exporter" ? "Exportadores" : "Importadores"}`,
+    sub: `Toneladas por empresa según fecha de ETD · Año destacado ${anoTxt}` +
+         ` · Ordenado por ${SORT.by === "hist" ? "total histórico" : "toneladas de " + SORT.by}, ${SORT.dir === "desc" ? "mayor a menor" : "menor a mayor"}`,
+    colLabel: campo === "exporter" ? "Exportador" : "Importador",
+    years: A.years, nowY: A.nowY, nowMes: MESES[A.nowM - 1],
+    anoTxt, yA,
+    filas: A.rows.map(r => ({
+      name: r.name,
+      porAno: A.years.map(y => r.porAno[y] || 0),
+      total: r.total,
+      pctAno: (r.porAno[yA] || 0) && totPorAno[yA] ? (r.porAno[yA] / totPorAno[yA] * 100) : null,
+      pctHist: totGeneral ? (r.total / totGeneral * 100) : null,
+    })),
+    totPorAno: A.years.map(y => totPorAno[y]),
+    totGeneral,
+    grafico: { labels: gLabels, data: gData, total: totAno, otrasN, otrasNombres },
+  };
   tabla.querySelectorAll("tr.rowlink").forEach(tr => {
     const open = () => openPartnerDetail(tr.dataset.partner);
     tr.onclick = open;
