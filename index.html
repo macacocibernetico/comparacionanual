@@ -360,6 +360,44 @@
   .chartbox.sm{height:150px}
   @media(max-width:720px){ .chartbox.sm{height:128px} .trendgrid{gap:14px} }
 
+  /* Encabezado que solo se ve en el PDF */
+  .printhead{display:none}
+
+  /* ---------- Impresión / PDF ---------- */
+  @media print{
+    @page{ size:A4 landscape; margin:12mm; }
+    html,body{background:#fff!important;color:#111!important;padding:0!important;margin:0!important}
+    /* con .printing solo se imprime la tarjeta marcada */
+    body.printing > *{display:none!important}
+    body.printing .print-target{display:block!important}
+    .print-target{
+      position:static!important;box-shadow:none!important;border:none!important;
+      background:#fff!important;padding:0!important;margin:0!important;width:100%!important
+    }
+    .print-target .consbar,.print-target .clickable,.print-target .chev{display:none!important}
+    .print-target .printhead{display:block;margin-bottom:10px}
+    .print-target .printhead h3{font-size:15pt;font-weight:600;color:#111;margin-bottom:3px}
+    .print-target .printhead p{font-size:8.5pt;color:#555;line-height:1.4}
+    .print-target h2{font-size:13pt;color:#111;margin-bottom:2px}
+    .print-target .csub{font-size:8.5pt;color:#555;margin-bottom:10px}
+    .print-target .chartbox{height:230px!important;page-break-inside:avoid;margin-bottom:12px}
+    .print-target canvas{max-width:100%!important}
+    .print-target .tablewrap{overflow:visible!important}
+    .print-target table{width:100%;font-size:8.5pt;border-collapse:collapse}
+    .print-target th,.print-target td{
+      border:0.5pt solid #bbb!important;padding:4pt 5pt;color:#111!important;
+      background:#fff!important;text-align:right;white-space:nowrap
+    }
+    .print-target th{background:#f0f0f0!important;font-weight:600;text-transform:none;font-size:8pt}
+    .print-target th:first-child,.print-target td:first-child{text-align:left;position:static!important}
+    .print-target tr.total td{background:#f6f6f6!important;font-weight:700}
+    .print-target tr{page-break-inside:avoid}
+    .print-target thead{display:table-header-group}
+    .print-target p{color:#555!important;font-size:8pt}
+    .print-target b{color:#111!important}
+    .print-target span{color:inherit!important}
+  }
+
   /* Colores */
   .swatches{display:flex;gap:9px;flex-wrap:wrap}
   .swatch{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:var(--r-sm);padding:8px 13px;transition:background .25s var(--ease)}
@@ -564,7 +602,9 @@
           <button type="button" data-pk="exporter" title="Toneladas exportadas por cada exportador">Exportadores</button>
           <button type="button" data-pk="importer" title="Toneladas importadas por cada importador">Importadores</button>
         </div>
+        <button type="button" id="btnPartnerPdf" title="Exportar este cuadro a PDF">⤓ Exportar a PDF</button>
       </div>
+      <div class="printhead" id="partnerPrintHead" aria-hidden="true"></div>
       <div class="chartbox tall"><canvas id="chPartner" aria-label="Toneladas por empresa" role="img"></canvas></div>
       <div class="tablewrap" id="partnerTable" style="margin-top:18px"></div>
     </div>
@@ -1844,6 +1884,27 @@ function renderGrupos(recs, year, maxMonth){
   });
 }
 
+/* Exporta una tarjeta a PDF usando la impresión del navegador (sin librerías):
+   marca qué tarjeta imprimir y el CSS de @media print oculta todo lo demás. */
+function exportarPdf(cardId){
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  document.body.classList.add("printing");
+  card.classList.add("print-target");
+  const limpiar = () => {
+    document.body.classList.remove("printing");
+    card.classList.remove("print-target");
+    Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} });
+  };
+  if (typeof matchMedia === "function"){
+    const mq = matchMedia("print");
+    const onChange = e => { if (!e.matches){ limpiar(); mq.removeEventListener && mq.removeEventListener("change", onChange); } };
+    mq.addEventListener && mq.addEventListener("change", onChange);
+  }
+  if (typeof window.onafterprint !== "undefined") window.onafterprint = limpiar;
+  setTimeout(() => { window.print(); setTimeout(limpiar, 1500); }, 120);
+}
+
 /* ============ Exportadores / importadores (solo Brokerage) ============
    Toneladas por empresa y por año, según ETD. El año en curso se corta en el mes actual. */
 function bizHasPartnerViews(){
@@ -1890,6 +1951,14 @@ function renderPartners(recs){
 
   const A = aggPartners(recs, campo);
   LAST_PARTNERS = new Map(A.rows.map(r => [r.name, r]));
+  // encabezado que aparece solo en el PDF
+  const bizName = (BUSINESSES.find(x => x.key === UI.biz) || {}).name || UI.biz;
+  document.getElementById("partnerPrintHead").innerHTML =
+    `<h3>${bizName} — ${campo === "exporter" ? "Exportadores" : "Importadores"}</h3>` +
+    `<p>Toneladas por empresa según fecha de ETD · Año destacado: ${UI.year}` +
+    `${A.years.includes(A.nowY) ? ` (el año en curso incluye hasta ${MESES[A.nowM - 1]})` : ""}` +
+    ` · Generado el ${new Date().toLocaleDateString("es-AR")}</p>`;
+  document.getElementById("btnPartnerPdf").onclick = () => exportarPdf("partnerCard");
   const tabla = document.getElementById("partnerTable");
   if (!A.rows.length){
     tabla.innerHTML = `<p class="empty">La planilla no tiene datos de ${campo === "exporter" ? "exportador" : "importador"}.<br>Revisá el encabezado en <b>⚙️ Configurar → Columnas</b>.</p>`;
@@ -1923,17 +1992,27 @@ function renderPartners(recs){
   const totPorAno = {};
   A.years.forEach(y => totPorAno[y] = A.rows.reduce((s, r) => s + (r.porAno[y] || 0), 0));
   const totGeneral = A.rows.reduce((s, r) => s + r.total, 0);
+  const anoTxt = yA === A.nowY ? `${yA} (a ${MESES[A.nowM - 1]})` : String(yA);
+  const pct = (v, t) => t ? (v / t * 100).toFixed(1).replace(".", ",") + "%" : "—";
   let h = `<table><tr><th>${campo === "exporter" ? "Exportador" : "Importador"}</th>` +
     A.years.map(y => `<th>${y === A.nowY ? `${y}<span style="font-weight:400;color:var(--faint)"> a ${MESES[A.nowM - 1]}</span>` : y}</th>`).join("") +
-    `<th>Total histórico</th><th>% del total</th></tr>`;
+    `<th>Total histórico</th>` +
+    `<th title="Participación dentro del año ${anoTxt}">% de ${anoTxt}</th>` +
+    `<th title="Participación sobre el total de todos los años">% del histórico</th></tr>`;
   for (const r of A.rows){
     h += `<tr class="rowlink" data-partner="${String(r.name).replace(/"/g, "&quot;")}" tabindex="0" role="button" title="Ver las cargas de ${r.name}">` +
       `<td>${r.name} <span class="chev">›</span></td>` +
       A.years.map(y => `<td>${r.porAno[y] ? fmt1(r.porAno[y]) : ""}</td>`).join("") +
-      `<td><b>${fmt1(r.total)}</b></td><td>${totGeneral ? (r.total / totGeneral * 100).toFixed(1).replace(".", ",") + "%" : "—"}</td></tr>`;
+      `<td><b>${fmt1(r.total)}</b></td>` +
+      `<td>${(r.porAno[yA] || 0) ? pct(r.porAno[yA], totPorAno[yA]) : "—"}</td>` +
+      `<td>${pct(r.total, totGeneral)}</td></tr>`;
   }
   h += `<tr class="total"><td>Total</td>` + A.years.map(y => `<td>${fmt1(totPorAno[y])}</td>`).join("") +
-       `<td>${fmt1(totGeneral)}</td><td>100%</td></tr></table>`;
+       `<td>${fmt1(totGeneral)}</td><td>${totPorAno[yA] ? "100%" : "—"}</td><td>100%</td></tr></table>`;
+  h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.55">
+        <b>% de ${anoTxt}</b>: cuánto representa cada empresa dentro de ese año.
+        <b>% del histórico</b>: cuánto representa sobre el total de todos los años (${fmt1(totGeneral)} t).
+        ${A.years.includes(A.nowY) ? `El año en curso incluye solo hasta ${MESES[A.nowM - 1]}.` : ""}</p>`;
   tabla.innerHTML = h;
   tabla.querySelectorAll("tr.rowlink").forEach(tr => {
     const open = () => openPartnerDetail(tr.dataset.partner);
