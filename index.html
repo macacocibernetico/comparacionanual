@@ -357,6 +357,10 @@
   .rangebox .mini:hover{background:var(--panel);color:var(--text)}
   @media(max-width:720px){ .consbar{gap:10px} .rangebox{width:100%;justify-content:flex-start} .rangebox select{flex:1;min-height:40px} .rangebox .mini{min-height:40px} }
 
+  .saldosgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){.saldosgrid{grid-template-columns:1fr}}
+  .saldosgrid .tlabel{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
+
   /* Switch estilo iOS */
   .switch{display:inline-flex;align-items:center;gap:9px;cursor:pointer;background:var(--panel2);border-radius:10px;padding:6px 12px;user-select:none}
   .switch input{position:absolute;opacity:0;width:0;height:0}
@@ -640,6 +644,38 @@
       <div class="chartbox tall"><canvas id="chPartner" aria-label="Toneladas por empresa" role="img"></canvas></div>
       <div class="tablewrap" id="partnerTable" style="margin-top:18px"></div>
     </div>
+    <div class="card wide" id="contractsCard" style="display:none">
+      <h2>Contratos <span id="lblContractsN" class="clickable"></span></h2>
+      <p class="csub">Lee la pestaña de contratos de la planilla y agrupa por la <b>Fecha del contrato</b>. Independiente de los embarques de arriba.</p>
+      <div class="consbar">
+        <div class="seg" id="contractsSeg" role="group" aria-label="Vista de contratos">
+          <button type="button" data-cv="exportador">Por exportador</button>
+          <button type="button" data-cv="importador">Por importador</button>
+          <button type="button" data-cv="listado">Listado completo</button>
+        </div>
+        <div class="rangebox" id="contractsSearchBox" style="display:none">
+          <label for="contractsSearch">Buscar</label>
+          <input id="contractsSearch" type="search" placeholder="contrato, empresa, producto…" autocomplete="off"
+                 style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.84rem;color:var(--text);min-width:200px">
+        </div>
+        <button type="button" id="btnContractsPdf" title="Exportar a PDF">⤓ Exportar a PDF</button>
+      </div>
+      <div class="tablewrap" id="contractsTable"></div>
+      <div id="saldosBlock" style="display:none">
+        <h3 class="subhead" id="saldosTitle">Saldos pendientes de embarque</h3>
+        <p class="csub" id="saldosSub"></p>
+        <div class="saldosgrid">
+          <div>
+            <span class="tlabel">Por cliente (Importador)</span>
+            <div class="tablewrap" id="saldosClientes"></div>
+          </div>
+          <div>
+            <span class="tlabel">Por proveedor (Exportador)</span>
+            <div class="tablewrap" id="saldosProveedores"></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="card wide" id="compareCard">
       <h2>Comparación anual por producto</h2>
       <p class="csub">Diferencia en toneladas y porcentaje de cada producto entre los dos años comparados.</p>
@@ -704,6 +740,10 @@
           </select>
         </div>
       </div>
+      <div class="row">
+        <div><label for="cfgContractsSheet">Pestaña de contratos <span style="color:var(--faint);font-weight:400">— opcional</span></label><input id="cfgContractsSheet" placeholder="ALL CONTRATOS"></div>
+        <div><label for="cfgContractsGid">GID de esa pestaña</label><input id="cfgContractsGid" placeholder="0"></div>
+      </div>
       <label for="cfgDecimal">Separador decimal de la planilla</label>
       <select id="cfgDecimal">
         <option value="auto">Detectar automáticamente</option>
@@ -765,7 +805,7 @@
 =================================================== */
 const BUSINESSES = [
   { key: "axt",       name: "AXT",       status: "active", nop: true, split: "nop", consViews: true },   // split: qué desglose ofrece cada negocio
-  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil", partnerViews: true },
+  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil", partnerViews: true, contractViews: true },
   { key: "buzaram",   name: "Buzaram",   status: "active", nop: false },
 ];
 const TOTAL_KEY = "total";
@@ -778,6 +818,8 @@ const SHEET_DEFAULTS = {
   HEADER_ROW: 2,
   DATE_FORMAT: "DMY",
   DECIMAL: "auto",                                 // "auto" | "comma" | "dot"
+  CONTRACTS_SHEET: "ALL CONTRATOS",                // pestaña de contratos (Brokerage)
+  CONTRACTS_GID: "",
   USD_COL: "TOTAL FINAL",                          // encabezado de la columna de facturación
   COMISION: { mode: "suma", col: "Monto LT" },     // "suma" o "porTon" (comisión × Tns)
   /* Encabezados de las columnas que usa el dashboard. Editables por negocio
@@ -847,6 +889,9 @@ function loadUI(){
   if (!ui.partnerSort) ui.partnerSort = { by: "hist", dir: "desc" };   // by: "hist" | año
   ui.partnerTop = [0, 10, 15, 20].includes(+ui.partnerTop) ? +ui.partnerTop : 15;
   if (typeof ui.partnerOil !== "boolean") ui.partnerOil = true;   // incluir aceite y expeller
+  if (!["exportador", "importador", "listado"].includes(ui.contractView)) ui.contractView = "exportador";
+  if (typeof ui.contractSearch !== "string") ui.contractSearch = "";
+  if (!ui.contractSort) ui.contractSort = { by: "total", dir: "desc" };
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1292,6 +1337,7 @@ function yearColor(year, orderedYears){
 }
 
 let DATA = {};        // bizKey -> records
+let CONTRACTS = {};   // bizKey -> contratos
 let charts = {};
 let demoMode = false;
 
@@ -1400,9 +1446,9 @@ function readCache(){
     return c;
   } catch(e){ return null; }
 }
-function writeCache(data, srcInfo){
+function writeCache(data, srcInfo, contracts){
   try {
-    const payload = JSON.stringify({ ts: Date.now(), biz: data, src: srcInfo });
+    const payload = JSON.stringify({ ts: Date.now(), biz: data, src: srcInfo, contratos: contracts || {} });
     if (payload.length < 3_000_000) localStorage.setItem(CACHE_KEY, payload);
   } catch(e){ /* sin espacio: seguimos sin caché */ }
 }
@@ -1418,7 +1464,7 @@ async function loadData(){
   const status = document.getElementById("statusLine");
   const banner = document.getElementById("banner");
   banner.style.display = "none";
-  DATA = {}; demoMode = false;
+  DATA = {}; CONTRACTS = {}; demoMode = false;
   const active = BUSINESSES.filter(b => b.status === "active");
   const configured = active.filter(b => CONFIG[b.key].SHEET_ID);
   if (!configured.length){
@@ -1439,6 +1485,7 @@ async function loadData(){
       const r = await fetchBiz(b.key);
       DATA[b.key] = r.recs;
       srcInfo[b.key] = r.src;
+      if (b.contractViews){ try { CONTRACTS[b.key] = await fetchContracts(b.key); } catch(e){ CONTRACTS[b.key] = []; } }
     }
     catch(e){ errors.push(`<b>${b.name}:</b> ${e.message}`); }
   }));
@@ -1447,7 +1494,7 @@ async function loadData(){
     banner.className = "banner err";
     banner.innerHTML = "<span>❌</span><span><b>No se pudo cargar una planilla.</b><br>" + errors.join("<br>") + "</span>";
   }
-  writeCache(DATA, srcInfo);
+  writeCache(DATA, srcInfo, CONTRACTS);
   const parts = configured
     .filter(b => DATA[b.key])
     .map(b => {
@@ -1628,6 +1675,84 @@ function wireRange(idFrom, idTo, idAll, idYtd, RG, recs, year){
     const meses = recs.filter(r => r.consolidacion && r.consolidacion.y === year).map(r => r.consolidacion.mo);
     UI.consFrom = 1; UI.consTo = meses.length ? Math.max(...meses) : 12; saveUI(); render();
   };
+}
+
+/* ============ Contratos (hoja "ALL CONTRATOS", solo Brokerage) ============ */
+const CONTRACT_COLS = {
+  fecha: "Fecha", contrato: "Contrato", exportador: "Exportador", importador: "Importador",
+  producto: "Producto", tipo: "Tipo", toneladas: "Toneladas", precio: "Precio", total: "Total",
+  packaging: "Packaging", incoterm: "Incoterm", pago: "Forma de pago", comision: "Comision Total",
+  pagosUsa: "PAGOS USA", ent: "ENT", saldo: "Saldo", periodo: "Periodo de embarque",
+};
+
+function buildContracts(rows, cfg){
+  // los contratos tienen su propia fila de encabezados: se busca por nombre
+  let hIdx = 0, best = 0;
+  const esperados = Object.values(CONTRACT_COLS);
+  for (let i = 0; i < Math.min(rows.length, 10); i++){
+    const hm = headerMap(rows[i]);
+    const score = esperados.filter(h => findInMap(h, hm) !== undefined).length;
+    if (score > best){ best = score; hIdx = i; }
+  }
+  if (best < 4) return [];
+  const hmap = headerMap(rows[hIdx]);
+  const C = {};
+  for (const k in CONTRACT_COLS){
+    const i = findInMap(CONTRACT_COLS[k], hmap);
+    C[k] = i === undefined ? -1 : i;
+  }
+  const body = rows.slice(hIdx + 1);
+  const col = i => (i < 0 ? [] : body.map(r => r && r[i]));
+  const forced = cfg.DECIMAL && cfg.DECIMAL !== "auto" ? cfg.DECIMAL : null;
+  const sep = {
+    toneladas: forced || detectDecimalSep(col(C.toneladas)),
+    precio: forced || detectDecimalSep(col(C.precio)),
+    total: forced || detectDecimalSep(col(C.total)),
+    comision: forced || detectDecimalSep(col(C.comision)),
+    pagosUsa: forced || detectDecimalSep(col(C.pagosUsa)),
+    saldo: forced || detectDecimalSep(col(C.saldo)),
+  };
+  const txt = (r, k) => C[k] < 0 ? "" : String(r[C[k]] ?? "").trim();
+  const num = (r, k) => C[k] < 0 ? 0 : parseNumber(r[C[k]], sep[k]);
+  const out = [];
+  for (const r of body){
+    if (!r) continue;
+    const fecha = parseDate(r[C.fecha], cfg.DATE_FORMAT);
+    const tns = num(r, "toneladas");
+    const contrato = txt(r, "contrato");
+    if (!fecha && !tns && !contrato) continue;
+    out.push({
+      fecha, fechaOrd: fecha ? fecha.y * 10000 + fecha.mo * 100 + (fecha.d || 0) : 0,
+      contrato, exportador: txt(r, "exportador") || "(sin dato)",
+      importador: txt(r, "importador") || "(sin dato)",
+      producto: txt(r, "producto"), tipo: txt(r, "tipo"),
+      toneladas: tns, precio: num(r, "precio"), total: num(r, "total"),
+      packaging: txt(r, "packaging"), incoterm: txt(r, "incoterm"), pago: txt(r, "pago"),
+      comision: num(r, "comision"), pagosUsa: num(r, "pagosUsa"),
+      ent: txt(r, "ent"), saldo: num(r, "saldo"), periodo: txt(r, "periodo"),
+    });
+  }
+  return out;
+}
+
+async function fetchContracts(key){
+  const cfg = CONFIG[key];
+  if (!cfg.SHEET_ID || !cfg.CONTRACTS_SHEET) return [];
+  const base = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}`;
+  const sq = encodeURIComponent(cfg.CONTRACTS_SHEET);
+  const intentos = [
+    { url: `${base}/gviz/tq?tqx=out:json&sheet=${sq}&headers=1&t=${Date.now()}`, parse: gvizJsonToRows },
+    { url: `${base}/gviz/tq?tqx=out:csv&sheet=${sq}&headers=1&t=${Date.now()}`, parse: parseCSV },
+  ];
+  if (cfg.CONTRACTS_GID)
+    intentos.push({ url: `${base}/export?format=csv&gid=${encodeURIComponent(cfg.CONTRACTS_GID)}&t=${Date.now()}`, parse: parseCSV });
+  for (const a of intentos){
+    try {
+      const recs = buildContracts(a.parse(await fetchCsvText(a.url)), cfg);
+      if (recs.length) return recs;
+    } catch(e){ /* siguiente intento */ }
+  }
+  return [];
 }
 
 /* Rango de meses elegido en el selector, intersectado con el corte a misma fecha */
@@ -2308,6 +2433,266 @@ function openPartnerDetail(name){
   detailBg.classList.add("open");
 }
 
+/* Saldos pendientes de embarque: suma la columna Saldo de los contratos del año
+   elegido, agrupada por cliente (Importador) y por proveedor (Exportador). */
+function renderSaldos(cs){
+  const bloque = document.getElementById("saldosBlock");
+  const year = UI.year;
+  const delAno = cs.filter(c => c.fecha && c.fecha.y === year);
+  if (!delAno.length){
+    bloque.style.display = "none";
+    return;
+  }
+  bloque.style.display = "";
+  document.getElementById("saldosTitle").textContent = `Saldos pendientes de embarque — ${year}`;
+
+  const agrupar = campo => {
+    const m = new Map();
+    for (const c of delAno){
+      const n = c[campo] || "(sin dato)";
+      if (!m.has(n)) m.set(n, { nombre: n, contratos: 0, toneladas: 0, total: 0, saldo: 0 });
+      const g = m.get(n);
+      g.contratos++; g.toneladas += c.toneladas; g.total += c.total; g.saldo += c.saldo;
+    }
+    return [...m.values()].sort((a, b) => b.saldo - a.saldo);
+  };
+  const totalSaldo = delAno.reduce((s2, c) => s2 + c.saldo, 0);
+  const pintar = (destino, filas, etiqueta) => {
+    const tSaldo = filas.reduce((s2, g) => s2 + g.saldo, 0);
+    let h = `<table><tr><th>${etiqueta}</th><th>Contratos</th><th>Toneladas</th><th>Contratado</th><th>Saldo pendiente</th><th>%</th></tr>`;
+    for (const g of filas){
+      const pend = g.saldo > 0;
+      h += `<tr><td>${g.nombre}</td><td>${fmt0(g.contratos)}</td><td>${fmt1(g.toneladas)}</td><td>${fmtUsd(g.total)}</td>
+        <td><b style="color:${pend ? "var(--amber)" : "var(--green)"}">${pend ? fmtUsd(g.saldo) : "sin saldo"}</b></td>
+        <td>${tSaldo && pend ? (g.saldo / tSaldo * 100).toFixed(1).replace(".", ",") + "%" : "—"}</td></tr>`;
+    }
+    h += `<tr class="total"><td>Total</td><td>${fmt0(filas.reduce((s2, g) => s2 + g.contratos, 0))}</td>
+      <td>${fmt1(filas.reduce((s2, g) => s2 + g.toneladas, 0))}</td>
+      <td>${fmtUsd(filas.reduce((s2, g) => s2 + g.total, 0))}</td>
+      <td><b style="color:${tSaldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(tSaldo)}</b></td><td>100%</td></tr></table>`;
+    document.getElementById(destino).innerHTML = h;
+  };
+  pintar("saldosClientes", agrupar("importador"), "Cliente");
+  pintar("saldosProveedores", agrupar("exportador"), "Proveedor");
+
+  const conSaldo = delAno.filter(c => c.saldo > 0).length;
+  document.getElementById("saldosSub").innerHTML =
+    `Suma de la columna <b>Saldo</b> de los ${fmt0(delAno.length)} contratos con fecha ${year}: ` +
+    `<b style="color:${totalSaldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(totalSaldo)}</b> pendiente en ${fmt0(conSaldo)} contrato(s). ` +
+    `El mismo saldo aparece en las dos tablas, visto por cliente y por proveedor.`;
+  LAST_SALDOS_PDF = { year, clientes: agrupar("importador"), proveedores: agrupar("exportador"), totalSaldo, n: delAno.length };
+}
+let LAST_SALDOS_PDF = null;
+
+/* PDF de la sección de contratos, con la vista que esté seleccionada */
+async function exportarContractsPdf(){
+  const D = LAST_CONTRACTS_PDF;
+  const btn = document.getElementById("btnContractsPdf");
+  if (!D) return;
+  const orig = btn ? btn.textContent : "";
+  try {
+    if (btn){ btn.disabled = true; btn.textContent = "Generando PDF…"; }
+    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+    const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!JsPDF) throw new Error("jsPDF no disponible");
+    const doc = new JsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const W = doc.internal.pageSize.getWidth(), M = 10;
+    const bizName = (BUSINESSES.find(x => x.key === UI.biz) || {}).name || UI.biz;
+    const titulo = D.modo === "listado" ? "Contratos — listado completo"
+      : `Contratos por ${D.modo === "exportador" ? "exportador" : "importador"}`;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(20);
+    doc.text(`${bizName} — ${titulo}`, M, 14);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(110);
+    doc.text(`Agrupado por fecha del contrato · ${fmt0(D.filas.length)} ${D.modo === "listado" ? "contratos" : "empresas"}` +
+             (D.modo === "listado" && UI.contractSearch ? ` · filtro: “${UI.contractSearch}”` : "") +
+             ` · generado el ${new Date().toLocaleDateString("es-AR")}`, M, 20);
+    let head, body, foot;
+    if (D.modo === "listado"){
+      head = [["Fecha", "Contrato", "Exportador", "Importador", "Producto", "Tipo", "Tns", "Precio", "Total", "Packaging", "Incoterm", "Pago", "Comisión", "Pagos USA", "ENT", "Saldo", "Per. embarque"]];
+      body = D.filas.map(c => [fmtDate(c.fecha), c.contrato || "", c.exportador, c.importador, c.producto || "", c.tipo || "",
+        fmt1(c.toneladas), c.precio ? fmt0(c.precio) : "", fmt0(c.total), c.packaging || "", c.incoterm || "", c.pago || "",
+        c.comision ? fmt0(c.comision) : "", c.pagosUsa ? fmt0(c.pagosUsa) : "", c.ent || "", c.saldo ? fmt0(c.saldo) : "", c.periodo || ""]);
+      const t = k => D.filas.reduce((s2, c) => s2 + (c[k] || 0), 0);
+      foot = [[`${fmt0(D.filas.length)} contrato(s)`, "", "", "", "", "", fmt1(t("toneladas")), "", fmt0(t("total")), "", "", "",
+        fmt0(t("comision")), fmt0(t("pagosUsa")), "", fmt0(t("saldo")), ""]];
+    } else {
+      head = [[D.modo === "exportador" ? "Exportador" : "Importador", ...D.ys.map(String), "Contratos", "Toneladas", "Total", "Comisión", "Pagos USA", "Saldo"]];
+      body = D.filas.map(g => [g.nombre, ...D.ys.map(y => g.porAno[y] ? fmt1(g.porAno[y]) : ""),
+        fmt0(g.contratos), fmt1(g.toneladas), fmt0(g.total), g.comision ? fmt0(g.comision) : "", g.pagosUsa ? fmt0(g.pagosUsa) : "", g.saldo ? fmt0(g.saldo) : ""]);
+      const t = k => D.filas.reduce((s2, g) => s2 + (g[k] || 0), 0);
+      foot = [["Total", ...D.ys.map(y => fmt1(D.filas.reduce((s2, g) => s2 + (g.porAno[y] || 0), 0))),
+        fmt0(t("contratos")), fmt1(t("toneladas")), fmt0(t("total")), fmt0(t("comision")), fmt0(t("pagosUsa")), fmt0(t("saldo"))]];
+    }
+    doc.autoTable({
+      head, body, foot, startY: 25, margin: { left: M, right: M },
+      styles: { fontSize: D.modo === "listado" ? 6.4 : 8, cellPadding: 1.3, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 20, halign: "right", overflow: "linebreak" },
+      headStyles: { fillColor: [238, 238, 238], textColor: 20, fontStyle: "bold", halign: "right", fontSize: D.modo === "listado" ? 6.2 : 7.6 },
+      footStyles: { fillColor: [246, 246, 246], textColor: 20, fontStyle: "bold", halign: "right" },
+      columnStyles: { 0: { halign: "left" }, 1: { halign: "left" }, 2: { halign: "left" }, 3: { halign: "left" } },
+      theme: "grid",
+    });
+    // saldos pendientes de embarque
+    if (LAST_SALDOS_PDF && (LAST_SALDOS_PDF.clientes.length || LAST_SALDOS_PDF.proveedores.length)){
+      const S = LAST_SALDOS_PDF;
+      const mkTabla = (titulo, filas, etiqueta) => {
+        const y0 = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 25) + 8;
+        if (y0 > doc.internal.pageSize.getHeight() - 40) doc.addPage();
+        const yy = (doc.lastAutoTable && doc.lastAutoTable.finalY < doc.internal.pageSize.getHeight() - 40)
+          ? doc.lastAutoTable.finalY + 8 : 18;
+        doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(20);
+        doc.text(titulo, M, yy);
+        const tS = filas.reduce((a, g) => a + g.saldo, 0);
+        doc.autoTable({
+          head: [[etiqueta, "Contratos", "Toneladas", "Contratado", "Saldo pendiente", "%"]],
+          body: filas.map(g => [g.nombre, fmt0(g.contratos), fmt1(g.toneladas), fmt0(g.total), fmt0(g.saldo),
+            tS && g.saldo > 0 ? (g.saldo / tS * 100).toFixed(1).replace(".", ",") + "%" : ""]),
+          foot: [["Total", fmt0(filas.reduce((a, g) => a + g.contratos, 0)), fmt1(filas.reduce((a, g) => a + g.toneladas, 0)),
+            fmt0(filas.reduce((a, g) => a + g.total, 0)), fmt0(tS), "100%"]],
+          startY: yy + 3, margin: { left: M, right: M },
+          styles: { fontSize: 8, cellPadding: 1.4, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 20, halign: "right" },
+          headStyles: { fillColor: [238, 238, 238], textColor: 20, fontStyle: "bold", halign: "right" },
+          footStyles: { fillColor: [246, 246, 246], textColor: 20, fontStyle: "bold", halign: "right" },
+          columnStyles: { 0: { halign: "left" } }, theme: "grid",
+        });
+      };
+      mkTabla(`Saldos pendientes de embarque ${S.year} — por cliente (Importador)`, S.clientes, "Cliente");
+      mkTabla(`Saldos pendientes de embarque ${S.year} — por proveedor (Exportador)`, S.proveedores, "Proveedor");
+    }
+    doc.save(`${bizName}_Contratos_${D.modo}.pdf`);
+  } catch(e){
+    exportarPdf("contractsCard");
+  } finally {
+    if (btn){ btn.disabled = false; btn.textContent = orig || "⤓ Exportar a PDF"; }
+  }
+}
+
+/* ---------- Render de la sección de contratos ---------- */
+let LAST_CONTRACTS_PDF = null;
+
+function renderContracts(){
+  const card = document.getElementById("contractsCard");
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  if (!bz || bz.contractViews !== true){ card.style.display = "none"; return; }
+  const cs = CONTRACTS[UI.biz] || [];
+  card.style.display = "";
+  const tabla = document.getElementById("contractsTable");
+  document.getElementById("lblContractsN").textContent = cs.length ? `${fmt0(cs.length)} contratos` : "";
+
+  const vista = UI.contractView;
+  document.querySelectorAll("#contractsSeg button").forEach(btn => {
+    const on = btn.dataset.cv === vista;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.onclick = () => { UI.contractView = btn.dataset.cv; saveUI(); render(); };
+  });
+  document.getElementById("contractsSearchBox").style.display = vista === "listado" ? "" : "none";
+
+  if (!cs.length){
+    tabla.innerHTML = `<p class="empty">No se encontraron contratos.<br>
+      Verificá el nombre de la pestaña en <b>⚙️ Configurar → Planilla → Pestaña de contratos</b>
+      (ahora: “${(CONFIG[UI.biz] || {}).CONTRACTS_SHEET || "sin configurar"}”).</p>`;
+    LAST_CONTRACTS_PDF = null;
+    return;
+  }
+
+  const SORT = UI.contractSort;
+  const flecha = k => SORT.by === k ? (SORT.dir === "asc" ? " ▲" : " ▼") : "";
+  const th = (k, label, tip) => `<th class="sortable" data-csort="${k}" tabindex="0" role="button" title="${tip || "Ordenar"}">${label}<span class="sarrow">${flecha(k)}</span></th>`;
+  const ordenar = arr => {
+    const v = r => {
+      const x = r[SORT.by];
+      return typeof x === "number" ? x : String(x ?? "").toLowerCase();
+    };
+    return arr.sort((a, b) => {
+      const va = v(a), vb = v(b);
+      const d = typeof va === "number" && typeof vb === "number" ? vb - va : String(vb).localeCompare(String(va), "es");
+      return SORT.dir === "asc" ? -d : d;
+    });
+  };
+
+  if (vista === "listado"){
+    const q = (UI.contractSearch || "").trim().toLowerCase();
+    const inp = document.getElementById("contractsSearch");
+    if (inp && inp.value !== UI.contractSearch) inp.value = UI.contractSearch;
+    if (inp) inp.oninput = () => { UI.contractSearch = inp.value; saveUI(); renderContracts(); };
+    let filas = cs.filter(c => !q || [c.contrato, c.exportador, c.importador, c.producto, c.tipo, c.packaging, c.incoterm, c.pago, c.ent, c.periodo]
+      .some(v => String(v || "").toLowerCase().includes(q)));
+    filas = ordenar([...filas]);
+    const tot = k => filas.reduce((s2, c) => s2 + (c[k] || 0), 0);
+    let h = `<table><tr>` +
+      th("fechaOrd", "Fecha") + th("contrato", "Contrato") + th("exportador", "Exportador") + th("importador", "Importador") +
+      th("producto", "Producto") + th("tipo", "Tipo") + th("toneladas", "Toneladas") + th("precio", "Precio") +
+      th("total", "Total") + th("packaging", "Packaging") + th("incoterm", "Incoterm") + th("pago", "Forma de pago") +
+      th("comision", "Comisión") + th("pagosUsa", "Pagos USA") + th("ent", "ENT") + th("saldo", "Saldo") +
+      th("periodo", "Per. embarque") + `</tr>`;
+    for (const c of filas){
+      h += `<tr><td>${fmtDate(c.fecha)}</td><td>${c.contrato || "—"}</td><td>${c.exportador}</td><td>${c.importador}</td>
+        <td>${c.producto || "—"}</td><td>${c.tipo || "—"}</td><td>${fmt1(c.toneladas)}</td>
+        <td>${c.precio ? fmtUsd(c.precio) : "—"}</td><td>${fmtUsd(c.total)}</td>
+        <td>${c.packaging || "—"}</td><td>${c.incoterm || "—"}</td><td>${c.pago || "—"}</td>
+        <td>${c.comision ? fmtUsd(c.comision) : "—"}</td><td>${c.pagosUsa ? fmtUsd(c.pagosUsa) : "—"}</td>
+        <td>${c.ent || "—"}</td>
+        <td>${c.saldo ? `<b style="color:${c.saldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(c.saldo)}</b>` : "—"}</td>
+        <td>${c.periodo || "—"}</td></tr>`;
+    }
+    h += `<tr class="total"><td>${fmt0(filas.length)} contrato(s)</td><td></td><td></td><td></td><td></td><td></td>
+      <td>${fmt1(tot("toneladas"))}</td><td></td><td>${fmtUsd(tot("total"))}</td><td></td><td></td><td></td>
+      <td>${fmtUsd(tot("comision"))}</td><td>${fmtUsd(tot("pagosUsa"))}</td><td></td><td>${fmtUsd(tot("saldo"))}</td><td></td></tr></table>`;
+    if (q) h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px">Mostrando ${filas.length} de ${cs.length} contratos que coinciden con “${UI.contractSearch}”.</p>`;
+    tabla.innerHTML = h;
+    LAST_CONTRACTS_PDF = { modo: "listado", filas, cs };
+  } else {
+    // agrupado por exportador o importador, con columnas por año de la fecha del contrato
+    const campo = vista;
+    const anos = new Set(), porNombre = new Map();
+    for (const c of cs){
+      const a = c.fecha ? c.fecha.y : null;
+      if (a) anos.add(a);
+      const n = c[campo] || "(sin dato)";
+      if (!porNombre.has(n)) porNombre.set(n, { nombre: n, porAno: {}, contratos: 0, toneladas: 0, total: 0, comision: 0, pagosUsa: 0, saldo: 0 });
+      const g = porNombre.get(n);
+      if (a) g.porAno[a] = (g.porAno[a] || 0) + c.toneladas;
+      g.contratos++; g.toneladas += c.toneladas; g.total += c.total;
+      g.comision += c.comision; g.pagosUsa += c.pagosUsa; g.saldo += c.saldo;
+    }
+    const ys = [...anos].sort((a, b) => a - b);
+    const filas = ordenar([...porNombre.values()].map(g => ({ ...g, nombreOrd: g.nombre })));
+    const tot = k => filas.reduce((s2, g) => s2 + (g[k] || 0), 0);
+    let h = `<table><tr>` + th("nombreOrd", campo === "exportador" ? "Exportador" : "Importador") +
+      ys.map(y => `<th>${y}</th>`).join("") +
+      th("contratos", "Contratos") + th("toneladas", "Toneladas") + th("total", "Total") +
+      th("comision", "Comisión") + th("pagosUsa", "Pagos USA") + th("saldo", "Saldo") + `</tr>`;
+    for (const g of filas){
+      h += `<tr><td>${g.nombre}</td>` + ys.map(y => `<td>${g.porAno[y] ? fmt1(g.porAno[y]) : ""}</td>`).join("") +
+        `<td>${fmt0(g.contratos)}</td><td>${fmt1(g.toneladas)}</td><td>${fmtUsd(g.total)}</td>
+         <td>${g.comision ? fmtUsd(g.comision) : "—"}</td><td>${g.pagosUsa ? fmtUsd(g.pagosUsa) : "—"}</td>
+         <td>${g.saldo ? `<b style="color:${g.saldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(g.saldo)}</b>` : "—"}</td></tr>`;
+    }
+    h += `<tr class="total"><td>Total</td>` +
+      ys.map(y => `<td>${fmt1(filas.reduce((s2, g) => s2 + (g.porAno[y] || 0), 0))}</td>`).join("") +
+      `<td>${fmt0(tot("contratos"))}</td><td>${fmt1(tot("toneladas"))}</td><td>${fmtUsd(tot("total"))}</td>
+       <td>${fmtUsd(tot("comision"))}</td><td>${fmtUsd(tot("pagosUsa"))}</td><td>${fmtUsd(tot("saldo"))}</td></tr></table>`;
+    h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.55">
+      Las columnas por año son toneladas contratadas según la <b>Fecha del contrato</b>.
+      El <b>Saldo</b> en ámbar es lo que queda pendiente. Tocá cualquier encabezado para ordenar.</p>`;
+    tabla.innerHTML = h;
+    LAST_CONTRACTS_PDF = { modo: campo, filas, ys, cs };
+  }
+
+  renderSaldos(cs);
+  tabla.querySelectorAll("th.sortable").forEach(el => {
+    const go = () => {
+      const k = el.dataset.csort;
+      UI.contractSort = { by: k, dir: SORT.by === k && SORT.dir === "desc" ? "asc" : "desc" };
+      saveUI(); renderContracts();
+    };
+    el.onclick = go;
+    el.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } };
+  });
+  document.getElementById("btnContractsPdf").onclick = exportarContractsPdf;
+}
+
 /* Detalle de un grupo comercial: cada carga con sus días de cobro y sus montos */
 let LAST_GRUPOS = new Map();
 
@@ -2565,6 +2950,9 @@ function render(){
     document.getElementById("contextBar").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
+    ["consSection", "gruposCard", "partnerCard", "contractsCard"].forEach(id => {
+      const el = document.getElementById(id); if (el) el.style.display = "none";
+    });
     return;
   }
   soonView.style.display = "none";
@@ -2591,6 +2979,9 @@ function render(){
     document.getElementById("contextBar").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
+    ["consSection", "gruposCard", "partnerCard", "contractsCard"].forEach(id => {
+      const el = document.getElementById(id); if (el) el.style.display = "none";
+    });
     return;
   }
   if (!years.includes(UI.year)) UI.year = years[0];
@@ -2684,6 +3075,7 @@ function render(){
   renderConsolidacion(recs, yA, MM);
   renderGrupos(recs, yA, MM);
   renderPartners(recs);
+  renderContracts();
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
@@ -2945,6 +3337,8 @@ function fillConfigForm(){
   document.getElementById("cfgDateFormat").value = c.DATE_FORMAT;
   document.getElementById("cfgComMode").value = c.COMISION.mode;
   document.getElementById("cfgDecimal").value = c.DECIMAL || "auto";
+  document.getElementById("cfgContractsSheet").value = c.CONTRACTS_SHEET || "";
+  document.getElementById("cfgContractsGid").value = c.CONTRACTS_GID || "";
   document.getElementById("cfgColEtd").value = c.COLS.etd;
   document.getElementById("cfgColTns").value = c.COLS.tns;
   document.getElementById("cfgColProduct").value = c.COLS.product;
@@ -3015,6 +3409,8 @@ document.getElementById("cfgSave").onclick = async () => {
     HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
     DECIMAL: document.getElementById("cfgDecimal").value,
+    CONTRACTS_SHEET: txt("cfgContractsSheet"),
+    CONTRACTS_GID: txt("cfgContractsGid").replace(/\D/g, ""),
     USD_COL: txt("cfgColUsd") || D.USD_COL,
     COMISION: { mode: document.getElementById("cfgComMode").value, col: txt("cfgColCom") || D.COMISION.col },
     COLS: {
@@ -3121,7 +3517,7 @@ async function init(opts){
   const cached = force ? null : readCache();
   const hasConfig = BUSINESSES.some(b => b.status === "active" && CONFIG[b.key].SHEET_ID);
   if (cached && hasConfig && Date.now() - cached.ts < CACHE_MAX_AGE && Object.keys(cached.biz || {}).length){
-    DATA = cached.biz; demoMode = false; paintedFromCache = true;
+    DATA = cached.biz; CONTRACTS = cached.contratos || {}; demoMode = false; paintedFromCache = true;
     const n = Object.values(DATA).reduce((s, r) => s + r.length, 0);
     document.getElementById("statusLine").innerHTML =
       `⚡ ${fmt0(n)} cargas desde la última lectura (${cacheAgeText(cached.ts)}) · <span style="opacity:.75">actualizando…</span>`;
