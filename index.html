@@ -556,6 +556,18 @@
       <div class="tablewrap" id="gruposTable"></div>
     </div>
 
+    <div class="card wide" id="partnerCard" style="display:none">
+      <h2>Exportadores e importadores <span class="clickable">CLICK EN UNA FILA PARA VER LAS CARGAS</span></h2>
+      <p class="csub">Toneladas por empresa según la fecha de <b>ETD</b>. El año en curso se muestra hasta el mes actual, y a la derecha tenés el histórico de todos los años.</p>
+      <div class="consbar">
+        <div class="seg" id="partnerSeg" role="group" aria-label="Ver exportadores o importadores">
+          <button type="button" data-pk="exporter" title="Toneladas exportadas por cada exportador">Exportadores</button>
+          <button type="button" data-pk="importer" title="Toneladas importadas por cada importador">Importadores</button>
+        </div>
+      </div>
+      <div class="chartbox tall"><canvas id="chPartner" aria-label="Toneladas por empresa" role="img"></canvas></div>
+      <div class="tablewrap" id="partnerTable" style="margin-top:18px"></div>
+    </div>
     <div class="card wide" id="compareCard">
       <h2>Comparación anual por producto</h2>
       <p class="csub">Diferencia en toneladas y porcentaje de cada producto entre los dos años comparados.</p>
@@ -660,6 +672,10 @@
         <div><label for="cfgColFlete">Flete (monto)</label><input id="cfgColFlete" placeholder="total flete"></div>
         <div><label for="cfgColBroker">Comisión devengada</label><input id="cfgColBroker" placeholder="Comision Broker"></div>
       </div>
+      <div class="row">
+        <div><label for="cfgColExporter">Exportador</label><input id="cfgColExporter" placeholder="Exporter"></div>
+        <div><label for="cfgColImporter">Importador</label><input id="cfgColImporter" placeholder="Importer"></div>
+      </div>
     </div>
     <div class="actions">
       <button class="danger" id="cfgClear" type="button" title="Borra la configuración guardada de todos los negocios">Borrar todo</button>
@@ -676,7 +692,7 @@
 =================================================== */
 const BUSINESSES = [
   { key: "axt",       name: "AXT",       status: "active", nop: true, split: "nop", consViews: true },   // split: qué desglose ofrece cada negocio
-  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil" },
+  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil", partnerViews: true },
   { key: "buzaram",   name: "Buzaram",   status: "active", nop: false },
 ];
 const TOTAL_KEY = "total";
@@ -704,12 +720,14 @@ const SHEET_DEFAULTS = {
     cobro:         "Fecha de cobro",
     cobroEst:      "Fecha estimada",
     flete:         "total flete",
-    comBroker:     "Comision Broker",         // destino
+    comBroker:     "Comision Broker",
+    exporter:      "Exporter",
+    importer:      "Importer",         // destino
     etd:           "ETD",          // fecha que define mes/año
   },
 };
 /* Fallback por letra, solo si el encabezado no aparece (estructura original AXT) */
-const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", packing: "D", containers: "F", consolidacion: "K", port: "N", etd: "L", cobro: "AU", cobroEst: "AT", flete: "AO", comBroker: "AF" };
+const COL_FALLBACK = { negocio: "A", tns: "B", product: "C", packing: "D", containers: "F", consolidacion: "K", port: "N", etd: "L", cobro: "AU", cobroEst: "AT", flete: "AO", comBroker: "AF", exporter: "S", importer: "X" };
 /* migración de configs viejas que guardaban letras */
 const LETTER_TO_HEADER = { AG: "TOTAL FINAL", AC: "Total CFR", AF: "Price Serv" };
 const LS_KEY = "dashboardConfigV2";
@@ -752,6 +770,7 @@ function loadUI(){
   if (ui.mode === "grupos"){ ui.mode = "solo"; ui.split = true; }   // migración del modo viejo
   if (typeof ui.split !== "boolean") ui.split = false;
   if (ui.consMetric !== "usd") ui.consMetric = "tns";
+  if (ui.partnerKind !== "importer") ui.partnerKind = "exporter";
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1082,6 +1101,11 @@ function buildRecords(rows, cfg, bizKey){
   // si no existe el encabezado de comisión, mejor 0 visible que sumar otra columna en silencio
   let comIdx = findInMap(cfg.COMISION.col, hmap);
   if (comIdx === undefined) comIdx = -1;
+  // el importador puede figurar como "Importer" o como "Customer"
+  if (C.importer < 0 || findInMap(cfg.COLS.importer, hmap) === undefined){
+    const alt = findInMap("Customer", hmap);
+    if (alt !== undefined) C.importer = alt;
+  }
   // separador decimal: el configurado, o deducido de cada columna numérica completa
   const body = rows.slice(headerRowIdx + 1);
   const colValues = i => (i < 0 ? [] : body.map(r => r && r[i]));
@@ -1116,6 +1140,8 @@ function buildRecords(rows, cfg, bizKey){
       port: String(r[C.port] ?? "").trim() || "(sin destino)",
       packing: String(r[C.packing] ?? "").trim(),
       cobro: parseDate(r[C.cobro], cfg.DATE_FORMAT) || parseDate(r[C.cobroEst], cfg.DATE_FORMAT),
+      exporter: String(r[C.exporter] ?? "").trim(),
+      importer: String(r[C.importer] ?? "").trim(),
       flete: C.flete >= 0 ? Math.abs(parseNumber(r[C.flete], sepFlete)) : 0,
       comBroker: C.comBroker >= 0 ? Math.abs(parseNumber(r[C.comBroker], sepBroker)) : 0,
       negocio: String(r[C.negocio] ?? "").trim(),
@@ -1818,6 +1844,126 @@ function renderGrupos(recs, year, maxMonth){
   });
 }
 
+/* ============ Exportadores / importadores (solo Brokerage) ============
+   Toneladas por empresa y por año, según ETD. El año en curso se corta en el mes actual. */
+function bizHasPartnerViews(){
+  const b = BUSINESSES.find(x => x.key === UI.biz);
+  return !!b && b.partnerViews === true;
+}
+
+function aggPartners(recs, campo){
+  const nowY = new Date().getFullYear(), nowM = new Date().getMonth() + 1;
+  const years = new Set(), byName = new Map();
+  for (const r of recs){
+    const e = r.etd;
+    if (!e) continue;
+    if (e.y === nowY && e.mo > nowM) continue;      // año en curso: solo hasta el mes actual
+    const name = (r[campo] || "").trim() || "(sin dato)";
+    years.add(e.y);
+    if (!byName.has(name)) byName.set(name, { name, porAno: {}, total: 0, cargas: 0, recs: [] });
+    const g = byName.get(name);
+    g.porAno[e.y] = (g.porAno[e.y] || 0) + r.tns;
+    g.total += r.tns; g.cargas++; g.recs.push(r);
+  }
+  const ys = [...years].sort((a, b) => a - b);
+  const rows = [...byName.values()].sort((a, b) => b.total - a.total);
+  return { years: ys, rows, nowY, nowM };
+}
+
+let LAST_PARTNERS = new Map();
+
+function renderPartners(recs){
+  const card = document.getElementById("partnerCard");
+  if (!bizHasPartnerViews()){
+    card.style.display = "none";
+    if (charts.chPartner){ charts.chPartner.destroy(); delete charts.chPartner; }
+    return;
+  }
+  card.style.display = "";
+  const campo = UI.partnerKind === "importer" ? "importer" : "exporter";
+  document.querySelectorAll("#partnerSeg button").forEach(btn => {
+    const on = btn.dataset.pk === campo;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.onclick = () => { UI.partnerKind = btn.dataset.pk; saveUI(); render(); };
+  });
+
+  const A = aggPartners(recs, campo);
+  LAST_PARTNERS = new Map(A.rows.map(r => [r.name, r]));
+  const tabla = document.getElementById("partnerTable");
+  if (!A.rows.length){
+    tabla.innerHTML = `<p class="empty">La planilla no tiene datos de ${campo === "exporter" ? "exportador" : "importador"}.<br>Revisá el encabezado en <b>⚙️ Configurar → Columnas</b>.</p>`;
+    if (charts.chPartner){ charts.chPartner.destroy(); delete charts.chPartner; }
+    return;
+  }
+
+  // gráfico del año elegido arriba
+  const yA = UI.year;
+  const delAno = A.rows.filter(r => (r.porAno[yA] || 0) > 0).sort((a, b) => (b.porAno[yA] || 0) - (a.porAno[yA] || 0));
+  if (charts.chPartner) charts.chPartner.destroy();
+  const tituloAno = yA === A.nowY ? `${yA} (a ${MESES[A.nowM - 1]})` : String(yA);
+  charts.chPartner = new Chart(document.getElementById("chPartner"), {
+    type: "bar",
+    data: { labels: delAno.map(r => r.name), datasets: [{
+      label: tituloAno, data: delAno.map(r => r.porAno[yA] || 0),
+      backgroundColor: delAno.map((_, i) => PALETTE[i % PALETTE.length]),
+      borderRadius: 6, borderSkipped: false, maxBarThickness: 26 }] },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${fmt1(c.parsed.x)} t` } } },
+      scales: { x: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
+                     title: { display: true, text: "Tns · " + tituloAno, color: cssVar("--tick") } },
+                y: { ticks: { color: cssVar("--tick") }, grid: { display: false } } },
+    },
+  });
+
+  // tabla histórica: una columna por año
+  const totPorAno = {};
+  A.years.forEach(y => totPorAno[y] = A.rows.reduce((s, r) => s + (r.porAno[y] || 0), 0));
+  const totGeneral = A.rows.reduce((s, r) => s + r.total, 0);
+  let h = `<table><tr><th>${campo === "exporter" ? "Exportador" : "Importador"}</th>` +
+    A.years.map(y => `<th>${y === A.nowY ? `${y}<span style="font-weight:400;color:var(--faint)"> a ${MESES[A.nowM - 1]}</span>` : y}</th>`).join("") +
+    `<th>Total histórico</th><th>% del total</th></tr>`;
+  for (const r of A.rows){
+    h += `<tr class="rowlink" data-partner="${String(r.name).replace(/"/g, "&quot;")}" tabindex="0" role="button" title="Ver las cargas de ${r.name}">` +
+      `<td>${r.name} <span class="chev">›</span></td>` +
+      A.years.map(y => `<td>${r.porAno[y] ? fmt1(r.porAno[y]) : ""}</td>`).join("") +
+      `<td><b>${fmt1(r.total)}</b></td><td>${totGeneral ? (r.total / totGeneral * 100).toFixed(1).replace(".", ",") + "%" : "—"}</td></tr>`;
+  }
+  h += `<tr class="total"><td>Total</td>` + A.years.map(y => `<td>${fmt1(totPorAno[y])}</td>`).join("") +
+       `<td>${fmt1(totGeneral)}</td><td>100%</td></tr></table>`;
+  tabla.innerHTML = h;
+  tabla.querySelectorAll("tr.rowlink").forEach(tr => {
+    const open = () => openPartnerDetail(tr.dataset.partner);
+    tr.onclick = open;
+    tr.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); } };
+  });
+}
+
+function openPartnerDetail(name){
+  const g = LAST_PARTNERS.get(name);
+  if (!g) return;
+  const rs = [...g.recs].sort((a, b) => {
+    const k = r => r.etd ? r.etd.y * 10000 + r.etd.mo * 100 + (r.etd.d || 0) : 0;
+    return k(b) - k(a);
+  });
+  document.getElementById("detailTitle").textContent = `${name} — ${rs.length} carga(s)`;
+  const anos = Object.keys(g.porAno).sort();
+  document.getElementById("detailSub").innerHTML =
+    `Total histórico <b>${fmt1(g.total)} t</b> · ` + anos.map(y => `${y}: <b>${fmt1(g.porAno[y])} t</b>`).join(" · ");
+  let h = `<table><tr><th>Ref.</th><th>Producto</th><th>Destino</th><th>ETD</th><th>Tns</th><th>Facturación</th></tr>`;
+  for (const r of rs){
+    h += `<tr><td>${r.negocio || "—"}</td><td>${r.product}</td><td>${r.port || "—"}</td>
+      <td>${fmtDate(r.etd)}</td><td>${fmt1(r.tns)}</td><td>${fmtUsd(r.usd)}</td></tr>`;
+  }
+  h += `<tr class="total"><td>Total</td><td></td><td></td><td></td><td>${fmt1(g.total)}</td>
+        <td>${fmtUsd(rs.reduce((s, r) => s + r.usd, 0))}</td></tr></table>`;
+  document.getElementById("detailTable").innerHTML = h;
+  detailBg.classList.add("open");
+}
+
 /* Detalle de un grupo comercial: cada carga con sus días de cobro y sus montos */
 let LAST_GRUPOS = new Map();
 
@@ -2193,6 +2339,7 @@ function render(){
   renderProductCompare(a, b, yA, yB);
   renderConsolidacion(recs, yA, MM);
   renderGrupos(recs, yA, MM);
+  renderPartners(recs);
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
@@ -2465,6 +2612,8 @@ function fillConfigForm(){
   document.getElementById("cfgColCobroEst").value = c.COLS.cobroEst || "Fecha estimada";
   document.getElementById("cfgColFlete").value = c.COLS.flete || "total flete";
   document.getElementById("cfgColBroker").value = c.COLS.comBroker || "Comision Broker";
+  document.getElementById("cfgColExporter").value = c.COLS.exporter || "Exporter";
+  document.getElementById("cfgColImporter").value = c.COLS.importer || "Importer";
   document.getElementById("cfgColCons").value = c.COLS.consolidacion;
   document.getElementById("cfgColPort").value = c.COLS.port;
   document.getElementById("cfgColUsd").value = c.USD_COL;
