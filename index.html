@@ -644,6 +644,20 @@
       <div class="chartbox tall"><canvas id="chPartner" aria-label="Toneladas por empresa" role="img"></canvas></div>
       <div class="tablewrap" id="partnerTable" style="margin-top:18px"></div>
     </div>
+    <div class="card wide" id="focusCard" style="display:none">
+      <h2 id="focusTitle"></h2>
+      <p class="csub">Solo las cargas de este exportador, separando <b>aceite</b> de <b>expeller</b>. Los totales no se mezclan con los de otras empresas que también exportan aceite. Según fecha de <b>ETD</b>.</p>
+      <div class="consbar">
+        <div class="seg" id="focusMetric" role="group" aria-label="Métrica">
+          <button type="button" data-fm="tns">Toneladas</button>
+          <button type="button" data-fm="usd">Facturación USD</button>
+        </div>
+        <button type="button" id="btnFocusPdf" title="Exportar a PDF">⤓ Exportar a PDF</button>
+      </div>
+      <div class="chartbox tall"><canvas id="chFocus" aria-label="Aceite y expeller por mes" role="img"></canvas></div>
+      <div class="tablewrap" id="focusTable" style="margin-top:18px"></div>
+      <div class="tablewrap" id="focusYears" style="margin-top:18px"></div>
+    </div>
     <div class="card wide" id="contractsCard" style="display:none">
       <h2>Contratos <span id="lblContractsN" class="clickable"></span></h2>
       <p class="csub">Lee la pestaña de contratos de la planilla y agrupa por la <b>Fecha del contrato</b>. Independiente de los embarques de arriba.</p>
@@ -652,6 +666,10 @@
           <button type="button" data-cv="exportador">Por exportador</button>
           <button type="button" data-cv="importador">Por importador</button>
           <button type="button" data-cv="listado">Listado completo</button>
+        </div>
+        <div class="rangebox" id="contractsYearsBox">
+          <label>Años</label>
+          <span id="contractsYears" class="chips" style="margin:0;gap:5px"></span>
         </div>
         <div class="rangebox" id="contractsSearchBox" style="display:none">
           <label for="contractsSearch">Buscar</label>
@@ -740,6 +758,8 @@
           </select>
         </div>
       </div>
+      <label for="cfgFocusExporter">Exportador con vista propia <span style="color:var(--faint);font-weight:400">— se le arma una sección aparte</span></label>
+      <input id="cfgFocusExporter" placeholder="NEWSAN SA">
       <div class="row">
         <div><label for="cfgContractsSheet">Pestaña de contratos <span style="color:var(--faint);font-weight:400">— opcional</span></label><input id="cfgContractsSheet" placeholder="ALL CONTRATOS"></div>
         <div><label for="cfgContractsGid">GID de esa pestaña</label><input id="cfgContractsGid" placeholder="0"></div>
@@ -805,7 +825,7 @@
 =================================================== */
 const BUSINESSES = [
   { key: "axt",       name: "AXT",       status: "active", nop: true, split: "nop", consViews: true },   // split: qué desglose ofrece cada negocio
-  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil", partnerViews: true, contractViews: true },
+  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil", partnerViews: true, contractViews: true, focusExporter: true },
   { key: "buzaram",   name: "Buzaram",   status: "active", nop: false },
 ];
 const TOTAL_KEY = "total";
@@ -818,6 +838,7 @@ const SHEET_DEFAULTS = {
   HEADER_ROW: 2,
   DATE_FORMAT: "DMY",
   DECIMAL: "auto",                                 // "auto" | "comma" | "dot"
+  FOCUS_EXPORTER: "NEWSAN SA",                     // exportador con vista propia (Brokerage)
   CONTRACTS_SHEET: "ALL CONTRATOS",                // pestaña de contratos (Brokerage)
   CONTRACTS_GID: "",
   USD_COL: "TOTAL FINAL",                          // encabezado de la columna de facturación
@@ -892,6 +913,8 @@ function loadUI(){
   if (!["exportador", "importador", "listado"].includes(ui.contractView)) ui.contractView = "exportador";
   if (typeof ui.contractSearch !== "string") ui.contractSearch = "";
   if (!ui.contractSort) ui.contractSort = { by: "total", dir: "desc" };
+  if (!Array.isArray(ui.contractYears)) ui.contractYears = [];   // vacío = todos los años
+  if (ui.focusMetric !== "usd") ui.focusMetric = "tns";
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -2435,16 +2458,18 @@ function openPartnerDetail(name){
 
 /* Saldos pendientes de embarque: suma la columna Saldo de los contratos del año
    elegido, agrupada por cliente (Importador) y por proveedor (Exportador). */
-function renderSaldos(cs){
+function renderSaldos(cs, anosSel){
   const bloque = document.getElementById("saldosBlock");
-  const year = UI.year;
-  const delAno = cs.filter(c => c.fecha && c.fecha.y === year);
+  // si hay años elegidos con los chips manda esa selección; si no, el año del tablero
+  const usados = (anosSel && anosSel.length) ? anosSel.slice().sort() : [UI.year];
+  const etiquetaAnos = usados.join(" y ");
+  const delAno = cs.filter(c => c.fecha && usados.includes(c.fecha.y));
   if (!delAno.length){
     bloque.style.display = "none";
     return;
   }
   bloque.style.display = "";
-  document.getElementById("saldosTitle").textContent = `Saldos pendientes de embarque — ${year}`;
+  document.getElementById("saldosTitle").textContent = `Toneladas pendientes de embarque — ${etiquetaAnos}`;
 
   const agrupar = campo => {
     const m = new Map();
@@ -2459,30 +2484,208 @@ function renderSaldos(cs){
   const totalSaldo = delAno.reduce((s2, c) => s2 + c.saldo, 0);
   const pintar = (destino, filas, etiqueta) => {
     const tSaldo = filas.reduce((s2, g) => s2 + g.saldo, 0);
-    let h = `<table><tr><th>${etiqueta}</th><th>Contratos</th><th>Toneladas</th><th>Contratado</th><th>Saldo pendiente</th><th>%</th></tr>`;
+    let h = `<table><tr><th>${etiqueta}</th><th>Contratos</th><th>Contratadas (t)</th><th>Embarcadas (t)</th><th>Pendientes (t)</th><th>% embarcado</th></tr>`;
     for (const g of filas){
       const pend = g.saldo > 0;
-      h += `<tr><td>${g.nombre}</td><td>${fmt0(g.contratos)}</td><td>${fmt1(g.toneladas)}</td><td>${fmtUsd(g.total)}</td>
-        <td><b style="color:${pend ? "var(--amber)" : "var(--green)"}">${pend ? fmtUsd(g.saldo) : "sin saldo"}</b></td>
-        <td>${tSaldo && pend ? (g.saldo / tSaldo * 100).toFixed(1).replace(".", ",") + "%" : "—"}</td></tr>`;
+      const emb = g.toneladas - g.saldo;
+      h += `<tr><td>${g.nombre}</td><td>${fmt0(g.contratos)}</td><td>${fmt1(g.toneladas)}</td>
+        <td>${fmt1(emb)}</td>
+        <td><b style="color:${pend ? "var(--amber)" : "var(--green)"}">${pend ? fmt1(g.saldo) + " t" : "completo"}</b></td>
+        <td>${g.toneladas ? (emb / g.toneladas * 100).toFixed(0) + "%" : "—"}</td></tr>`;
     }
+    const tTns = filas.reduce((s2, g) => s2 + g.toneladas, 0);
     h += `<tr class="total"><td>Total</td><td>${fmt0(filas.reduce((s2, g) => s2 + g.contratos, 0))}</td>
-      <td>${fmt1(filas.reduce((s2, g) => s2 + g.toneladas, 0))}</td>
-      <td>${fmtUsd(filas.reduce((s2, g) => s2 + g.total, 0))}</td>
-      <td><b style="color:${tSaldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(tSaldo)}</b></td><td>100%</td></tr></table>`;
+      <td>${fmt1(tTns)}</td><td>${fmt1(tTns - tSaldo)}</td>
+      <td><b style="color:${tSaldo > 0 ? "var(--amber)" : "var(--green)"}">${fmt1(tSaldo)} t</b></td>
+      <td>${tTns ? ((tTns - tSaldo) / tTns * 100).toFixed(0) + "%" : "—"}</td></tr></table>`;
     document.getElementById(destino).innerHTML = h;
   };
   pintar("saldosClientes", agrupar("importador"), "Cliente");
   pintar("saldosProveedores", agrupar("exportador"), "Proveedor");
 
   const conSaldo = delAno.filter(c => c.saldo > 0).length;
+  const totContratadas = delAno.reduce((s2, c) => s2 + c.toneladas, 0);
   document.getElementById("saldosSub").innerHTML =
-    `Suma de la columna <b>Saldo</b> de los ${fmt0(delAno.length)} contratos con fecha ${year}: ` +
-    `<b style="color:${totalSaldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(totalSaldo)}</b> pendiente en ${fmt0(conSaldo)} contrato(s). ` +
-    `El mismo saldo aparece en las dos tablas, visto por cliente y por proveedor.`;
-  LAST_SALDOS_PDF = { year, clientes: agrupar("importador"), proveedores: agrupar("exportador"), totalSaldo, n: delAno.length };
+    `De los ${fmt0(delAno.length)} contratos con fecha ${etiquetaAnos} se contrataron <b>${fmt1(totContratadas)} t</b> y ` +
+    `quedan <b style="color:${totalSaldo > 0 ? "var(--amber)" : "var(--green)"}">${fmt1(totalSaldo)} t pendientes de embarque</b> ` +
+    `(columna <b>Saldo</b>) en ${fmt0(conSaldo)} contrato(s). Las mismas toneladas, vistas por cliente y por proveedor.`;
+  LAST_SALDOS_PDF = { year: etiquetaAnos, clientes: agrupar("importador"), proveedores: agrupar("exportador"), totalSaldo, n: delAno.length };
 }
 let LAST_SALDOS_PDF = null;
+
+/* Compara nombres de empresa tolerando puntuación y sufijos societarios:
+   "NEWSAN SA", "Newsan S.A.", "newsan s a" y "NEWSAN" se consideran la misma. */
+function normEmpresa(x){
+  let t = normHeader(x).replace(/[^a-z0-9]+/g, "");
+  t = t.replace(/(sa|srl|sas|sca|saic|sacif|ltd|ltda|llc|inc|spa|gmbh|bv|nv|plc|co)$/,"");
+  return t;
+}
+function mismaEmpresa(a, b){
+  const x = normEmpresa(a), y = normEmpresa(b);
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+/* ============ Vista propia de un exportador (NEWSAN SA en Brokerage) ============
+   Separa aceite y expeller SOLO de ese exportador, sin mezclar con otras empresas. */
+let LAST_FOCUS_PDF = null;
+
+function renderFocusExporter(recs){
+  const card = document.getElementById("focusCard");
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  const objetivo = ((CONFIG[UI.biz] || {}).FOCUS_EXPORTER || "").trim();
+  if (!bz || bz.focusExporter !== true || !objetivo){
+    card.style.display = "none";
+    if (charts.chFocus){ charts.chFocus.destroy(); delete charts.chFocus; }
+    LAST_FOCUS_PDF = null;
+    return;
+  }
+  const propias = recs.filter(r => mismaEmpresa(r.exporter, objetivo));
+  card.style.display = "";
+  document.getElementById("focusTitle").innerHTML =
+    `${objetivo} <span class="clickable">${fmt0(propias.length)} CARGAS</span>`;
+
+  const metrica = UI.focusMetric === "usd" ? "usd" : "tns";
+  document.querySelectorAll("#focusMetric button").forEach(btn => {
+    const on = btn.dataset.fm === metrica;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.onclick = () => { UI.focusMetric = btn.dataset.fm; saveUI(); render(); };
+  });
+  const usd = metrica === "usd";
+  const val = r => usd ? r.usd : r.tns;
+  const f = v => usd ? fmtUsd(v) : fmt1(v) + " t";
+  const unidad = usd ? "USD" : "Tns";
+
+  if (!propias.length){
+    document.getElementById("focusTable").innerHTML =
+      `<p class="empty">No hay cargas con <b>${objetivo}</b> como exportador.<br>
+       Si en la planilla figura con otro nombre, cambialo en <b>⚙️ Configurar → Exportador con vista propia</b>.</p>`;
+    document.getElementById("focusYears").innerHTML = "";
+    if (charts.chFocus){ charts.chFocus.destroy(); delete charts.chFocus; }
+    LAST_FOCUS_PDF = null;
+    return;
+  }
+
+  // clasificación: aceite / expeller / otros
+  const cat = r => isExpeller(r.product) ? "exp" : (isOil(r.product) ? "oil" : "otros");
+  const NOMBRES = { oil: "Aceite", exp: "Expeller", otros: "Otros productos" };
+  const COLORES = { oil: "#ff9500", exp: "#af52de", otros: "#8e8e93" };
+
+  // por mes del año elegido
+  const yA = UI.year;
+  const porMes = { oil: Array(12).fill(0), exp: Array(12).fill(0), otros: Array(12).fill(0) };
+  const nMes = { oil: 0, exp: 0, otros: 0 };
+  for (const r of propias){
+    if (!r.etd || r.etd.y !== yA) continue;
+    porMes[cat(r)][r.etd.mo - 1] += val(r);
+    nMes[cat(r)]++;
+  }
+  const usadas = ["oil", "exp", "otros"].filter(k => porMes[k].some(v => v > 0));
+  if (charts.chFocus) charts.chFocus.destroy();
+  charts.chFocus = new Chart(document.getElementById("chFocus"), {
+    type: "bar",
+    data: { labels: MESES, datasets: usadas.map(k => ({
+      label: NOMBRES[k], data: porMes[k], backgroundColor: COLORES[k],
+      borderRadius: 5, borderSkipped: false, maxBarThickness: 44, stack: "f" })) },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+      plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${f(c.parsed.y)}` } } },
+      scales: { x: { stacked: true, ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick"), callback: v => usd ? "$" + fmt0(v) : fmt0(v) },
+                     grid: { color: cssVar("--grid") }, title: { display: true, text: unidad, color: cssVar("--tick") } } },
+    },
+  });
+
+  // tabla mensual del año
+  const totMes = MESES.map((_, m) => usadas.reduce((s2, k) => s2 + porMes[k][m], 0));
+  const totCat = k => porMes[k].reduce((a, v) => a + v, 0);
+  const granTotal = usadas.reduce((s2, k) => s2 + totCat(k), 0);
+  let h = `<table><tr><th>${yA}</th>` + MESES.map(m => `<th>${m}</th>`).join("") + `<th>Total</th><th>%</th></tr>`;
+  for (const k of usadas){
+    h += `<tr><td><span style="color:${COLORES[k]}">■</span> ${NOMBRES[k]}</td>` +
+      porMes[k].map(v => `<td>${v ? f(v) : ""}</td>`).join("") +
+      `<td><b>${f(totCat(k))}</b></td><td>${granTotal ? (totCat(k) / granTotal * 100).toFixed(1).replace(".", ",") + "%" : "—"}</td></tr>`;
+  }
+  h += `<tr class="total"><td>Total ${objetivo}</td>` + totMes.map(v => `<td>${v ? f(v) : ""}</td>`).join("") +
+       `<td>${f(granTotal)}</td><td>100%</td></tr></table>`;
+  document.getElementById("focusTable").innerHTML = h;
+
+  // histórico por año
+  const anos = [...new Set(propias.filter(r => r.etd).map(r => r.etd.y))].sort((a, b) => a - b);
+  const porAno = {};
+  for (const k of ["oil", "exp", "otros"]) porAno[k] = {};
+  for (const r of propias){
+    if (!r.etd) continue;
+    const k = cat(r);
+    porAno[k][r.etd.y] = (porAno[k][r.etd.y] || 0) + val(r);
+  }
+  const usadasA = ["oil", "exp", "otros"].filter(k => anos.some(y => porAno[k][y]));
+  let hy = `<table><tr><th>Histórico</th>` + anos.map(y => `<th>${y}</th>`).join("") + `<th>Total</th></tr>`;
+  for (const k of usadasA){
+    const t = anos.reduce((a, y) => a + (porAno[k][y] || 0), 0);
+    hy += `<tr><td><span style="color:${COLORES[k]}">■</span> ${NOMBRES[k]}</td>` +
+      anos.map(y => `<td>${porAno[k][y] ? f(porAno[k][y]) : ""}</td>`).join("") + `<td><b>${f(t)}</b></td></tr>`;
+  }
+  const totAnoAll = y => usadasA.reduce((a, k) => a + (porAno[k][y] || 0), 0);
+  hy += `<tr class="total"><td>Total</td>` + anos.map(y => `<td>${f(totAnoAll(y))}</td>`).join("") +
+        `<td>${f(anos.reduce((a, y) => a + totAnoAll(y), 0))}</td></tr></table>`;
+  hy += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.5">
+    Aceite y expeller se detectan por el nombre del producto. Estos números son exclusivos de <b>${objetivo}</b>:
+    si otra empresa exporta aceite, no entra en esta tabla.</p>`;
+  document.getElementById("focusYears").innerHTML = hy;
+
+  LAST_FOCUS_PDF = { objetivo, yA, unidad, usd, anos, porMes, porAno, usadas, usadasA, NOMBRES, granTotal, n: propias.length };
+  document.getElementById("btnFocusPdf").onclick = exportarFocusPdf;
+}
+
+async function exportarFocusPdf(){
+  const D = LAST_FOCUS_PDF;
+  const btn = document.getElementById("btnFocusPdf");
+  if (!D) return;
+  const orig = btn ? btn.textContent : "";
+  try {
+    if (btn){ btn.disabled = true; btn.textContent = "Generando PDF…"; }
+    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+    const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!JsPDF) throw new Error("jsPDF no disponible");
+    const doc = new JsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const M = 12;
+    const fm = v => D.usd ? fmt0(v) : fmt1(v);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(20);
+    doc.text(`${D.objetivo} — aceite y expeller`, M, 15);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(110);
+    doc.text(`${D.n} cargas · métrica: ${D.unidad} · año ${D.yA} · según fecha de ETD · generado el ${new Date().toLocaleDateString("es-AR")}`, M, 21);
+    doc.autoTable({
+      head: [[String(D.yA), ...MESES, "Total"]],
+      body: D.usadas.map(k => [D.NOMBRES[k], ...D.porMes[k].map(v => v ? fm(v) : ""),
+        fm(D.porMes[k].reduce((a, v) => a + v, 0))]),
+      foot: [["Total", ...MESES.map((_, m) => fm(D.usadas.reduce((a, k) => a + D.porMes[k][m], 0))), fm(D.granTotal)]],
+      startY: 26, margin: { left: M, right: M },
+      styles: { fontSize: 8, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 20, halign: "right" },
+      headStyles: { fillColor: [238, 238, 238], textColor: 20, fontStyle: "bold", halign: "right" },
+      footStyles: { fillColor: [246, 246, 246], textColor: 20, fontStyle: "bold", halign: "right" },
+      columnStyles: { 0: { halign: "left" } }, theme: "grid",
+    });
+    const y2 = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 26) + 10;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(20);
+    doc.text("Histórico por año", M, y2);
+    doc.autoTable({
+      head: [["Histórico", ...D.anos.map(String), "Total"]],
+      body: D.usadasA.map(k => [D.NOMBRES[k], ...D.anos.map(y => D.porAno[k][y] ? fm(D.porAno[k][y]) : ""),
+        fm(D.anos.reduce((a, y) => a + (D.porAno[k][y] || 0), 0))]),
+      startY: y2 + 3, margin: { left: M, right: M },
+      styles: { fontSize: 8, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 20, halign: "right" },
+      headStyles: { fillColor: [238, 238, 238], textColor: 20, fontStyle: "bold", halign: "right" },
+      columnStyles: { 0: { halign: "left" } }, theme: "grid",
+    });
+    doc.save(`${D.objetivo.replace(/[^\w\s-]/g, "").replace(/\s+/g, "_")}_aceite_expeller_${D.yA}.pdf`);
+  } catch(e){ exportarPdf("focusCard"); }
+  finally { if (btn){ btn.disabled = false; btn.textContent = orig || "⤓ Exportar a PDF"; } }
+}
 
 /* PDF de la sección de contratos, con la vista que esté seleccionada */
 async function exportarContractsPdf(){
@@ -2505,24 +2708,25 @@ async function exportarContractsPdf(){
     doc.text(`${bizName} — ${titulo}`, M, 14);
     doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(110);
     doc.text(`Agrupado por fecha del contrato · ${fmt0(D.filas.length)} ${D.modo === "listado" ? "contratos" : "empresas"}` +
+             ((UI.contractYears || []).length ? ` · solo contratos de ${UI.contractYears.slice().sort().join(" y ")}` : "") +
              (D.modo === "listado" && UI.contractSearch ? ` · filtro: “${UI.contractSearch}”` : "") +
              ` · generado el ${new Date().toLocaleDateString("es-AR")}`, M, 20);
     let head, body, foot;
     if (D.modo === "listado"){
-      head = [["Fecha", "Contrato", "Exportador", "Importador", "Producto", "Tipo", "Tns", "Precio", "Total", "Packaging", "Incoterm", "Pago", "Comisión", "Pagos USA", "ENT", "Saldo", "Per. embarque"]];
+      head = [["Fecha", "Contrato", "Exportador", "Importador", "Producto", "Tipo", "Tns", "Precio", "Total", "Packaging", "Incoterm", "Pago", "Comisión", "Pagos USA", "ENT", "Saldo (t)", "Per. embarque"]];
       body = D.filas.map(c => [fmtDate(c.fecha), c.contrato || "", c.exportador, c.importador, c.producto || "", c.tipo || "",
         fmt1(c.toneladas), c.precio ? fmt0(c.precio) : "", fmt0(c.total), c.packaging || "", c.incoterm || "", c.pago || "",
-        c.comision ? fmt0(c.comision) : "", c.pagosUsa ? fmt0(c.pagosUsa) : "", c.ent || "", c.saldo ? fmt0(c.saldo) : "", c.periodo || ""]);
+        c.comision ? fmt0(c.comision) : "", c.pagosUsa ? fmt0(c.pagosUsa) : "", c.ent || "", c.saldo ? fmt1(c.saldo) : "", c.periodo || ""]);
       const t = k => D.filas.reduce((s2, c) => s2 + (c[k] || 0), 0);
       foot = [[`${fmt0(D.filas.length)} contrato(s)`, "", "", "", "", "", fmt1(t("toneladas")), "", fmt0(t("total")), "", "", "",
-        fmt0(t("comision")), fmt0(t("pagosUsa")), "", fmt0(t("saldo")), ""]];
+        fmt0(t("comision")), fmt0(t("pagosUsa")), "", fmt1(t("saldo")), ""]];
     } else {
-      head = [[D.modo === "exportador" ? "Exportador" : "Importador", ...D.ys.map(String), "Contratos", "Toneladas", "Total", "Comisión", "Pagos USA", "Saldo"]];
+      head = [[D.modo === "exportador" ? "Exportador" : "Importador", ...D.ys.map(String), "Contratos", "Toneladas", "Total", "Comisión", "Pagos USA", "Pendiente (t)"]];
       body = D.filas.map(g => [g.nombre, ...D.ys.map(y => g.porAno[y] ? fmt1(g.porAno[y]) : ""),
-        fmt0(g.contratos), fmt1(g.toneladas), fmt0(g.total), g.comision ? fmt0(g.comision) : "", g.pagosUsa ? fmt0(g.pagosUsa) : "", g.saldo ? fmt0(g.saldo) : ""]);
+        fmt0(g.contratos), fmt1(g.toneladas), fmt0(g.total), g.comision ? fmt0(g.comision) : "", g.pagosUsa ? fmt0(g.pagosUsa) : "", g.saldo ? fmt1(g.saldo) : ""]);
       const t = k => D.filas.reduce((s2, g) => s2 + (g[k] || 0), 0);
       foot = [["Total", ...D.ys.map(y => fmt1(D.filas.reduce((s2, g) => s2 + (g.porAno[y] || 0), 0))),
-        fmt0(t("contratos")), fmt1(t("toneladas")), fmt0(t("total")), fmt0(t("comision")), fmt0(t("pagosUsa")), fmt0(t("saldo"))]];
+        fmt0(t("contratos")), fmt1(t("toneladas")), fmt0(t("total")), fmt0(t("comision")), fmt0(t("pagosUsa")), fmt1(t("saldo"))]];
     }
     doc.autoTable({
       head, body, foot, startY: 25, margin: { left: M, right: M },
@@ -2544,11 +2748,12 @@ async function exportarContractsPdf(){
         doc.text(titulo, M, yy);
         const tS = filas.reduce((a, g) => a + g.saldo, 0);
         doc.autoTable({
-          head: [[etiqueta, "Contratos", "Toneladas", "Contratado", "Saldo pendiente", "%"]],
-          body: filas.map(g => [g.nombre, fmt0(g.contratos), fmt1(g.toneladas), fmt0(g.total), fmt0(g.saldo),
-            tS && g.saldo > 0 ? (g.saldo / tS * 100).toFixed(1).replace(".", ",") + "%" : ""]),
-          foot: [["Total", fmt0(filas.reduce((a, g) => a + g.contratos, 0)), fmt1(filas.reduce((a, g) => a + g.toneladas, 0)),
-            fmt0(filas.reduce((a, g) => a + g.total, 0)), fmt0(tS), "100%"]],
+          head: [[etiqueta, "Contratos", "Contratadas (t)", "Embarcadas (t)", "Pendientes (t)", "% embarcado"]],
+          body: filas.map(g => [g.nombre, fmt0(g.contratos), fmt1(g.toneladas), fmt1(g.toneladas - g.saldo), fmt1(g.saldo),
+            g.toneladas ? ((g.toneladas - g.saldo) / g.toneladas * 100).toFixed(0) + "%" : ""]),
+          foot: (() => { const tT = filas.reduce((a, g) => a + g.toneladas, 0);
+            return [["Total", fmt0(filas.reduce((a, g) => a + g.contratos, 0)), fmt1(tT), fmt1(tT - tS), fmt1(tS),
+              tT ? ((tT - tS) / tT * 100).toFixed(0) + "%" : ""]]; })(),
           startY: yy + 3, margin: { left: M, right: M },
           styles: { fontSize: 8, cellPadding: 1.4, lineColor: [200, 200, 200], lineWidth: 0.1, textColor: 20, halign: "right" },
           headStyles: { fillColor: [238, 238, 238], textColor: 20, fontStyle: "bold", halign: "right" },
@@ -2556,8 +2761,8 @@ async function exportarContractsPdf(){
           columnStyles: { 0: { halign: "left" } }, theme: "grid",
         });
       };
-      mkTabla(`Saldos pendientes de embarque ${S.year} — por cliente (Importador)`, S.clientes, "Cliente");
-      mkTabla(`Saldos pendientes de embarque ${S.year} — por proveedor (Exportador)`, S.proveedores, "Proveedor");
+      mkTabla(`Toneladas pendientes de embarque ${S.year} — por cliente (Importador)`, S.clientes, "Cliente");
+      mkTabla(`Toneladas pendientes de embarque ${S.year} — por proveedor (Exportador)`, S.proveedores, "Proveedor");
     }
     doc.save(`${bizName}_Contratos_${D.modo}.pdf`);
   } catch(e){
@@ -2574,10 +2779,34 @@ function renderContracts(){
   const card = document.getElementById("contractsCard");
   const bz = BUSINESSES.find(x => x.key === UI.biz);
   if (!bz || bz.contractViews !== true){ card.style.display = "none"; return; }
-  const cs = CONTRACTS[UI.biz] || [];
+  const todos = CONTRACTS[UI.biz] || [];
   card.style.display = "";
   const tabla = document.getElementById("contractsTable");
-  document.getElementById("lblContractsN").textContent = cs.length ? `${fmt0(cs.length)} contratos` : "";
+
+  // chips para elegir los años de los contratos (vacío = todos)
+  const anosDisp = [...new Set(todos.filter(c => c.fecha).map(c => c.fecha.y))].sort((a, b) => b - a);
+  const sel = (UI.contractYears || []).filter(y => anosDisp.includes(y));
+  const box = document.getElementById("contractsYears");
+  document.getElementById("contractsYearsBox").style.display = anosDisp.length > 1 ? "" : "none";
+  if (box){
+    box.innerHTML = `<button type="button" class="chip ${sel.length ? "" : "active"}" data-cy="all">Todos</button>` +
+      anosDisp.map(y => `<button type="button" class="chip ${sel.includes(y) ? "active" : ""}" data-cy="${y}">${y}</button>`).join("");
+    box.querySelectorAll(".chip").forEach(ch => {
+      ch.onclick = () => {
+        if (ch.dataset.cy === "all") UI.contractYears = [];
+        else {
+          const y = +ch.dataset.cy, set = new Set(UI.contractYears || []);
+          set.has(y) ? set.delete(y) : set.add(y);
+          UI.contractYears = [...set];
+        }
+        saveUI(); renderContracts();
+      };
+    });
+  }
+  const cs = sel.length ? todos.filter(c => c.fecha && sel.includes(c.fecha.y)) : todos;
+  document.getElementById("lblContractsN").textContent = todos.length
+    ? `${fmt0(cs.length)}${sel.length ? " de " + fmt0(todos.length) : ""} contratos${sel.length ? " · " + sel.slice().sort().join(" y ") : ""}`
+    : "";
 
   const vista = UI.contractView;
   document.querySelectorAll("#contractsSeg button").forEach(btn => {
@@ -2588,6 +2817,12 @@ function renderContracts(){
   });
   document.getElementById("contractsSearchBox").style.display = vista === "listado" ? "" : "none";
 
+  if (!cs.length && todos.length){
+    tabla.innerHTML = `<p class="empty">Ningún contrato en ${sel.slice().sort().join(" y ")}.<br>Tocá <b>Todos</b> en el filtro de años.</p>`;
+    document.getElementById("saldosBlock").style.display = "none";
+    LAST_CONTRACTS_PDF = null; LAST_SALDOS_PDF = null;
+    return;
+  }
   if (!cs.length){
     tabla.innerHTML = `<p class="empty">No se encontraron contratos.<br>
       Verificá el nombre de la pestaña en <b>⚙️ Configurar → Planilla → Pestaña de contratos</b>
@@ -2624,7 +2859,7 @@ function renderContracts(){
       th("fechaOrd", "Fecha") + th("contrato", "Contrato") + th("exportador", "Exportador") + th("importador", "Importador") +
       th("producto", "Producto") + th("tipo", "Tipo") + th("toneladas", "Toneladas") + th("precio", "Precio") +
       th("total", "Total") + th("packaging", "Packaging") + th("incoterm", "Incoterm") + th("pago", "Forma de pago") +
-      th("comision", "Comisión") + th("pagosUsa", "Pagos USA") + th("ent", "ENT") + th("saldo", "Saldo") +
+      th("comision", "Comisión") + th("pagosUsa", "Pagos USA") + th("ent", "ENT") + th("saldo", "Saldo (t)") +
       th("periodo", "Per. embarque") + `</tr>`;
     for (const c of filas){
       h += `<tr><td>${fmtDate(c.fecha)}</td><td>${c.contrato || "—"}</td><td>${c.exportador}</td><td>${c.importador}</td>
@@ -2633,12 +2868,12 @@ function renderContracts(){
         <td>${c.packaging || "—"}</td><td>${c.incoterm || "—"}</td><td>${c.pago || "—"}</td>
         <td>${c.comision ? fmtUsd(c.comision) : "—"}</td><td>${c.pagosUsa ? fmtUsd(c.pagosUsa) : "—"}</td>
         <td>${c.ent || "—"}</td>
-        <td>${c.saldo ? `<b style="color:${c.saldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(c.saldo)}</b>` : "—"}</td>
+        <td>${c.saldo ? `<b style="color:${c.saldo > 0 ? "var(--amber)" : "var(--green)"}">${fmt1(c.saldo)} t</b>` : "—"}</td>
         <td>${c.periodo || "—"}</td></tr>`;
     }
     h += `<tr class="total"><td>${fmt0(filas.length)} contrato(s)</td><td></td><td></td><td></td><td></td><td></td>
       <td>${fmt1(tot("toneladas"))}</td><td></td><td>${fmtUsd(tot("total"))}</td><td></td><td></td><td></td>
-      <td>${fmtUsd(tot("comision"))}</td><td>${fmtUsd(tot("pagosUsa"))}</td><td></td><td>${fmtUsd(tot("saldo"))}</td><td></td></tr></table>`;
+      <td>${fmtUsd(tot("comision"))}</td><td>${fmtUsd(tot("pagosUsa"))}</td><td></td><td>${fmt1(tot("saldo"))} t</td><td></td></tr></table>`;
     if (q) h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px">Mostrando ${filas.length} de ${cs.length} contratos que coinciden con “${UI.contractSearch}”.</p>`;
     tabla.innerHTML = h;
     LAST_CONTRACTS_PDF = { modo: "listado", filas, cs };
@@ -2662,25 +2897,25 @@ function renderContracts(){
     let h = `<table><tr>` + th("nombreOrd", campo === "exportador" ? "Exportador" : "Importador") +
       ys.map(y => `<th>${y}</th>`).join("") +
       th("contratos", "Contratos") + th("toneladas", "Toneladas") + th("total", "Total") +
-      th("comision", "Comisión") + th("pagosUsa", "Pagos USA") + th("saldo", "Saldo") + `</tr>`;
+      th("comision", "Comisión") + th("pagosUsa", "Pagos USA") + th("saldo", "Pendiente (t)") + `</tr>`;
     for (const g of filas){
       h += `<tr><td>${g.nombre}</td>` + ys.map(y => `<td>${g.porAno[y] ? fmt1(g.porAno[y]) : ""}</td>`).join("") +
         `<td>${fmt0(g.contratos)}</td><td>${fmt1(g.toneladas)}</td><td>${fmtUsd(g.total)}</td>
          <td>${g.comision ? fmtUsd(g.comision) : "—"}</td><td>${g.pagosUsa ? fmtUsd(g.pagosUsa) : "—"}</td>
-         <td>${g.saldo ? `<b style="color:${g.saldo > 0 ? "var(--amber)" : "var(--green)"}">${fmtUsd(g.saldo)}</b>` : "—"}</td></tr>`;
+         <td>${g.saldo ? `<b style="color:${g.saldo > 0 ? "var(--amber)" : "var(--green)"}">${fmt1(g.saldo)} t</b>` : "—"}</td></tr>`;
     }
     h += `<tr class="total"><td>Total</td>` +
       ys.map(y => `<td>${fmt1(filas.reduce((s2, g) => s2 + (g.porAno[y] || 0), 0))}</td>`).join("") +
       `<td>${fmt0(tot("contratos"))}</td><td>${fmt1(tot("toneladas"))}</td><td>${fmtUsd(tot("total"))}</td>
-       <td>${fmtUsd(tot("comision"))}</td><td>${fmtUsd(tot("pagosUsa"))}</td><td>${fmtUsd(tot("saldo"))}</td></tr></table>`;
+       <td>${fmtUsd(tot("comision"))}</td><td>${fmtUsd(tot("pagosUsa"))}</td><td>${fmt1(tot("saldo"))} t</td></tr></table>`;
     h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.55">
       Las columnas por año son toneladas contratadas según la <b>Fecha del contrato</b>.
-      El <b>Saldo</b> en ámbar es lo que queda pendiente. Tocá cualquier encabezado para ordenar.</p>`;
+      <b>Pendiente (t)</b> son las toneladas que faltan embarcar (columna Saldo). Tocá cualquier encabezado para ordenar.</p>`;
     tabla.innerHTML = h;
     LAST_CONTRACTS_PDF = { modo: campo, filas, ys, cs };
   }
 
-  renderSaldos(cs);
+  renderSaldos(cs, sel);
   tabla.querySelectorAll("th.sortable").forEach(el => {
     const go = () => {
       const k = el.dataset.csort;
@@ -2950,7 +3185,7 @@ function render(){
     document.getElementById("contextBar").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard"].forEach(id => {
+    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -2979,7 +3214,7 @@ function render(){
     document.getElementById("contextBar").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard"].forEach(id => {
+    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -3075,6 +3310,7 @@ function render(){
   renderConsolidacion(recs, yA, MM);
   renderGrupos(recs, yA, MM);
   renderPartners(recs);
+  renderFocusExporter(recs);
   renderContracts();
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
 
@@ -3337,6 +3573,7 @@ function fillConfigForm(){
   document.getElementById("cfgDateFormat").value = c.DATE_FORMAT;
   document.getElementById("cfgComMode").value = c.COMISION.mode;
   document.getElementById("cfgDecimal").value = c.DECIMAL || "auto";
+  document.getElementById("cfgFocusExporter").value = c.FOCUS_EXPORTER || "";
   document.getElementById("cfgContractsSheet").value = c.CONTRACTS_SHEET || "";
   document.getElementById("cfgContractsGid").value = c.CONTRACTS_GID || "";
   document.getElementById("cfgColEtd").value = c.COLS.etd;
@@ -3409,6 +3646,7 @@ document.getElementById("cfgSave").onclick = async () => {
     HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
     DECIMAL: document.getElementById("cfgDecimal").value,
+    FOCUS_EXPORTER: txt("cfgFocusExporter"),
     CONTRACTS_SHEET: txt("cfgContractsSheet"),
     CONTRACTS_GID: txt("cfgContractsGid").replace(/\D/g, ""),
     USD_COL: txt("cfgColUsd") || D.USD_COL,
