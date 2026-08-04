@@ -131,6 +131,26 @@
   .sub{color:var(--faint);font-size:.8rem;margin:4px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .dotsep{opacity:.4}
 
+  /* Accesos directos a las secciones */
+  .secnav{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:-6px 0 18px}
+  .secnav .navlabel{color:var(--faint);font-size:.72rem;font-weight:600;margin-right:2px}
+  .secnav a{
+    background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:6px 13px;
+    font-size:.79rem;color:var(--muted);text-decoration:none;font-weight:500;
+    transition:all .25s var(--ease);display:inline-flex;align-items:center;gap:6px
+  }
+  .secnav a:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .secnav a .num{background:var(--panel2);border-radius:20px;padding:1px 7px;font-size:.7rem;font-weight:600}
+  @media(max-width:720px){
+    .secnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:14px}
+    .secnav::-webkit-scrollbar{display:none}
+    .secnav a{flex:0 0 auto;min-height:40px}
+  }
+  /* al saltar, la tarjeta queda despegada del borde y se resalta un instante */
+  .card,.panel{scroll-margin-top:16px}
+  @keyframes flash{0%{box-shadow:0 0 0 0 var(--accent)}30%{box-shadow:0 0 0 3px var(--accent-soft)}100%{box-shadow:var(--shadow)}}
+  .justjumped{animation:flash 1.1s var(--ease)}
+
   /* Chips de contexto */
   .context{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
   .ctag{
@@ -506,6 +526,7 @@
 
   <div class="sub" id="statusLine" role="status" aria-live="polite">Cargando planillas…</div>
   <div class="context" id="contextBar"></div>
+  <nav class="secnav" id="secNav" aria-label="Ir a una sección"></nav>
 </header>
 
 <div id="banner" class="banner" style="display:none"></div>
@@ -541,7 +562,21 @@
       <p class="csub">Cuántas cargas salieron cada mes.</p>
       <div class="chartbox"><canvas id="chEtd" aria-label="Gráfico de cantidad de embarques por mes" role="img"></canvas></div>
     </div>
-    <div class="card wide">
+    <div class="card wide" id="focusCard" style="display:none">
+      <h2 id="focusTitle"></h2>
+      <p class="csub">Solo las cargas de este exportador, separando <b>aceite</b> de <b>expeller</b>. Los totales no se mezclan con los de otras empresas que también exportan aceite. Según fecha de <b>ETD</b>.</p>
+      <div class="consbar">
+        <div class="seg" id="focusMetric" role="group" aria-label="Métrica">
+          <button type="button" data-fm="tns">Toneladas</button>
+          <button type="button" data-fm="usd">Facturación USD</button>
+        </div>
+        <button type="button" id="btnFocusPdf" title="Exportar a PDF">⤓ Exportar a PDF</button>
+      </div>
+      <div class="chartbox tall"><canvas id="chFocus" aria-label="Aceite y expeller por mes" role="img"></canvas></div>
+      <div class="tablewrap" id="focusTable" style="margin-top:18px"></div>
+      <div class="tablewrap" id="focusYears" style="margin-top:18px"></div>
+    </div>
+    <div class="card wide" id="trendCard">
       <h2>Tendencia histórica mes a mes <span class="clickable">CLICK PARA VER CARGAS</span></h2>
       <p class="csub">Toda la historia sin cortes por año, cada métrica con su propia escala. No depende del año elegido arriba.</p>
       <div class="trendgrid">
@@ -564,7 +599,7 @@
       <p class="csub">Qué porcentaje del total de toneladas aporta cada negocio en el año seleccionado.</p>
       <div class="chartbox"><canvas id="chBiz" aria-label="Participación por negocio" role="img"></canvas></div>
     </div>
-    <div class="card wide">
+    <div class="card wide" id="prodCard">
       <h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2>
       <p class="csub">Barras apiladas: la altura de cada mes es el total, y cada color es un producto.</p>
       <div class="chartbox tall"><canvas id="chProd" aria-label="Toneladas por producto y mes" role="img"></canvas></div>
@@ -643,20 +678,6 @@
       <div class="printhead" id="partnerPrintHead" aria-hidden="true"></div>
       <div class="chartbox tall"><canvas id="chPartner" aria-label="Toneladas por empresa" role="img"></canvas></div>
       <div class="tablewrap" id="partnerTable" style="margin-top:18px"></div>
-    </div>
-    <div class="card wide" id="focusCard" style="display:none">
-      <h2 id="focusTitle"></h2>
-      <p class="csub">Solo las cargas de este exportador, separando <b>aceite</b> de <b>expeller</b>. Los totales no se mezclan con los de otras empresas que también exportan aceite. Según fecha de <b>ETD</b>.</p>
-      <div class="consbar">
-        <div class="seg" id="focusMetric" role="group" aria-label="Métrica">
-          <button type="button" data-fm="tns">Toneladas</button>
-          <button type="button" data-fm="usd">Facturación USD</button>
-        </div>
-        <button type="button" id="btnFocusPdf" title="Exportar a PDF">⤓ Exportar a PDF</button>
-      </div>
-      <div class="chartbox tall"><canvas id="chFocus" aria-label="Aceite y expeller por mes" role="img"></canvas></div>
-      <div class="tablewrap" id="focusTable" style="margin-top:18px"></div>
-      <div class="tablewrap" id="focusYears" style="margin-top:18px"></div>
     </div>
     <div class="card wide" id="contractsCard" style="display:none">
       <h2>Contratos <span id="lblContractsN" class="clickable"></span></h2>
@@ -3144,6 +3165,40 @@ function renderProductCompare(a, b, yA, yB){
   el.innerHTML = html;
 }
 
+/* Accesos directos: solo a las secciones que existen en la pestaña actual */
+function renderSecNav(){
+  const nav = document.getElementById("secNav");
+  if (!nav) return;
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  const focusName = ((CONFIG[UI.biz] || {}).FOCUS_EXPORTER || "").trim();
+  // en el mismo orden en que aparecen en la página
+  const items = [{ id: "kpis", label: "Resumen" }];
+  if (bz && bz.focusExporter && focusName) items.push({ id: "focusCard", label: focusName, destacado: true });
+  items.push({ id: "trendCard", label: "Tendencia" });
+  if (UI.biz === TOTAL_KEY) items.push({ id: "bizCard", label: "Por negocio" });
+  items.push({ id: "prodCard", label: "Productos" });
+  if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
+  if (bz && bz.partnerViews) items.push({ id: "partnerCard", label: "Exportadores / importadores" });
+  if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" });
+  const visibles = items.filter(it => {
+    const el = document.getElementById(it.id);
+    return el && el.style.display !== "none";
+  });
+  if (visibles.length < 3){ nav.innerHTML = ""; return; }
+  nav.innerHTML = `<span class="navlabel">Ir a</span>` + visibles.map(it =>
+    `<a href="#${it.id}" data-go="${it.id}"${it.destacado ? ' style="border-color:var(--accent);color:var(--accent)"' : ""}>${it.label}</a>`).join("");
+  nav.querySelectorAll("a").forEach(a => {
+    a.onclick = e => {
+      e.preventDefault();
+      const el = document.getElementById(a.dataset.go);
+      if (!el) return;
+      if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("justjumped");
+      setTimeout(() => el.classList.remove("justjumped"), 1200);
+    };
+  });
+}
+
 /* Barra de contexto: en una línea, qué se está viendo y con qué ajustes.
    Los ajustes activos se pueden quitar con un click. */
 function renderContext(s){
@@ -3183,6 +3238,7 @@ function render(){
     document.getElementById("footer").textContent = "";
     document.getElementById("ytdNote").style.display = "none";
     document.getElementById("contextBar").innerHTML = "";
+    document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
     ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard"].forEach(id => {
@@ -3212,6 +3268,7 @@ function render(){
     document.getElementById("footer").textContent = "";
     document.getElementById("ytdNote").style.display = "none";
     document.getElementById("contextBar").innerHTML = "";
+    document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
     ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard"].forEach(id => {
@@ -3313,6 +3370,7 @@ function render(){
   renderFocusExporter(recs);
   renderContracts();
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
+  renderSecNav();
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
   const cc = CONFIG[UI.biz] || CONFIG.axt;
