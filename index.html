@@ -630,8 +630,16 @@
     </div>
     <div class="card wide" id="bizCard" style="display:none">
       <h2>Participación de cada negocio — <span id="lblBizYear"></span></h2>
-      <p class="csub">Qué porcentaje del total de toneladas aporta cada negocio en el año seleccionado.</p>
+      <p class="csub">De dónde viene cada parte del total en el año seleccionado. Cambiá la métrica para ver volumen, facturación o comisión.</p>
+      <div class="consbar">
+        <div class="seg" id="bizMetric" role="group" aria-label="Métrica de la participación">
+          <button type="button" data-bm="tns">Toneladas</button>
+          <button type="button" data-bm="usd">Facturación</button>
+          <button type="button" data-bm="com">Comisión</button>
+        </div>
+      </div>
       <div class="chartbox"><canvas id="chBiz" aria-label="Participación por negocio" role="img"></canvas></div>
+      <div class="tablewrap" id="bizTable" style="margin-top:18px"></div>
     </div>
     <div class="card wide" id="prodCard">
       <h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2>
@@ -971,6 +979,7 @@ function loadUI(){
   if (!Array.isArray(ui.contractYears)) ui.contractYears = [];   // vacío = todos los años
   if (ui.focusMetric !== "usd") ui.focusMetric = "tns";
   if (!ui.bizSub || typeof ui.bizSub !== "object") ui.bizSub = {};
+  if (!["tns", "usd", "com"].includes(ui.bizMetric)) ui.bizMetric = "tns";
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1355,7 +1364,7 @@ function aggregate(recs, year, maxMonth = 12){
   const agg = {
     tns: byMonth(), usd: byMonth(), com: byMonth(), etdCount: byMonth(),
     totTns: 0, totUsd: 0, totCom: 0, totCont: 0, totNeg: 0,
-    products: {}, prodTotals: {}, bizTotals: {},
+    products: {}, prodTotals: {}, bizTotals: {}, bizUsd: {}, bizCom: {},
   };
   for (const r of recs){
     if (r.year === year && r.month <= maxMonth){
@@ -1367,6 +1376,8 @@ function aggregate(recs, year, maxMonth = 12){
       agg.products[r.product][m] += r.tns;
       agg.prodTotals[r.product] = (agg.prodTotals[r.product] || 0) + r.tns;
       agg.bizTotals[r.biz] = (agg.bizTotals[r.biz] || 0) + r.tns;
+      agg.bizUsd[r.biz] = (agg.bizUsd[r.biz] || 0) + r.usd;
+      agg.bizCom[r.biz] = (agg.bizCom[r.biz] || 0) + r.comision;
     }
     if (r.etd && r.etd.y === year && r.etd.mo <= maxMonth) agg.etdCount[r.etd.mo - 1] += 1;
   }
@@ -3199,16 +3210,40 @@ function openDetail(monthIdx, year, group){
 
 function renderBizChart(a, yA){
   const card = document.getElementById("bizCard");
-  if (UI.biz !== TOTAL_KEY){ card.style.display = "none"; if (charts.chBiz){ charts.chBiz.destroy(); delete charts.chBiz; } return; }
+  if (UI.biz !== TOTAL_KEY){
+    card.style.display = "none";
+    if (charts.chBiz){ charts.chBiz.destroy(); delete charts.chBiz; }
+    return;
+  }
   card.style.display = "";
   document.getElementById("lblBizYear").textContent = yA;
-  if (charts.chBiz) charts.chBiz.destroy();
-  const names = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
-  const keys = Object.keys(a.bizTotals);
-  const vals = keys.map(k => a.bizTotals[k]);
-  const total = vals.reduce((s, v) => s + v, 0);
 
-  /* Dibuja el % de cada negocio sobre su porción, y el total en el centro */
+  const M = ["tns", "usd", "com"].includes(UI.bizMetric) ? UI.bizMetric : "tns";
+  document.querySelectorAll("#bizMetric button").forEach(btn => {
+    const on = btn.dataset.bm === M;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.onclick = () => { UI.bizMetric = btn.dataset.bm; saveUI(); render(); };
+  });
+  const fuentes = { tns: a.bizTotals, usd: a.bizUsd, com: a.bizCom };
+  const nombresMetrica = { tns: "Toneladas", usd: "Facturación", com: "Comisión" };
+  const datos = fuentes[M] || {};
+  const fm = v => M === "tns" ? fmt1(v) + " t" : fmtUsd(v);
+
+  const names = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
+  // se ordena de mayor a menor aporte en la métrica elegida
+  const keys = Object.keys(datos).filter(k => (datos[k] || 0) !== 0).sort((x, y) => datos[y] - datos[x]);
+  const vals = keys.map(k => datos[k]);
+  const total = vals.reduce((s2, v) => s2 + v, 0);
+
+  if (charts.chBiz) charts.chBiz.destroy();
+  if (!keys.length){
+    document.getElementById("bizTable").innerHTML =
+      `<p class="empty">No hay ${nombresMetrica[M].toLowerCase()} registrada en ${yA}.</p>`;
+    return;
+  }
+
+  /* % sobre cada porción y el total al centro */
   const pctPlugin = {
     id: "pctLabels",
     afterDatasetsDraw(chart){
@@ -3220,26 +3255,23 @@ function renderBizChart(a, yA){
         const v = vals[i];
         if (!total || !v) return;
         const pct = v / total * 100;
-        if (pct < 4) return;                       // porciones muy chicas: se leen en la leyenda
+        if (pct < 4) return;
         const p = arc.tooltipPosition();
-        ctx.font = "700 13px 'Segoe UI', system-ui, sans-serif";
+        ctx.font = "700 13px -apple-system, 'Segoe UI', system-ui, sans-serif";
+        ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 3;
         ctx.fillStyle = "#ffffff";
-        ctx.strokeStyle = "rgba(0,0,0,.35)";
-        ctx.lineWidth = 3;
         const txt = pct.toFixed(1).replace(".", ",") + "%";
         ctx.strokeText(txt, p.x, p.y);
         ctx.fillText(txt, p.x, p.y);
       });
-      // total al centro
       const first = meta.data[0];
       if (first){
-        const cx = first.x, cy = first.y;
         ctx.fillStyle = cssVar("--text");
-        ctx.font = "700 17px 'Segoe UI', system-ui, sans-serif";
-        ctx.fillText(fmt1(total) + " t", cx, cy - 8);
+        ctx.font = "700 17px -apple-system, 'Segoe UI', system-ui, sans-serif";
+        ctx.fillText(fm(total), first.x, first.y - 8);
         ctx.fillStyle = cssVar("--faint");
-        ctx.font = "400 11px 'Segoe UI', system-ui, sans-serif";
-        ctx.fillText("total " + yA, cx, cy + 12);
+        ctx.font = "400 11px -apple-system, 'Segoe UI', system-ui, sans-serif";
+        ctx.fillText(nombresMetrica[M].toLowerCase() + " " + yA, first.x, first.y + 12);
       }
       ctx.restore();
     },
@@ -3249,41 +3281,44 @@ function renderBizChart(a, yA){
     type: "doughnut",
     data: {
       labels: keys.map(k => names[k] || k),
-      datasets: [{ data: vals, backgroundColor: PALETTE, borderColor: cssVar("--panel"), borderWidth: 3 }],
+      datasets: [{ data: vals, backgroundColor: keys.map((_, i) => PALETTE[i % PALETTE.length]),
+        borderColor: cssVar("--panel"), borderWidth: 3 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: "62%",
+      animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
       plugins: {
-        legend: {
-          position: "right",
-          labels: {
-            color: cssVar("--muted"),
-            generateLabels(chart){
-              return keys.map((k, i) => {
-                const pct = total ? (vals[i] / total * 100) : 0;
-                return {
-                  text: `${names[k] || k} — ${fmt1(vals[i])} t (${pct.toFixed(1).replace(".", ",")}%)`,
-                  fillStyle: PALETTE[i % PALETTE.length],
-                  strokeStyle: PALETTE[i % PALETTE.length],
-                  index: i,
-                };
-              });
-            },
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: c => {
-              const v = c.parsed;
-              const pct = total ? (v / total * 100) : 0;
-              return ` ${c.label}: ${fmt1(v)} t (${pct.toFixed(1).replace(".", ",")}%)`;
-            },
-          },
-        },
+        legend: { position: "right", labels: { color: cssVar("--muted"),
+          generateLabels(){
+            return keys.map((k, i) => ({
+              text: `${names[k] || k} — ${fm(vals[i])} (${total ? (vals[i] / total * 100).toFixed(1).replace(".", ",") : 0}%)`,
+              fillStyle: PALETTE[i % PALETTE.length], strokeStyle: PALETTE[i % PALETTE.length], index: i,
+            }));
+          } } },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${fm(c.parsed)} (${total ? (c.parsed / total * 100).toFixed(1).replace(".", ",") : 0}%)` } },
       },
     },
     plugins: [pctPlugin],
   });
+
+  // tabla con las tres métricas juntas, para no perder de vista el resto
+  const todas = Object.keys(a.bizTotals).sort((x, y) => (datos[y] || 0) - (datos[x] || 0));
+  const tt = k => (a.bizTotals[k] || 0), tu = k => (a.bizUsd[k] || 0), tc = k => (a.bizCom[k] || 0);
+  const sumT = todas.reduce((s2, k) => s2 + tt(k), 0), sumU = todas.reduce((s2, k) => s2 + tu(k), 0), sumC = todas.reduce((s2, k) => s2 + tc(k), 0);
+  const pc = (v, t) => t ? (v / t * 100).toFixed(1).replace(".", ",") + "%" : "—";
+  let h = `<table><tr><th>Negocio</th><th>Toneladas</th><th>% tns</th><th>Facturación</th><th>% fact.</th><th>Comisión</th><th>% comisión</th><th>Comisión / t</th></tr>`;
+  for (const k of todas){
+    h += `<tr><td>${names[k] || k}</td>
+      <td>${fmt1(tt(k))}</td><td>${pc(tt(k), sumT)}</td>
+      <td>${fmtUsd(tu(k))}</td><td>${pc(tu(k), sumU)}</td>
+      <td><b>${fmtUsd(tc(k))}</b></td><td><b>${pc(tc(k), sumC)}</b></td>
+      <td>${tt(k) ? fmtUsd(tc(k) / tt(k)) : "—"}</td></tr>`;
+  }
+  h += `<tr class="total"><td>Total</td><td>${fmt1(sumT)}</td><td>100%</td>
+    <td>${fmtUsd(sumU)}</td><td>100%</td><td>${fmtUsd(sumC)}</td><td>100%</td>
+    <td>${sumT ? fmtUsd(sumC / sumT) : "—"}</td></tr></table>
+    <p style="color:var(--faint);font-size:.74rem;margin-top:10px">La torta muestra la métrica elegida arriba; la tabla siempre trae las tres, más la comisión por tonelada de cada negocio.</p>`;
+  document.getElementById("bizTable").innerHTML = h;
 }
 
 function renderProductChart(a, yA){
