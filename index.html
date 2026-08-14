@@ -93,6 +93,29 @@
   .tab.soon:hover{color:var(--muted)}
   .tab .badge{background:var(--tint-amber-bg);color:var(--tint-amber-tx);border:1px solid var(--tint-amber-bd);font-size:.6rem;padding:2px 6px;border-radius:20px;font-weight:600}
 
+  /* Estadísticas lado a lado de aceite y expeller */
+  .oxgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:820px){.oxgrid{grid-template-columns:1fr}}
+  .oxcard{background:var(--panel2);border-radius:var(--r);padding:16px 18px}
+  .oxcard h4{font-size:.95rem;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:12px;letter-spacing:-.01em}
+  .oxcard h4 .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .oxrow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border);font-size:.85rem}
+  .oxrow:last-child{border-bottom:none}
+  .oxrow span:first-child{color:var(--faint)}
+  .oxrow b{font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* Sub-pestañas del negocio */
+  .subtabs{display:inline-flex;gap:3px;background:var(--panel2);border-radius:10px;padding:3px;flex-wrap:wrap;animation:fadeUp .3s var(--ease) both}
+  .subtabs button{
+    background:transparent;border:none;border-radius:7px;padding:6px 13px;font-size:.82rem;cursor:pointer;
+    color:var(--muted);font-family:inherit;font-weight:500;transition:all .28s var(--ease);display:inline-flex;align-items:center;gap:6px
+  }
+  .subtabs button:hover{color:var(--text)}
+  .subtabs button.active{background:var(--panel);color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  html[data-theme="dark"] .subtabs button.active{background:var(--panel3)}
+  .subtabs .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  @media(max-width:720px){ .subtabs{width:100%} .subtabs button{flex:1;justify-content:center;min-height:42px} }
+
   /* Años */
   .yearpills{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .pill{
@@ -462,7 +485,10 @@
   <div class="toolbar" role="group" aria-label="Controles del dashboard">
     <div class="group" id="grpBiz">
       <span class="glabel" id="lblGrpBiz">Negocio</span>
-      <div class="grow"><div class="tabs" id="tabs" role="tablist" aria-labelledby="lblGrpBiz"></div></div>
+      <div class="grow" style="flex-direction:column;align-items:flex-start;gap:8px">
+        <div class="tabs" id="tabs" role="tablist" aria-labelledby="lblGrpBiz"></div>
+        <div class="subtabs" id="subTabs" role="group" aria-label="Vista dentro del negocio" style="display:none"></div>
+      </div>
     </div>
 
     <div class="vsep" aria-hidden="true"></div>
@@ -561,6 +587,14 @@
       <h2>Cantidad de embarques <span class="clickable">CLICK PARA VER CARGAS</span></h2>
       <p class="csub">Cuántas cargas salieron cada mes.</p>
       <div class="chartbox"><canvas id="chEtd" aria-label="Gráfico de cantidad de embarques por mes" role="img"></canvas></div>
+    </div>
+    <div class="card wide" id="oilexpCard" style="display:none">
+      <h2>Aceite y Expeller por separado — <span id="lblOilexpYear"></span></h2>
+      <p class="csub">Estadísticas de cada producto por su cuenta: volumen, facturación, comisión, precio por tonelada y estacionalidad. Según fecha de <b>ETD</b>.</p>
+      <div class="oxgrid" id="oilexpStats"></div>
+      <div class="chartbox tall" style="margin-top:18px"><canvas id="chOilexp" aria-label="Aceite y expeller por mes" role="img"></canvas></div>
+      <div class="tablewrap" id="oilexpTable" style="margin-top:18px"></div>
+      <div class="tablewrap" id="oilexpYears" style="margin-top:18px"></div>
     </div>
     <div class="card wide" id="focusCard" style="display:none">
       <h2 id="focusTitle"></h2>
@@ -936,6 +970,7 @@ function loadUI(){
   if (!ui.contractSort) ui.contractSort = { by: "total", dir: "desc" };
   if (!Array.isArray(ui.contractYears)) ui.contractYears = [];   // vacío = todos los años
   if (ui.focusMetric !== "usd") ui.focusMetric = "tns";
+  if (!ui.bizSub || typeof ui.bizSub !== "object") ui.bizSub = {};
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1548,6 +1583,22 @@ async function loadData(){
   status.innerHTML = `✅ ${parts.join(' <span class="dotsep">|</span> ')} <span class="dotsep">|</span> actualizado ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+/* Sub-vistas de un negocio (Brokerage: total / maní / aceite+expeller) */
+const SUBVISTAS = {
+  brokerage: [
+    { key: "total",  label: "Brokerage Total",  color: "#8e8e93", tip: "Todos los productos de la hoja", test: null },
+    { key: "mani",   label: "Brokerage Maní",   color: "#0071e3", tip: "Todo menos aceite y expeller",   test: r => !isOilOrExpeller(r.product) },
+    { key: "oilexp", label: "Brokerage Aceite + Expeller", color: "#ff9500", tip: "Solo aceite y expeller", test: r => isOilOrExpeller(r.product) },
+  ],
+};
+function subVistas(){ return SUBVISTAS[UI.biz] || null; }
+function subActual(){
+  const vs = subVistas();
+  if (!vs) return null;
+  const k = (UI.bizSub || {})[UI.biz] || "total";
+  return vs.find(v => v.key === k) || vs[0];
+}
+
 /* ¿Hay desglose disponible en la vista actual? Solo dentro de un negocio; en Total no. */
 function bizAllowsSplit(){ return currentSplit() !== null; }
 
@@ -1571,6 +1622,13 @@ function sanitizeFilter(){
 }
 
 function getRecordsUnfiltered(){
+  if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
+  const base = DATA[UI.biz] || [];
+  const sv = subActual();
+  return (sv && sv.test) ? base.filter(sv.test) : base;
+}
+/* Todos los registros del negocio, ignorando la sub-vista (para comparar contra el total) */
+function getRecordsNegocio(){
   if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
   return DATA[UI.biz] || [];
 }
@@ -2547,6 +2605,121 @@ function mismaEmpresa(a, b){
   return x === y || x.includes(y) || y.includes(x);
 }
 
+/* ============ Estadísticas separadas de aceite y expeller (Brokerage) ============ */
+function renderOilExp(recs, yA){
+  const card = document.getElementById("oilexpCard");
+  const sv = subActual();
+  if (!sv || sv.key !== "oilexp"){
+    card.style.display = "none";
+    if (charts.chOilexp){ charts.chOilexp.destroy(); delete charts.chOilexp; }
+    return;
+  }
+  card.style.display = "";
+  document.getElementById("lblOilexpYear").textContent = yA;
+  const COL = { oil: "#ff9500", exp: "#af52de" };
+  const NOM = { oil: "Aceite", exp: "Expeller" };
+  const clasif = r => isExpeller(r.product) ? "exp" : "oil";
+
+  const stats = {};
+  for (const k of ["oil", "exp"]){
+    const rs = recs.filter(r => r.etd && r.etd.y === yA && clasif(r) === k);
+    const mes = Array(12).fill(0), mesUsd = Array(12).fill(0);
+    let tns = 0, usd = 0, com = 0;
+    const prods = {}, dest = {};
+    for (const r of rs){
+      mes[r.etd.mo - 1] += r.tns; mesUsd[r.etd.mo - 1] += r.usd;
+      tns += r.tns; usd += r.usd; com += r.comision;
+      prods[r.product] = (prods[r.product] || 0) + r.tns;
+      dest[r.port || "(sin destino)"] = (dest[r.port || "(sin destino)"] || 0) + r.tns;
+    }
+    const mejor = bestMonth(mes);
+    const topProd = Object.entries(prods).sort((a, b) => b[1] - a[1])[0];
+    const topDest = Object.entries(dest).sort((a, b) => b[1] - a[1])[0];
+    stats[k] = { rs, mes, mesUsd, tns, usd, com, mejor, topProd, topDest,
+                 cargas: rs.length, precio: tns ? usd / tns : 0, comPorTon: tns ? com / tns : 0,
+                 meses: mes.filter(v => v > 0).length };
+  }
+  const totTns = stats.oil.tns + stats.exp.tns;
+  const totUsd = stats.oil.usd + stats.exp.usd;
+
+  // tarjetas de estadísticas
+  document.getElementById("oilexpStats").innerHTML = ["oil", "exp"].map(k => {
+    const t = stats[k];
+    return `<div class="oxcard">
+      <h4><span class="sw" style="background:${COL[k]}"></span>${NOM[k]}</h4>
+      <div class="oxrow"><span>Toneladas</span><b>${fmt1(t.tns)} t</b></div>
+      <div class="oxrow"><span>Participación</span><b>${totTns ? (t.tns / totTns * 100).toFixed(1).replace(".", ",") + "%" : "—"}</b></div>
+      <div class="oxrow"><span>Facturación</span><b>${fmtUsd(t.usd)}</b></div>
+      <div class="oxrow"><span>Precio promedio</span><b>${t.precio ? fmtUsd(t.precio) + " / t" : "—"}</b></div>
+      <div class="oxrow"><span>Comisión</span><b>${fmtUsd(t.com)}</b></div>
+      <div class="oxrow"><span>Comisión por tonelada</span><b>${t.comPorTon ? fmtUsd(t.comPorTon) : "—"}</b></div>
+      <div class="oxrow"><span>Cargas</span><b>${fmt0(t.cargas)}</b></div>
+      <div class="oxrow"><span>Meses con actividad</span><b>${fmt0(t.meses)} de 12</b></div>
+      <div class="oxrow"><span>Mejor mes</span><b>${t.mejor ? `${t.mejor.name} · ${fmt1(t.mejor.value)} t` : "—"}</b></div>
+      <div class="oxrow"><span>Producto principal</span><b>${t.topProd ? `${t.topProd[0]} · ${fmt1(t.topProd[1])} t` : "—"}</b></div>
+      <div class="oxrow"><span>Destino principal</span><b>${t.topDest ? `${t.topDest[0]} · ${fmt1(t.topDest[1])} t` : "—"}</b></div>
+    </div>`;
+  }).join("");
+
+  // gráfico mensual con las dos series
+  if (charts.chOilexp) charts.chOilexp.destroy();
+  charts.chOilexp = new Chart(document.getElementById("chOilexp"), {
+    type: "bar",
+    data: { labels: MESES, datasets: ["oil", "exp"].map(k => ({
+      label: NOM[k], data: stats[k].mes, backgroundColor: COL[k],
+      borderRadius: 5, borderSkipped: false, maxBarThickness: 40 })) },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+      onClick: (e, els2) => { if (els2 && els2.length) openDetail(els2[0].index, yA); },
+      plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t` } } },
+      scales: { x: { ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
+                     title: { display: true, text: "Tns", color: cssVar("--tick") } } },
+    },
+  });
+
+  // tabla mensual
+  let h = `<table><tr><th>${yA}</th>` + MESES.map(m => `<th>${m}</th>`).join("") + `<th>Total</th></tr>`;
+  for (const k of ["oil", "exp"]){
+    h += `<tr><td><span style="color:${COL[k]}">■</span> ${NOM[k]}</td>` +
+      stats[k].mes.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td><b>${fmt1(stats[k].tns)}</b></td></tr>`;
+  }
+  h += `<tr><td style="color:var(--faint)">Aceite / total</td>` +
+    MESES.map((_, m) => { const t = stats.oil.mes[m] + stats.exp.mes[m];
+      return `<td style="color:var(--faint)">${t ? (stats.oil.mes[m] / t * 100).toFixed(0) + "%" : ""}</td>`; }).join("") +
+    `<td style="color:var(--faint)">${totTns ? (stats.oil.tns / totTns * 100).toFixed(0) + "%" : ""}</td></tr>`;
+  h += `<tr class="total"><td>Total</td>` +
+    MESES.map((_, m) => { const t = stats.oil.mes[m] + stats.exp.mes[m]; return `<td>${t ? fmt1(t) : ""}</td>`; }).join("") +
+    `<td>${fmt1(totTns)}</td></tr></table>`;
+  document.getElementById("oilexpTable").innerHTML = h;
+
+  // histórico por año
+  const anos = [...new Set(recs.filter(r => r.etd).map(r => r.etd.y))].sort((a, b) => a - b);
+  const hist = { oil: {}, exp: {}, oilUsd: {}, expUsd: {} };
+  for (const r of recs){
+    if (!r.etd) continue;
+    const k = clasif(r);
+    hist[k][r.etd.y] = (hist[k][r.etd.y] || 0) + r.tns;
+    hist[k + "Usd"][r.etd.y] = (hist[k + "Usd"][r.etd.y] || 0) + r.usd;
+  }
+  let hy = `<table><tr><th>Histórico</th>` + anos.map(y => `<th>${y}</th>`).join("") + `<th>Total</th></tr>`;
+  for (const k of ["oil", "exp"]){
+    const t = anos.reduce((a, y) => a + (hist[k][y] || 0), 0);
+    hy += `<tr><td><span style="color:${COL[k]}">■</span> ${NOM[k]} (t)</td>` +
+      anos.map(y => `<td>${hist[k][y] ? fmt1(hist[k][y]) : ""}</td>`).join("") + `<td><b>${fmt1(t)}</b></td></tr>`;
+  }
+  for (const k of ["oil", "exp"]){
+    const t = anos.reduce((a, y) => a + (hist[k + "Usd"][y] || 0), 0);
+    hy += `<tr><td style="color:var(--faint)"><span style="color:${COL[k]}">■</span> ${NOM[k]} (USD)</td>` +
+      anos.map(y => `<td style="color:var(--faint)">${hist[k + "Usd"][y] ? fmtUsd(hist[k + "Usd"][y]) : ""}</td>`).join("") +
+      `<td style="color:var(--faint)">${fmtUsd(t)}</td></tr>`;
+  }
+  hy += `</table><p style="color:var(--faint);font-size:.74rem;margin-top:10px">Aceite y expeller se identifican por el nombre del producto. Click en una barra para ver las cargas del mes.</p>`;
+  document.getElementById("oilexpYears").innerHTML = hy;
+}
+
 /* ============ Vista propia de un exportador (NEWSAN SA en Brokerage) ============
    Separa aceite y expeller SOLO de ese exportador, sin mezclar con otras empresas. */
 let LAST_FOCUS_PDF = null;
@@ -3173,6 +3346,8 @@ function renderSecNav(){
   const focusName = ((CONFIG[UI.biz] || {}).FOCUS_EXPORTER || "").trim();
   // en el mismo orden en que aparecen en la página
   const items = [{ id: "kpis", label: "Resumen" }];
+  const sv = subActual();
+  if (sv && sv.key === "oilexp") items.push({ id: "oilexpCard", label: "Aceite vs Expeller", destacado: true });
   if (bz && bz.focusExporter && focusName) items.push({ id: "focusCard", label: focusName, destacado: true });
   items.push({ id: "trendCard", label: "Tendencia" });
   if (UI.biz === TOTAL_KEY) items.push({ id: "bizCard", label: "Por negocio" });
@@ -3205,7 +3380,8 @@ function renderContext(s){
   const el = document.getElementById("contextBar");
   const bizName = UI.biz === TOTAL_KEY ? "Todos los negocios" : (s.biz ? s.biz.name : UI.biz);
   const tags = [];
-  tags.push(`<span class="ctag">Viendo <b>${bizName}</b></span>`);
+  const svc = subActual();
+  tags.push(`<span class="ctag">Viendo <b>${svc ? svc.label : bizName}</b></span>`);
   tags.push(`<span class="ctag">${s.cmpYears.length ? `Comparando <b>${s.yA}</b> con <b>${s.cmpYears.join(" · ")}</b>` : `Año <b>${s.yA}</b>`}</span>`);
   tags.push(`<span class="ctag"><b>${fmt0(s.nRecs)}</b> cargas en la vista</span>`);
   if (s.ytd) tags.push(`<span class="ctag act">📅 Comparación a misma fecha (hasta ${MESES[s.cutoff - 1]})</span>`);
@@ -3241,7 +3417,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard"].forEach(id => {
+    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -3271,7 +3447,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard"].forEach(id => {
+    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -3367,6 +3543,7 @@ function render(){
   renderConsolidacion(recs, yA, MM);
   renderGrupos(recs, yA, MM);
   renderPartners(recs);
+  renderOilExp(recs, yA);
   renderFocusExporter(recs);
   renderContracts();
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
@@ -3399,7 +3576,31 @@ function renderTabs(){
       const bz = BUSINESSES.find(b => b.key === UI.biz);
       if (bz && bz.status === "active") cfgBizKey = UI.biz;   // ⚙️ Config abre en este negocio
       saveUI();
-      renderTabs(); renderControls(); render();
+      renderTabs(); renderSubTabs(); renderControls(); render();
+    };
+  });
+}
+
+function renderSubTabs(){
+  const cont = document.getElementById("subTabs");
+  const vs = subVistas();
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  if (!vs || (bz && bz.status === "soon")){ cont.style.display = "none"; cont.innerHTML = ""; return; }
+  cont.style.display = "";
+  const act = subActual();
+  const base = DATA[UI.biz] || [];
+  cont.innerHTML = vs.map(v => {
+    const n = v.test ? base.filter(v.test).length : base.length;
+    return `<button type="button" class="${v.key === act.key ? "active" : ""}" data-sub="${v.key}"
+      aria-pressed="${v.key === act.key}" title="${v.tip} · ${fmt0(n)} cargas">
+      <span class="dot" style="background:${v.color}" aria-hidden="true"></span>${v.label}</button>`;
+  }).join("");
+  cont.querySelectorAll("button").forEach(btn => {
+    btn.onclick = () => {
+      UI.bizSub = { ...(UI.bizSub || {}), [UI.biz]: btn.dataset.sub };
+      // un filtro de grupo puede no aplicar a la nueva sub-vista
+      if (["a", "b", "nop", "conv"].includes(UI.filter.mode)) UI.filter = { mode: "todos", sel: null };
+      saveUI(); renderSubTabs(); renderControls(); render();
     };
   });
 }
@@ -3800,6 +4001,7 @@ let paintedFromCache = false;
 /* Pinta la pantalla con lo que haya (caché o datos frescos) */
 function paint(){
   renderTabs();
+  renderSubTabs();
   document.getElementById("btnFilter").textContent = filterLabel();
   document.getElementById("btnFilter").classList.toggle("filtering", UI.filter.mode !== "todos");
   renderControls();
