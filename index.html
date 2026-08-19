@@ -821,6 +821,8 @@
           </select>
         </div>
       </div>
+      <label for="cfgExcluir">Exportadores excluidos del análisis <span style="color:var(--faint);font-weight:400">— separados por coma</span></label>
+      <input id="cfgExcluir" placeholder="Latinut S.A.">
       <label for="cfgFocusExporter">Exportador con vista propia <span style="color:var(--faint);font-weight:400">— se le arma una sección aparte</span></label>
       <input id="cfgFocusExporter" placeholder="NEWSAN SA">
       <div class="row">
@@ -888,7 +890,8 @@
 =================================================== */
 const BUSINESSES = [
   { key: "axt",       name: "AXT",       status: "active", nop: true, split: "nop", consViews: true },   // split: qué desglose ofrece cada negocio
-  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil", partnerViews: true, contractViews: true, focusExporter: true },
+  { key: "brokerage", name: "Brokerage", status: "active", nop: false, split: "oil", partnerViews: true, contractViews: true, focusExporter: true,
+    excluirDefault: "Latinut S.A." },
   { key: "buzaram",   name: "Buzaram",   status: "active", nop: false },
 ];
 const TOTAL_KEY = "total";
@@ -902,6 +905,7 @@ const SHEET_DEFAULTS = {
   DATE_FORMAT: "DMY",
   DECIMAL: "auto",                                 // "auto" | "comma" | "dot"
   FOCUS_EXPORTER: "NEWSAN SA",                     // exportador con vista propia (Brokerage)
+  EXCLUDE_EXPORTERS: "",                           // exportadores que no se cuentan (separados por coma)
   CONTRACTS_SHEET: "ALL CONTRATOS",                // pestaña de contratos (Brokerage)
   CONTRACTS_GID: "",
   USD_COL: "TOTAL FINAL",                          // encabezado de la columna de facturación
@@ -947,7 +951,7 @@ function loadConfig(){
   const cfg = {};
   for (const b of BUSINESSES){
     const s = saved[b.key] || {};
-    const c = { ...SHEET_DEFAULTS, ...s,
+    const c = { ...SHEET_DEFAULTS, EXCLUDE_EXPORTERS: b.excluirDefault || "", ...s,
       COMISION: { ...SHEET_DEFAULTS.COMISION, ...(s.COMISION || {}) },
       COLS: { ...SHEET_DEFAULTS.COLS, ...(s.COLS || {}) } };
     // migrar letras guardadas por versiones anteriores a nombres de encabezado
@@ -980,6 +984,7 @@ function loadUI(){
   if (ui.focusMetric !== "usd") ui.focusMetric = "tns";
   if (!ui.bizSub || typeof ui.bizSub !== "object") ui.bizSub = {};
   if (!["tns", "usd", "com"].includes(ui.bizMetric)) ui.bizMetric = "tns";
+  if (typeof ui.verExcluidos !== "boolean") ui.verExcluidos = false;
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1632,16 +1637,44 @@ function sanitizeFilter(){
   return false;
 }
 
+/* Exportadores que el negocio deja fuera del análisis (configurable) */
+function excluidosDe(bizKey){
+  const raw = ((CONFIG[bizKey] || {}).EXCLUDE_EXPORTERS || "").trim();
+  return raw ? raw.split(/[,;]/).map(x => x.trim()).filter(Boolean) : [];
+}
+/* ¿Esta carga corresponde a un exportador excluido? */
+function esExcluida(r, bizKey){
+  const lista = excluidosDe(bizKey);
+  if (!lista.length) return false;
+  return lista.some(n => mismaEmpresa(r.exporter, n));
+}
+function quitarExcluidas(arr, bizKey){
+  if (UI.verExcluidos) return arr;
+  const lista = excluidosDe(bizKey);
+  if (!lista.length) return arr;
+  return arr.filter(r => !esExcluida(r, bizKey));
+}
+
 function getRecordsUnfiltered(){
-  if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
-  const base = DATA[UI.biz] || [];
+  if (UI.biz === TOTAL_KEY){
+    // en el Total cada negocio aplica sus propias exclusiones
+    return Object.entries(DATA).flatMap(([k, arr]) => quitarExcluidas(arr, k));
+  }
+  const base = quitarExcluidas(DATA[UI.biz] || [], UI.biz);
   const sv = subActual();
   return (sv && sv.test) ? base.filter(sv.test) : base;
 }
+/* Cuántas cargas quedaron fuera por la exclusión (para avisarlo) */
+function nExcluidas(){
+  if (UI.verExcluidos) return 0;
+  if (UI.biz === TOTAL_KEY)
+    return Object.entries(DATA).reduce((n, [k, arr]) => n + arr.filter(r => esExcluida(r, k)).length, 0);
+  return (DATA[UI.biz] || []).filter(r => esExcluida(r, UI.biz)).length;
+}
 /* Todos los registros del negocio, ignorando la sub-vista (para comparar contra el total) */
 function getRecordsNegocio(){
-  if (UI.biz === TOTAL_KEY) return Object.values(DATA).flat();
-  return DATA[UI.biz] || [];
+  if (UI.biz === TOTAL_KEY) return Object.entries(DATA).flatMap(([k, arr]) => quitarExcluidas(arr, k));
+  return quitarExcluidas(DATA[UI.biz] || [], UI.biz);
 }
 function getRecords(){
   return applyFilter(getRecordsUnfiltered());
@@ -3420,6 +3453,15 @@ function renderContext(s){
   tags.push(`<span class="ctag">${s.cmpYears.length ? `Comparando <b>${s.yA}</b> con <b>${s.cmpYears.join(" · ")}</b>` : `Año <b>${s.yA}</b>`}</span>`);
   tags.push(`<span class="ctag"><b>${fmt0(s.nRecs)}</b> cargas en la vista</span>`);
   if (s.ytd) tags.push(`<span class="ctag act">📅 Comparación a misma fecha (hasta ${MESES[s.cutoff - 1]})</span>`);
+  const listaEx = UI.biz === TOTAL_KEY
+    ? [...new Set(Object.keys(DATA).flatMap(k => excluidosDe(k)))]
+    : excluidosDe(UI.biz);
+  if (listaEx.length){
+    const nEx = nExcluidas();
+    tags.push(UI.verExcluidos
+      ? `<span class="ctag act">👁 Incluyendo ${listaEx.join(", ")}<button type="button" data-clear="excl" title="Volver a excluirlas" aria-label="Volver a excluirlas">×</button></span>`
+      : `<span class="ctag">Sin ${listaEx.join(", ")}${nEx ? ` · ${fmt0(nEx)} carga(s) fuera` : ""}<button type="button" data-clear="excl" title="Ver también estas exportaciones" aria-label="Incluir las exportaciones excluidas">👁</button></span>`);
+  }
   if (UI.filter.mode !== "todos")
     tags.push(`<span class="ctag act">🎛 ${filterLabel().replace("🎛 Productos: ", "Productos: ")}<button type="button" data-clear="filter" title="Quitar el filtro de productos" aria-label="Quitar el filtro de productos">×</button></span>`);
   if (s.splitOn)
@@ -3429,9 +3471,11 @@ function renderContext(s){
     b.onclick = () => {
       if (b.dataset.clear === "filter") UI.filter = { mode: "todos", sel: null };
       if (b.dataset.clear === "split") UI.split = false;
+      if (b.dataset.clear === "excl") UI.verExcluidos = !UI.verExcluidos;
       saveUI();
       document.getElementById("btnFilter").textContent = filterLabel();
       document.getElementById("btnFilter").classList.toggle("filtering", UI.filter.mode !== "todos");
+      renderSubTabs();
       renderControls();
       render();
     };
@@ -3623,7 +3667,7 @@ function renderSubTabs(){
   if (!vs || (bz && bz.status === "soon")){ cont.style.display = "none"; cont.innerHTML = ""; return; }
   cont.style.display = "";
   const act = subActual();
-  const base = DATA[UI.biz] || [];
+  const base = quitarExcluidas(DATA[UI.biz] || [], UI.biz);
   cont.innerHTML = vs.map(v => {
     const n = v.test ? base.filter(v.test).length : base.length;
     return `<button type="button" class="${v.key === act.key ? "active" : ""}" data-sub="${v.key}"
@@ -3867,6 +3911,7 @@ function fillConfigForm(){
   document.getElementById("cfgDateFormat").value = c.DATE_FORMAT;
   document.getElementById("cfgComMode").value = c.COMISION.mode;
   document.getElementById("cfgDecimal").value = c.DECIMAL || "auto";
+  document.getElementById("cfgExcluir").value = c.EXCLUDE_EXPORTERS || "";
   document.getElementById("cfgFocusExporter").value = c.FOCUS_EXPORTER || "";
   document.getElementById("cfgContractsSheet").value = c.CONTRACTS_SHEET || "";
   document.getElementById("cfgContractsGid").value = c.CONTRACTS_GID || "";
@@ -3940,6 +3985,7 @@ document.getElementById("cfgSave").onclick = async () => {
     HEADER_ROW: Math.max(1, parseInt(document.getElementById("cfgHeaderRow").value) || 2),
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
     DECIMAL: document.getElementById("cfgDecimal").value,
+    EXCLUDE_EXPORTERS: txt("cfgExcluir"),
     FOCUS_EXPORTER: txt("cfgFocusExporter"),
     CONTRACTS_SHEET: txt("cfgContractsSheet"),
     CONTRACTS_GID: txt("cfgContractsGid").replace(/\D/g, ""),
