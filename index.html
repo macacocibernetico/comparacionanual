@@ -91,7 +91,18 @@
   html[data-theme="dark"] .tab.active{background:var(--panel3)}
   .tab.soon{opacity:.4;cursor:not-allowed}
   .tab.soon:hover{color:var(--muted)}
+  .tab .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
   .tab .badge{background:var(--tint-amber-bg);color:var(--tint-amber-tx);border:1px solid var(--tint-amber-bd);font-size:.6rem;padding:2px 6px;border-radius:20px;font-weight:600}
+
+  /* Tres tortas del Total, lado a lado */
+  .bizgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:820px){.bizgrid{grid-template-columns:1fr;gap:20px}}
+  .bizcell{text-align:center}
+  .bizcell .tlabel{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
+  .chartbox.sm2{height:210px}
+  .bizlegend{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-bottom:14px}
+  .bizlegend span{display:inline-flex;align-items:center;gap:7px;font-size:.83rem;color:var(--muted);font-weight:500}
+  .bizlegend i{width:11px;height:11px;border-radius:3px;display:inline-block;flex:0 0 auto}
 
   /* Estadísticas lado a lado de aceite y expeller */
   .oxgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -485,10 +496,7 @@
   <div class="toolbar" role="group" aria-label="Controles del dashboard">
     <div class="group" id="grpBiz">
       <span class="glabel" id="lblGrpBiz">Negocio</span>
-      <div class="grow" style="flex-direction:column;align-items:flex-start;gap:8px">
-        <div class="tabs" id="tabs" role="tablist" aria-labelledby="lblGrpBiz"></div>
-        <div class="subtabs" id="subTabs" role="group" aria-label="Vista dentro del negocio" style="display:none"></div>
-      </div>
+      <div class="grow"><div class="tabs" id="tabs" role="tablist" aria-labelledby="lblGrpBiz"></div></div>
     </div>
 
     <div class="vsep" aria-hidden="true"></div>
@@ -593,6 +601,16 @@
       <p class="csub">Estadísticas de cada producto por su cuenta: volumen, facturación, comisión, precio por tonelada y estacionalidad. Según fecha de <b>ETD</b>.</p>
       <div class="oxgrid" id="oilexpStats"></div>
       <div class="chartbox tall" style="margin-top:18px"><canvas id="chOilexp" aria-label="Aceite y expeller por mes" role="img"></canvas></div>
+      <h3 class="subhead">Clientes de aceite y expeller — participación en toneladas</h3>
+      <div class="consbar">
+        <div class="seg" id="oxClientSeg" role="group" aria-label="Qué clientes mostrar">
+          <button type="button" data-oc="ambos">Aceite + Expeller</button>
+          <button type="button" data-oc="oil">Solo aceite</button>
+          <button type="button" data-oc="exp">Solo expeller</button>
+        </div>
+      </div>
+      <div class="chartbox tall"><canvas id="chOxClients" aria-label="Participación de cada cliente" role="img"></canvas></div>
+      <div class="tablewrap" id="oxClientsTable" style="margin-top:14px"></div>
       <div class="tablewrap" id="oilexpTable" style="margin-top:18px"></div>
       <div class="tablewrap" id="oilexpYears" style="margin-top:18px"></div>
     </div>
@@ -630,15 +648,13 @@
     </div>
     <div class="card wide" id="bizCard" style="display:none">
       <h2>Participación de cada negocio — <span id="lblBizYear"></span></h2>
-      <p class="csub">De dónde viene cada parte del total en el año seleccionado. Cambiá la métrica para ver volumen, facturación o comisión.</p>
-      <div class="consbar">
-        <div class="seg" id="bizMetric" role="group" aria-label="Métrica de la participación">
-          <button type="button" data-bm="tns">Toneladas</button>
-          <button type="button" data-bm="usd">Facturación</button>
-          <button type="button" data-bm="com">Comisión</button>
-        </div>
+      <p class="csub">De dónde viene cada parte del total en el año seleccionado: volumen, facturación y comisión, una al lado de la otra. Cada negocio mantiene su color en las tres.</p>
+      <div class="bizlegend" id="bizLegend"></div>
+      <div class="bizgrid">
+        <div class="bizcell"><span class="tlabel">Toneladas</span><div class="chartbox sm2"><canvas id="chBizTns" aria-label="Participación en toneladas" role="img"></canvas></div></div>
+        <div class="bizcell"><span class="tlabel">Facturación</span><div class="chartbox sm2"><canvas id="chBizUsd" aria-label="Participación en facturación" role="img"></canvas></div></div>
+        <div class="bizcell"><span class="tlabel">Comisión</span><div class="chartbox sm2"><canvas id="chBizCom" aria-label="Participación en comisión" role="img"></canvas></div></div>
       </div>
-      <div class="chartbox"><canvas id="chBiz" aria-label="Participación por negocio" role="img"></canvas></div>
       <div class="tablewrap" id="bizTable" style="margin-top:18px"></div>
     </div>
     <div class="card wide" id="prodCard">
@@ -895,6 +911,8 @@ const BUSINESSES = [
   { key: "buzaram",   name: "Buzaram",   status: "active", nop: false },
 ];
 const TOTAL_KEY = "total";
+/* orden del menú principal: los negocios con sub-vistas se abren en varios botones */
+const ORDEN_MENU = ["axt", "buzaram", "brokerage"];
 
 /* Config por defecto de cada planilla (estructura de columnas AXT) */
 const SHEET_DEFAULTS = {
@@ -983,8 +1001,8 @@ function loadUI(){
   if (!Array.isArray(ui.contractYears)) ui.contractYears = [];   // vacío = todos los años
   if (ui.focusMetric !== "usd") ui.focusMetric = "tns";
   if (!ui.bizSub || typeof ui.bizSub !== "object") ui.bizSub = {};
-  if (!["tns", "usd", "com"].includes(ui.bizMetric)) ui.bizMetric = "tns";
   if (typeof ui.verExcluidos !== "boolean") ui.verExcluidos = false;
+  if (!["ambos", "oil", "exp"].includes(ui.oxClientes)) ui.oxClientes = "ambos";
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -2762,6 +2780,111 @@ function renderOilExp(recs, yA){
   }
   hy += `</table><p style="color:var(--faint);font-size:.74rem;margin-top:10px">Aceite y expeller se identifican por el nombre del producto. Click en una barra para ver las cargas del mes.</p>`;
   document.getElementById("oilexpYears").innerHTML = hy;
+
+  /* ---- torta de clientes: cuánto representa cada uno en toneladas ---- */
+  const modo = ["ambos", "oil", "exp"].includes(UI.oxClientes) ? UI.oxClientes : "ambos";
+  document.querySelectorAll("#oxClientSeg button").forEach(btn => {
+    const on = btn.dataset.oc === modo;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.onclick = () => { UI.oxClientes = btn.dataset.oc; saveUI(); render(); };
+  });
+  const delAno = recs.filter(r => r.etd && r.etd.y === yA);
+  const cli = new Map();
+  for (const r of delAno){
+    const k = clasif(r);
+    if (modo !== "ambos" && k !== modo) continue;
+    const n = (r.importer || "").trim() || "(sin cliente)";
+    if (!cli.has(n)) cli.set(n, { nombre: n, oil: 0, exp: 0, total: 0, usd: 0, cargas: 0 });
+    const g = cli.get(n);
+    g[k] += r.tns; g.total += r.tns; g.usd += r.usd; g.cargas++;
+  }
+  const filas = [...cli.values()].sort((a2, b2) => b2.total - a2.total);
+  const totCli = filas.reduce((s2, g) => s2 + g.total, 0);
+  if (charts.chOxClients) charts.chOxClients.destroy();
+  const tablaCli = document.getElementById("oxClientsTable");
+  if (!filas.length){
+    tablaCli.innerHTML = `<p class="empty">Sin cargas de ${modo === "oil" ? "aceite" : modo === "exp" ? "expeller" : "aceite ni expeller"} en ${yA}.</p>`;
+  } else {
+    // el gráfico agrupa los muy chicos para que se lea
+    const TOPC = 12;
+    let labels, datos, otrosN = 0;
+    if (filas.length > TOPC + 1){
+      const top = filas.slice(0, TOPC), resto = filas.slice(TOPC);
+      otrosN = resto.length;
+      labels = [...top.map(g => g.nombre), `Otros (${otrosN})`];
+      datos = [...top.map(g => g.total), resto.reduce((s2, g) => s2 + g.total, 0)];
+    } else {
+      labels = filas.map(g => g.nombre);
+      datos = filas.map(g => g.total);
+    }
+    const pctPluginCli = {
+      id: "pctCli",
+      afterDatasetsDraw(chart){
+        const { ctx } = chart;
+        ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        chart.getDatasetMeta(0).data.forEach((arc, i) => {
+          const v = datos[i];
+          if (!totCli || !v) return;
+          const pct = v / totCli * 100;
+          if (pct < 5) return;
+          const p = arc.tooltipPosition();
+          ctx.font = "700 13px -apple-system, 'Segoe UI', system-ui, sans-serif";
+          ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 3; ctx.fillStyle = "#fff";
+          const t = pct.toFixed(1).replace(".", ",") + "%";
+          ctx.strokeText(t, p.x, p.y); ctx.fillText(t, p.x, p.y);
+        });
+        const f0 = chart.getDatasetMeta(0).data[0];
+        if (f0){
+          ctx.fillStyle = cssVar("--text");
+          ctx.font = "700 17px -apple-system, 'Segoe UI', system-ui, sans-serif";
+          ctx.fillText(fmt1(totCli) + " t", f0.x, f0.y - 8);
+          ctx.fillStyle = cssVar("--faint");
+          ctx.font = "400 11px -apple-system, 'Segoe UI', system-ui, sans-serif";
+          ctx.fillText(`${filas.length} cliente(s) · ${yA}`, f0.x, f0.y + 12);
+        }
+        ctx.restore();
+      },
+    };
+    charts.chOxClients = new Chart(document.getElementById("chOxClients"), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data: datos,
+        backgroundColor: labels.map((l, i) => String(l).startsWith("Otros (") ? "#8e8e93" : PALETTE[i % PALETTE.length]),
+        borderColor: cssVar("--panel"), borderWidth: 3 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: "60%",
+        animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        plugins: {
+          legend: { position: "right", labels: { color: cssVar("--muted"),
+            generateLabels(){
+              return labels.map((l, i) => ({
+                text: `${l} — ${fmt1(datos[i])} t (${totCli ? (datos[i] / totCli * 100).toFixed(1).replace(".", ",") : 0}%)`,
+                fillStyle: String(l).startsWith("Otros (") ? "#8e8e93" : PALETTE[i % PALETTE.length],
+                strokeStyle: String(l).startsWith("Otros (") ? "#8e8e93" : PALETTE[i % PALETTE.length], index: i,
+              }));
+            } } },
+          tooltip: { callbacks: { label: c => ` ${c.label}: ${fmt1(c.parsed)} t (${totCli ? (c.parsed / totCli * 100).toFixed(1).replace(".", ",") : 0}%)` } },
+        },
+      },
+      plugins: [pctPluginCli],
+    });
+    // tabla con el desglose aceite / expeller de cada cliente
+    let hc = `<table><tr><th>Cliente</th>` +
+      (modo === "ambos" ? `<th><span style="color:${COL.oil}">■</span> Aceite</th><th><span style="color:${COL.exp}">■</span> Expeller</th>` : "") +
+      `<th>Total (t)</th><th>%</th><th>Facturación</th><th>Cargas</th></tr>`;
+    for (const g of filas){
+      hc += `<tr><td>${g.nombre}</td>` +
+        (modo === "ambos" ? `<td>${g.oil ? fmt1(g.oil) : ""}</td><td>${g.exp ? fmt1(g.exp) : ""}</td>` : "") +
+        `<td><b>${fmt1(g.total)}</b></td><td>${totCli ? (g.total / totCli * 100).toFixed(1).replace(".", ",") + "%" : "—"}</td>
+         <td>${fmtUsd(g.usd)}</td><td>${fmt0(g.cargas)}</td></tr>`;
+    }
+    hc += `<tr class="total"><td>Total</td>` +
+      (modo === "ambos" ? `<td>${fmt1(filas.reduce((s2, g) => s2 + g.oil, 0))}</td><td>${fmt1(filas.reduce((s2, g) => s2 + g.exp, 0))}</td>` : "") +
+      `<td>${fmt1(totCli)}</td><td>100%</td><td>${fmtUsd(filas.reduce((s2, g) => s2 + g.usd, 0))}</td>
+       <td>${fmt0(filas.reduce((s2, g) => s2 + g.cargas, 0))}</td></tr></table>`;
+    if (otrosN) hc += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px">La torta agrupa ${otrosN} clientes menores en “Otros”; la tabla los lista a todos.</p>`;
+    tablaCli.innerHTML = hc;
+  }
 }
 
 /* ============ Vista propia de un exportador (NEWSAN SA en Brokerage) ============
@@ -3243,105 +3366,86 @@ function openDetail(monthIdx, year, group){
 
 function renderBizChart(a, yA){
   const card = document.getElementById("bizCard");
+  const IDS = { tns: "chBizTns", usd: "chBizUsd", com: "chBizCom" };
   if (UI.biz !== TOTAL_KEY){
     card.style.display = "none";
-    if (charts.chBiz){ charts.chBiz.destroy(); delete charts.chBiz; }
+    Object.values(IDS).forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
     return;
   }
   card.style.display = "";
   document.getElementById("lblBizYear").textContent = yA;
 
-  const M = ["tns", "usd", "com"].includes(UI.bizMetric) ? UI.bizMetric : "tns";
-  document.querySelectorAll("#bizMetric button").forEach(btn => {
-    const on = btn.dataset.bm === M;
-    btn.classList.toggle("active", on);
-    btn.setAttribute("aria-pressed", String(on));
-    btn.onclick = () => { UI.bizMetric = btn.dataset.bm; saveUI(); render(); };
-  });
-  const fuentes = { tns: a.bizTotals, usd: a.bizUsd, com: a.bizCom };
-  const nombresMetrica = { tns: "Toneladas", usd: "Facturación", com: "Comisión" };
-  const datos = fuentes[M] || {};
-  const fm = v => M === "tns" ? fmt1(v) + " t" : fmtUsd(v);
-
   const names = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
-  // se ordena de mayor a menor aporte en la métrica elegida
-  const keys = Object.keys(datos).filter(k => (datos[k] || 0) !== 0).sort((x, y) => datos[y] - datos[x]);
-  const vals = keys.map(k => datos[k]);
-  const total = vals.reduce((s2, v) => s2 + v, 0);
+  // color estable por negocio: el mismo en las tres tortas
+  const colorDe = k => {
+    const i2 = BUSINESSES.findIndex(b => b.key === k);
+    return PALETTE[(i2 < 0 ? 0 : i2) % PALETTE.length];
+  };
+  const fuentes = { tns: a.bizTotals, usd: a.bizUsd, com: a.bizCom };
+  const nombreM = { tns: "del volumen", usd: "de la facturación", com: "de la comisión" };
+  const fmM = { tns: v => fmt1(v) + " t", usd: fmtUsd, com: fmtUsd };
 
-  if (charts.chBiz) charts.chBiz.destroy();
-  if (!keys.length){
-    document.getElementById("bizTable").innerHTML =
-      `<p class="empty">No hay ${nombresMetrica[M].toLowerCase()} registrada en ${yA}.</p>`;
-    return;
+  // negocios presentes en cualquiera de las métricas (para una leyenda única)
+  const keys = [...new Set(Object.keys(a.bizTotals).concat(Object.keys(a.bizUsd), Object.keys(a.bizCom)))]
+    .filter(k => (a.bizTotals[k] || a.bizUsd[k] || a.bizCom[k]))
+    .sort((x, y) => (a.bizTotals[y] || 0) - (a.bizTotals[x] || 0));
+  document.getElementById("bizLegend").innerHTML = keys.map(k =>
+    `<span><i style="background:${colorDe(k)}"></i>${names[k] || k}</span>`).join("");
+
+  for (const m of ["tns", "usd", "com"]){
+    const datos = fuentes[m] || {};
+    const ks = keys.filter(k => (datos[k] || 0) > 0);
+    const vals = ks.map(k => datos[k]);
+    const total = vals.reduce((s2, v) => s2 + v, 0);
+    const fm = fmM[m];
+    if (charts[IDS[m]]) charts[IDS[m]].destroy();
+    if (!ks.length) continue;
+    const pctPlugin = {
+      id: "pct_" + m,
+      afterDatasetsDraw(chart){
+        const { ctx } = chart;
+        ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        chart.getDatasetMeta(0).data.forEach((arc, i) => {
+          const v = vals[i];
+          if (!total || !v) return;
+          const pct = v / total * 100;
+          if (pct < 7) return;
+          const p = arc.tooltipPosition();
+          ctx.font = "700 12px -apple-system, 'Segoe UI', system-ui, sans-serif";
+          ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 3; ctx.fillStyle = "#fff";
+          const t = pct.toFixed(0) + "%";
+          ctx.strokeText(t, p.x, p.y); ctx.fillText(t, p.x, p.y);
+        });
+        const f0 = chart.getDatasetMeta(0).data[0];
+        if (f0){
+          ctx.fillStyle = cssVar("--text");
+          ctx.font = "700 14px -apple-system, 'Segoe UI', system-ui, sans-serif";
+          ctx.fillText(fm(total), f0.x, f0.y);
+        }
+        ctx.restore();
+      },
+    };
+    charts[IDS[m]] = new Chart(document.getElementById(IDS[m]), {
+      type: "doughnut",
+      data: { labels: ks.map(k => names[k] || k),
+        datasets: [{ data: vals, backgroundColor: ks.map(colorDe), borderColor: cssVar("--panel"), borderWidth: 3 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: "64%",
+        animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: c => ` ${c.label}: ${fm(c.parsed)} (${total ? (c.parsed / total * 100).toFixed(1).replace(".", ",") : 0}% ${nombreM[m]})` } } },
+      },
+      plugins: [pctPlugin],
+    });
   }
 
-  /* % sobre cada porción y el total al centro */
-  const pctPlugin = {
-    id: "pctLabels",
-    afterDatasetsDraw(chart){
-      const { ctx } = chart;
-      const meta = chart.getDatasetMeta(0);
-      ctx.save();
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      meta.data.forEach((arc, i) => {
-        const v = vals[i];
-        if (!total || !v) return;
-        const pct = v / total * 100;
-        if (pct < 4) return;
-        const p = arc.tooltipPosition();
-        ctx.font = "700 13px -apple-system, 'Segoe UI', system-ui, sans-serif";
-        ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 3;
-        ctx.fillStyle = "#ffffff";
-        const txt = pct.toFixed(1).replace(".", ",") + "%";
-        ctx.strokeText(txt, p.x, p.y);
-        ctx.fillText(txt, p.x, p.y);
-      });
-      const first = meta.data[0];
-      if (first){
-        ctx.fillStyle = cssVar("--text");
-        ctx.font = "700 17px -apple-system, 'Segoe UI', system-ui, sans-serif";
-        ctx.fillText(fm(total), first.x, first.y - 8);
-        ctx.fillStyle = cssVar("--faint");
-        ctx.font = "400 11px -apple-system, 'Segoe UI', system-ui, sans-serif";
-        ctx.fillText(nombresMetrica[M].toLowerCase() + " " + yA, first.x, first.y + 12);
-      }
-      ctx.restore();
-    },
-  };
-
-  charts.chBiz = new Chart(document.getElementById("chBiz"), {
-    type: "doughnut",
-    data: {
-      labels: keys.map(k => names[k] || k),
-      datasets: [{ data: vals, backgroundColor: keys.map((_, i) => PALETTE[i % PALETTE.length]),
-        borderColor: cssVar("--panel"), borderWidth: 3 }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, cutout: "62%",
-      animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
-      plugins: {
-        legend: { position: "right", labels: { color: cssVar("--muted"),
-          generateLabels(){
-            return keys.map((k, i) => ({
-              text: `${names[k] || k} — ${fm(vals[i])} (${total ? (vals[i] / total * 100).toFixed(1).replace(".", ",") : 0}%)`,
-              fillStyle: PALETTE[i % PALETTE.length], strokeStyle: PALETTE[i % PALETTE.length], index: i,
-            }));
-          } } },
-        tooltip: { callbacks: { label: c => ` ${c.label}: ${fm(c.parsed)} (${total ? (c.parsed / total * 100).toFixed(1).replace(".", ",") : 0}%)` } },
-      },
-    },
-    plugins: [pctPlugin],
-  });
-
-  // tabla con las tres métricas juntas, para no perder de vista el resto
-  const todas = Object.keys(a.bizTotals).sort((x, y) => (datos[y] || 0) - (datos[x] || 0));
+  // tabla con las tres métricas y la comisión por tonelada
   const tt = k => (a.bizTotals[k] || 0), tu = k => (a.bizUsd[k] || 0), tc = k => (a.bizCom[k] || 0);
-  const sumT = todas.reduce((s2, k) => s2 + tt(k), 0), sumU = todas.reduce((s2, k) => s2 + tu(k), 0), sumC = todas.reduce((s2, k) => s2 + tc(k), 0);
+  const sumT = keys.reduce((s2, k) => s2 + tt(k), 0), sumU = keys.reduce((s2, k) => s2 + tu(k), 0), sumC = keys.reduce((s2, k) => s2 + tc(k), 0);
   const pc = (v, t) => t ? (v / t * 100).toFixed(1).replace(".", ",") + "%" : "—";
   let h = `<table><tr><th>Negocio</th><th>Toneladas</th><th>% tns</th><th>Facturación</th><th>% fact.</th><th>Comisión</th><th>% comisión</th><th>Comisión / t</th></tr>`;
-  for (const k of todas){
-    h += `<tr><td>${names[k] || k}</td>
+  for (const k of keys){
+    h += `<tr><td><span style="color:${colorDe(k)}">■</span> ${names[k] || k}</td>
       <td>${fmt1(tt(k))}</td><td>${pc(tt(k), sumT)}</td>
       <td>${fmtUsd(tu(k))}</td><td>${pc(tu(k), sumU)}</td>
       <td><b>${fmtUsd(tc(k))}</b></td><td><b>${pc(tc(k), sumC)}</b></td>
@@ -3350,7 +3454,7 @@ function renderBizChart(a, yA){
   h += `<tr class="total"><td>Total</td><td>${fmt1(sumT)}</td><td>100%</td>
     <td>${fmtUsd(sumU)}</td><td>100%</td><td>${fmtUsd(sumC)}</td><td>100%</td>
     <td>${sumT ? fmtUsd(sumC / sumT) : "—"}</td></tr></table>
-    <p style="color:var(--faint);font-size:.74rem;margin-top:10px">La torta muestra la métrica elegida arriba; la tabla siempre trae las tres, más la comisión por tonelada de cada negocio.</p>`;
+    <p style="color:var(--faint);font-size:.74rem;margin-top:10px">La comisión por tonelada muestra qué negocio rinde más por volumen movido.</p>`;
   document.getElementById("bizTable").innerHTML = h;
 }
 
@@ -3638,51 +3742,50 @@ function render(){
 
 function renderTabs(){
   const el = document.getElementById("tabs");
-  const tabs = [
-    ...BUSINESSES.map(b => ({ key: b.key, name: b.name, soon: b.status === "soon" })),
-    { key: TOTAL_KEY, name: "Σ Total", soon: false },
-  ];
-  el.innerHTML = tabs.map(t => `
-    <button type="button" role="tab" class="tab ${UI.biz === t.key ? "active" : ""} ${t.soon ? "soon" : ""} ${t.key === TOTAL_KEY ? "total" : ""}"
-      data-key="${t.key}" aria-selected="${UI.biz === t.key}" ${t.soon ? 'aria-disabled="true"' : ""}
-      title="${t.key === TOTAL_KEY ? "Consolidado de todos los negocios" : "Ver solo " + t.name}">
-      ${t.name}${t.soon ? ' <span class="badge">PRÓXIMAMENTE</span>' : ""}
-    </button>`).join("");
+  const orden = [...ORDEN_MENU.filter(k => BUSINESSES.some(b => b.key === k)),
+                 ...BUSINESSES.map(b => b.key).filter(k => !ORDEN_MENU.includes(k))];
+  const tabs = [];
+  for (const key of orden){
+    const b = BUSINESSES.find(x => x.key === key);
+    if (!b) continue;
+    const vs = SUBVISTAS[key];
+    if (vs && b.status === "active"){
+      // un botón por sub-vista, con su color
+      vs.forEach(v => tabs.push({ key, sub: v.key, name: v.label, color: v.color, tip: v.tip, soon: false }));
+    } else {
+      tabs.push({ key, name: b.name, soon: b.status === "soon" });
+    }
+  }
+  tabs.push({ key: TOTAL_KEY, name: "Σ Total", tip: "Consolidado de todos los negocios" });
+
+  const subDe = k => (UI.bizSub || {})[k] || (SUBVISTAS[k] ? SUBVISTAS[k][0].key : null);
+  el.innerHTML = tabs.map(t => {
+    const activo = UI.biz === t.key && (!t.sub || subDe(t.key) === t.sub);
+    return `<button type="button" role="tab" class="tab ${activo ? "active" : ""} ${t.soon ? "soon" : ""} ${t.key === TOTAL_KEY ? "total" : ""}"
+      data-key="${t.key}"${t.sub ? ` data-sub="${t.sub}"` : ""} aria-selected="${activo}" ${t.soon ? 'aria-disabled="true"' : ""}
+      title="${t.tip || (t.key === TOTAL_KEY ? "Consolidado de todos los negocios" : "Ver " + t.name)}">
+      ${t.color ? `<span class="dot" style="background:${t.color}" aria-hidden="true"></span>` : ""}${t.name}${t.soon ? ' <span class="badge">PRÓXIMAMENTE</span>' : ""}
+    </button>`;
+  }).join("");
   el.querySelectorAll(".tab").forEach(tab => {
     tab.onclick = () => {
-      UI.biz = tab.dataset.key;
-      if (["a","b","nop","conv"].includes(UI.filter.mode) ) UI.filter = { mode: "todos", sel: null };
-      const bz = BUSINESSES.find(b => b.key === UI.biz);
-      if (bz && bz.status === "active") cfgBizKey = UI.biz;   // ⚙️ Config abre en este negocio
+      const k = tab.dataset.key, sub = tab.dataset.sub;
+      const cambiaNegocio = UI.biz !== k;
+      UI.biz = k;
+      if (sub) UI.bizSub = { ...(UI.bizSub || {}), [k]: sub };
+      if (cambiaNegocio || sub){
+        // un filtro de grupo puede no aplicar a la vista nueva
+        if (["a", "b", "nop", "conv"].includes(UI.filter.mode)) UI.filter = { mode: "todos", sel: null };
+      }
+      const bz = BUSINESSES.find(b => b.key === k);
+      if (bz && bz.status === "active") cfgBizKey = k;
       saveUI();
-      renderTabs(); renderSubTabs(); renderControls(); render();
+      renderTabs(); renderControls(); render();
     };
   });
 }
 
-function renderSubTabs(){
-  const cont = document.getElementById("subTabs");
-  const vs = subVistas();
-  const bz = BUSINESSES.find(x => x.key === UI.biz);
-  if (!vs || (bz && bz.status === "soon")){ cont.style.display = "none"; cont.innerHTML = ""; return; }
-  cont.style.display = "";
-  const act = subActual();
-  const base = quitarExcluidas(DATA[UI.biz] || [], UI.biz);
-  cont.innerHTML = vs.map(v => {
-    const n = v.test ? base.filter(v.test).length : base.length;
-    return `<button type="button" class="${v.key === act.key ? "active" : ""}" data-sub="${v.key}"
-      aria-pressed="${v.key === act.key}" title="${v.tip} · ${fmt0(n)} cargas">
-      <span class="dot" style="background:${v.color}" aria-hidden="true"></span>${v.label}</button>`;
-  }).join("");
-  cont.querySelectorAll("button").forEach(btn => {
-    btn.onclick = () => {
-      UI.bizSub = { ...(UI.bizSub || {}), [UI.biz]: btn.dataset.sub };
-      // un filtro de grupo puede no aplicar a la nueva sub-vista
-      if (["a", "b", "nop", "conv"].includes(UI.filter.mode)) UI.filter = { mode: "todos", sel: null };
-      saveUI(); renderSubTabs(); renderControls(); render();
-    };
-  });
-}
+function renderSubTabs(){ /* las sub-vistas ahora viven en el menú principal */ }
 
 function renderControls(){
   let years = yearsAvailable();
