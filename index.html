@@ -737,6 +737,24 @@
       <div class="chartbox tall"><canvas id="chPartner" aria-label="Toneladas por empresa" role="img"></canvas></div>
       <div class="tablewrap" id="partnerTable" style="margin-top:18px"></div>
     </div>
+    <div class="card wide" id="pipeCard" style="display:none">
+      <h2>Programación de embarques <span id="lblPipeN" class="clickable"></span></h2>
+      <p class="csub">Lee las columnas de mes de la hoja de contratos abiertos. Compara lo <b>programado</b> con lo que realmente salió según <b>ETD</b>, mes por mes.</p>
+      <div class="consbar">
+        <div class="seg" id="pipeSeg" role="group" aria-label="Vista de la programación">
+          <button type="button" data-pv="cruce">Programado vs embarcado</button>
+          <button type="button" data-pv="cliente">Pipeline por cliente</button>
+          <button type="button" data-pv="contrato">Detalle por contrato</button>
+        </div>
+        <label class="switch" id="swPipeWrap" for="swPipePasado" title="Mostrar u ocultar los meses que ya pasaron">
+          <input type="checkbox" id="swPipePasado">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          <span class="swtext">Ver meses pasados</span>
+        </label>
+      </div>
+      <div class="chartbox tall"><canvas id="chPipe" aria-label="Programación de embarques" role="img"></canvas></div>
+      <div class="tablewrap" id="pipeTable" style="margin-top:18px"></div>
+    </div>
     <div class="card wide" id="contractsCard" style="display:none">
       <h2>Contratos <span id="lblContractsN" class="clickable"></span></h2>
       <p class="csub">Lee la pestaña de contratos de la planilla y agrupa por la <b>Fecha del contrato</b>. Independiente de los embarques de arriba.</p>
@@ -845,6 +863,8 @@
         <div><label for="cfgContractsSheet">Pestaña de contratos <span style="color:var(--faint);font-weight:400">— opcional</span></label><input id="cfgContractsSheet" placeholder="ALL CONTRATOS"></div>
         <div><label for="cfgContractsGid">GID de esa pestaña</label><input id="cfgContractsGid" placeholder="0"></div>
       </div>
+      <label for="cfgOpenSheet">Pestaña de contratos abiertos <span style="color:var(--faint);font-weight:400">— la de la programación mes a mes</span></label>
+      <input id="cfgOpenSheet" placeholder="Contratos Abiertos">
       <label for="cfgDecimal">Separador decimal de la planilla</label>
       <select id="cfgDecimal">
         <option value="auto">Detectar automáticamente</option>
@@ -926,6 +946,7 @@ const SHEET_DEFAULTS = {
   EXCLUDE_EXPORTERS: "",                           // exportadores que no se cuentan (separados por coma)
   CONTRACTS_SHEET: "ALL CONTRATOS",                // pestaña de contratos (Brokerage)
   CONTRACTS_GID: "",
+  OPEN_SHEET: "Contratos Abiertos",                // pestaña con la programación mes a mes
   USD_COL: "TOTAL FINAL",                          // encabezado de la columna de facturación
   COMISION: { mode: "suma", col: "Monto LT" },     // "suma" o "porTon" (comisión × Tns)
   /* Encabezados de las columnas que usa el dashboard. Editables por negocio
@@ -1003,6 +1024,8 @@ function loadUI(){
   if (!ui.bizSub || typeof ui.bizSub !== "object") ui.bizSub = {};
   if (typeof ui.verExcluidos !== "boolean") ui.verExcluidos = false;
   if (!["ambos", "oil", "exp"].includes(ui.oxClientes)) ui.oxClientes = "ambos";
+  if (!["cruce", "cliente", "contrato"].includes(ui.pipeView)) ui.pipeView = "cruce";
+  if (typeof ui.pipePasado !== "boolean") ui.pipePasado = false;
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -1451,6 +1474,7 @@ function yearColor(year, orderedYears){
 
 let DATA = {};        // bizKey -> records
 let CONTRACTS = {};   // bizKey -> contratos
+let OPEN = {};        // bizKey -> programación mes a mes
 let charts = {};
 let demoMode = false;
 
@@ -1559,9 +1583,9 @@ function readCache(){
     return c;
   } catch(e){ return null; }
 }
-function writeCache(data, srcInfo, contracts){
+function writeCache(data, srcInfo, contracts, open){
   try {
-    const payload = JSON.stringify({ ts: Date.now(), biz: data, src: srcInfo, contratos: contracts || {} });
+    const payload = JSON.stringify({ ts: Date.now(), biz: data, src: srcInfo, contratos: contracts || {}, abiertos: open || {} });
     if (payload.length < 3_000_000) localStorage.setItem(CACHE_KEY, payload);
   } catch(e){ /* sin espacio: seguimos sin caché */ }
 }
@@ -1577,7 +1601,7 @@ async function loadData(){
   const status = document.getElementById("statusLine");
   const banner = document.getElementById("banner");
   banner.style.display = "none";
-  DATA = {}; CONTRACTS = {}; demoMode = false;
+  DATA = {}; CONTRACTS = {}; OPEN = {}; demoMode = false;
   const active = BUSINESSES.filter(b => b.status === "active");
   const configured = active.filter(b => CONFIG[b.key].SHEET_ID);
   if (!configured.length){
@@ -1598,7 +1622,10 @@ async function loadData(){
       const r = await fetchBiz(b.key);
       DATA[b.key] = r.recs;
       srcInfo[b.key] = r.src;
-      if (b.contractViews){ try { CONTRACTS[b.key] = await fetchContracts(b.key); } catch(e){ CONTRACTS[b.key] = []; } }
+      if (b.contractViews){
+        try { CONTRACTS[b.key] = await fetchContracts(b.key); } catch(e){ CONTRACTS[b.key] = []; }
+        try { OPEN[b.key] = await fetchOpenContracts(b.key); } catch(e){ OPEN[b.key] = null; }
+      }
     }
     catch(e){ errors.push(`<b>${b.name}:</b> ${e.message}`); }
   }));
@@ -1607,7 +1634,7 @@ async function loadData(){
     banner.className = "banner err";
     banner.innerHTML = "<span>❌</span><span><b>No se pudo cargar una planilla.</b><br>" + errors.join("<br>") + "</span>";
   }
-  writeCache(DATA, srcInfo, CONTRACTS);
+  writeCache(DATA, srcInfo, CONTRACTS, OPEN);
   const parts = configured
     .filter(b => DATA[b.key])
     .map(b => {
@@ -1897,6 +1924,85 @@ function buildContracts(rows, cfg){
     });
   }
   return out;
+}
+
+/* Interpreta encabezados de mes tipo "ago-26", "sept-26", "ene-27", "Ago 2026" */
+const MESES_ABREV = { ene:1, en:1, feb:2, mar:3, abr:4, may:5, jun:6, jul:7, ago:8, ags:8, sep:9, sept:9, set:9, oct:10, nov:11, dic:12 };
+function parseMesEncabezado(h){
+  const t = normHeader(h).replace(/[.\s]+/g, "");
+  const m = t.match(/^([a-z]{2,4})[-\/]?(\d{2,4})$/);
+  if (!m) return null;
+  const mo = MESES_ABREV[m[1]];
+  if (!mo) return null;
+  let y = parseInt(m[2], 10);
+  if (y < 100) y += 2000;
+  if (y < 2000 || y > 2100) return null;
+  return { y, mo };
+}
+
+/* Contratos abiertos: identidad + la matriz de toneladas por mes */
+function buildOpenContracts(rows, cfg){
+  // fila de encabezados: la que tenga más columnas de mes reconocibles
+  let hIdx = -1, best = 0;
+  for (let i = 0; i < Math.min(rows.length, 12); i++){
+    const n = (rows[i] || []).filter(c => parseMesEncabezado(c)).length;
+    if (n > best){ best = n; hIdx = i; }
+  }
+  if (hIdx < 0 || best < 2) return null;
+  const head = rows[hIdx];
+  const hmap = headerMap(head);
+  const col = n => { const i = findInMap(n, hmap); return i === undefined ? -1 : i; };
+  const C = {
+    contrato: col(CONTRACT_COLS.contrato), exportador: col(CONTRACT_COLS.exportador),
+    importador: col(CONTRACT_COLS.importador), producto: col(CONTRACT_COLS.producto),
+    toneladas: col(CONTRACT_COLS.toneladas), saldo: col(CONTRACT_COLS.saldo),
+    prompt: col("Prompt"),
+  };
+  const meses = [];
+  head.forEach((h, i) => { const m = parseMesEncabezado(h); if (m) meses.push({ ...m, col: i, label: `${MESES[m.mo - 1]} ${String(m.y).slice(2)}` }); });
+  meses.sort((a, b) => (a.y - b.y) || (a.mo - b.mo));
+  const body = rows.slice(hIdx + 1);
+  const forced = cfg.DECIMAL && cfg.DECIMAL !== "auto" ? cfg.DECIMAL : null;
+  const sepM = forced || detectDecimalSep(meses.flatMap(m => body.map(r => r && r[m.col])));
+  const sepT = forced || detectDecimalSep(body.map(r => r && r[C.toneladas]));
+  const txt = (r, i) => i < 0 ? "" : String(r[i] ?? "").trim();
+  const filas = [];
+  for (const r of body){
+    if (!r) continue;
+    const porMes = meses.map(m => parseNumber(r[m.col], sepM));
+    const contrato = txt(r, C.contrato);
+    const prog = porMes.reduce((a, v) => a + v, 0);
+    if (!contrato && !prog) continue;
+    filas.push({
+      contrato: contrato || "(sin número)",
+      exportador: txt(r, C.exportador) || "(sin dato)",
+      importador: txt(r, C.importador) || "(sin dato)",
+      producto: txt(r, C.producto),
+      prompt: txt(r, C.prompt),
+      toneladas: C.toneladas >= 0 ? parseNumber(r[C.toneladas], sepT) : 0,
+      saldo: C.saldo >= 0 ? parseNumber(r[C.saldo], sepT) : 0,
+      porMes, programado: prog,
+    });
+  }
+  return { meses, filas };
+}
+
+async function fetchOpenContracts(key){
+  const cfg = CONFIG[key];
+  if (!cfg.SHEET_ID || !cfg.OPEN_SHEET) return null;
+  const base = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}`;
+  const sq = encodeURIComponent(cfg.OPEN_SHEET);
+  for (const a of [
+    { url: `${base}/gviz/tq?tqx=out:json&sheet=${sq}&headers=1&t=${Date.now()}`, parse: gvizJsonToRows },
+    { url: `${base}/gviz/tq?tqx=out:csv&sheet=${sq}&headers=1&t=${Date.now()}`, parse: parseCSV },
+    { url: `${base}/gviz/tq?tqx=out:csv&sheet=${sq}&headers=0&t=${Date.now()}`, parse: parseCSV },
+  ]){
+    try {
+      const r = buildOpenContracts(a.parse(await fetchCsvText(a.url)), cfg);
+      if (r && r.filas.length) return r;
+    } catch(e){ /* siguiente */ }
+  }
+  return null;
 }
 
 async function fetchContracts(key){
@@ -3048,6 +3154,193 @@ async function exportarFocusPdf(){
   finally { if (btn){ btn.disabled = false; btn.textContent = orig || "⤓ Exportar a PDF"; } }
 }
 
+/* ============ Programación de embarques (matriz de meses) ============ */
+function renderPipeline(recs){
+  const card = document.getElementById("pipeCard");
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  const O = OPEN[UI.biz];
+  if (!bz || bz.contractViews !== true){
+    card.style.display = "none";
+    if (charts.chPipe){ charts.chPipe.destroy(); delete charts.chPipe; }
+    return;
+  }
+  card.style.display = "";
+  const tabla = document.getElementById("pipeTable");
+  if (!O || !O.meses.length){
+    document.getElementById("lblPipeN").textContent = "";
+    tabla.innerHTML = `<p class="empty">No encontré columnas de mes en la hoja de contratos abiertos.<br>
+      Revisá el nombre de la pestaña en <b>⚙️ Configurar → Pestaña de contratos abiertos</b>
+      (ahora: “${(CONFIG[UI.biz] || {}).OPEN_SHEET || "sin configurar"}”).<br>
+      Los encabezados deben ser tipo <b>ago-26</b>, <b>sept-26</b>, <b>ene-27</b>.</p>`;
+    if (charts.chPipe){ charts.chPipe.destroy(); delete charts.chPipe; }
+    return;
+  }
+  const vista = UI.pipeView;
+  document.querySelectorAll("#pipeSeg button").forEach(btn => {
+    const on = btn.dataset.pv === vista;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.onclick = () => { UI.pipeView = btn.dataset.pv; saveUI(); render(); };
+  });
+
+  const hoy = new Date(), hoyKey = hoy.getFullYear() * 12 + hoy.getMonth();
+  const esPasado = m => (m.y * 12 + (m.mo - 1)) < hoyKey;
+
+  // por defecto solo se muestran el mes en curso y los futuros
+  const sw = document.getElementById("swPipePasado");
+  const nPasados = O.meses.filter(esPasado).length;
+  if (sw){
+    sw.checked = !!UI.pipePasado;
+    sw.onchange = () => { UI.pipePasado = !!sw.checked; saveUI(); render(); };
+    const wrap = document.getElementById("swPipeWrap");
+    if (wrap) wrap.style.display = nPasados ? "" : "none";
+  }
+  const idxVis = O.meses.map((m, i) => i).filter(i => UI.pipePasado || !esPasado(O.meses[i]));
+  const mesesVis = idxVis.map(i => O.meses[i]);
+  if (!mesesVis.length){
+    document.getElementById("lblPipeN").textContent = "";
+    tabla.innerHTML = `<p class="empty">Todas las columnas de mes de la planilla ya pasaron.<br>Activá <b>Ver meses pasados</b> o agregá columnas de los meses que vienen.</p>`;
+    if (charts.chPipe){ charts.chPipe.destroy(); delete charts.chPipe; }
+    return;
+  }
+
+  const labels = mesesVis.map(m => m.label);
+  const progPorMes = idxVis.map(i => O.filas.reduce((s2, f) => s2 + (f.porMes[i] || 0), 0));
+  const totalProg = progPorMes.reduce((a, v) => a + v, 0);
+  // lo realmente embarcado en esos mismos meses (por ETD)
+  const realPorMes = mesesVis.map(m => recs.filter(r => r.etd && r.etd.y === m.y && r.etd.mo === m.mo)
+    .reduce((s2, r) => s2 + r.tns, 0));
+  const pasado = mesesVis.map(esPasado);
+
+  /* Columnas que ya se pueden borrar de la planilla: mes pasado y sin nada pendiente */
+  const borrables = O.meses.filter((m, i) => {
+    if (!esPasado(m)) return false;
+    const prog = O.filas.reduce((s2, f) => s2 + (f.porMes[i] || 0), 0);
+    if (!prog) return true;                     // vacía y pasada
+    const real = recs.filter(r => r.etd && r.etd.y === m.y && r.etd.mo === m.mo).reduce((s2, r) => s2 + r.tns, 0);
+    return real >= prog * 0.999;               // pasada y cumplida
+  });
+  document.getElementById("lblPipeN").textContent =
+    `${fmt0(O.filas.length)} contratos · ${fmt1(totalProg)} t programadas` +
+    (nPasados && !UI.pipePasado ? ` · ${fmt0(nPasados)} mes(es) pasados ocultos` : "");
+
+  if (charts.chPipe) charts.chPipe.destroy();
+
+  if (vista === "cruce"){
+    charts.chPipe = new Chart(document.getElementById("chPipe"), {
+      type: "bar",
+      data: { labels, datasets: [
+        { label: "Programado", data: progPorMes, backgroundColor: "#0071e3", borderRadius: 5, borderSkipped: false, maxBarThickness: 34 },
+        { label: "Embarcado (ETD)", data: realPorMes, backgroundColor: "#34c759", borderRadius: 5, borderSkipped: false, maxBarThickness: 34 },
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
+          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t` } } },
+        scales: { x: { ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                  y: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
+                       title: { display: true, text: "Tns", color: cssVar("--tick") } } },
+      },
+    });
+    let h = `<table><tr><th>Mes</th><th>Programado</th><th>Embarcado</th><th>Diferencia</th><th>Cumplimiento</th><th>Estado</th></tr>`;
+    O.meses.forEach((m, i) => {
+      const p = progPorMes[i], r = realPorMes[i], d = r - p;
+      const cum = p ? r / p * 100 : null;
+      const atrasado = pasado[i] && p > 0 && r < p * 0.999;
+      h += `<tr><td>${m.label}</td><td>${p ? fmt1(p) : ""}</td><td>${r ? fmt1(r) : ""}</td>
+        <td class="delta ${d >= 0 ? "up" : "down"}">${p || r ? (d >= 0 ? "+" : "") + fmt1(d) : ""}</td>
+        <td>${cum === null ? "—" : `<b style="color:${cum >= 99.9 ? "var(--green)" : atrasado ? "var(--red)" : "var(--amber)"}">${cum.toFixed(0)}%</b>`}</td>
+        <td>${!p ? "" : atrasado ? `<span style="color:var(--red)">atrasado</span>`
+             : pasado[i] ? `<span style="color:var(--green)">cumplido</span>`
+             : `<span style="color:var(--faint)">a futuro</span>`}</td></tr>`;
+    });
+    const tr = realPorMes.reduce((a, v) => a + v, 0);
+    h += `<tr class="total"><td>Total</td><td>${fmt1(totalProg)}</td><td>${fmt1(tr)}</td>
+      <td class="delta ${tr - totalProg >= 0 ? "up" : "down"}">${tr - totalProg >= 0 ? "+" : ""}${fmt1(tr - totalProg)}</td>
+      <td>${totalProg ? (tr / totalProg * 100).toFixed(0) + "%" : "—"}</td><td></td></tr></table>`;
+    const atrasadas = O.meses.reduce((n, m, i) => n + (pasado[i] && progPorMes[i] > 0 && realPorMes[i] < progPorMes[i] * 0.999 ? 1 : 0), 0);
+    h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.5">
+      “Embarcado” son las cargas de la hoja de embarques con ETD en ese mes.
+      ${atrasadas ? `<b style="color:var(--red)">${atrasadas} mes(es) ya pasados quedaron por debajo de lo programado.</b>` : "Los meses ya pasados cumplieron lo programado."}
+      ${borrables.length ? `<br>🧹 <b>Ya podés borrar estas columnas de la planilla</b> (mes pasado y sin pendientes): ${borrables.map(m => m.label).join(", ")}. Borrarlas no afecta al dashboard.` : ""}</p>`;
+    tabla.innerHTML = h;
+
+  } else if (vista === "cliente"){
+    const porCli = new Map();
+    for (const f of O.filas){
+      const n = f.importador;
+      if (!porCli.has(n)) porCli.set(n, Array(idxVis.length).fill(0));
+      const arr = porCli.get(n);
+      idxVis.forEach((src, i) => arr[i] += (f.porMes[src] || 0));
+    }
+    const clis = [...porCli.entries()].sort((a, b) =>
+      b[1].reduce((x, y) => x + y, 0) - a[1].reduce((x, y) => x + y, 0));
+    charts.chPipe = new Chart(document.getElementById("chPipe"), {
+      type: "bar",
+      data: { labels, datasets: clis.map(([n, arr], i) => ({
+        label: n, data: arr, backgroundColor: PALETTE[i % PALETTE.length],
+        borderRadius: 4, borderSkipped: false, maxBarThickness: 46, stack: "p" })) },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
+          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t` } } },
+        scales: { x: { stacked: true, ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                  y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
+                       title: { display: true, text: "Tns programadas", color: cssVar("--tick") } } },
+      },
+    });
+    let h = `<table><tr><th>Cliente</th>` + labels.map(l => `<th>${l}</th>`).join("") + `<th>Total</th></tr>`;
+    for (const [n, arr] of clis){
+      const t = arr.reduce((a, v) => a + v, 0);
+      h += `<tr><td>${n}</td>` + arr.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td><b>${fmt1(t)}</b></td></tr>`;
+    }
+    h += `<tr class="total"><td>Total</td>` + progPorMes.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") +
+         `<td>${fmt1(totalProg)}</td></tr></table>`;
+    if (borrables.length) h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px">🧹 Columnas que ya podés borrar de la planilla: ${borrables.map(m => m.label).join(", ")}.</p>`;
+    tabla.innerHTML = h;
+
+  } else {
+    charts.chPipe = new Chart(document.getElementById("chPipe"), {
+      type: "bar",
+      data: { labels, datasets: [
+        { label: "Programado", data: progPorMes, backgroundColor: "#0071e3", borderRadius: 5, borderSkipped: false, maxBarThickness: 46 },
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: c => ` ${fmt1(c.parsed.y)} t programadas` } } },
+        scales: { x: { ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                  y: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
+                       title: { display: true, text: "Tns", color: cssVar("--tick") } } },
+      },
+    });
+    const ordenadas = [...O.filas].sort((a, b) => b.programado - a.programado);
+    let h = `<table><tr><th>Contrato</th><th>Cliente</th><th>Producto</th><th>Prompt</th>` +
+      labels.map(l => `<th>${l}</th>`).join("") + `<th>Programado</th>${O.filas.some(f => f.toneladas) ? "<th>Contratado</th><th>Sin programar</th>" : ""}</tr>`;
+    for (const f of ordenadas){
+      const resto = f.toneladas ? f.toneladas - f.programado : null;
+      h += `<tr><td>${f.contrato}</td><td>${f.importador}</td><td>${f.producto || "—"}</td><td>${f.prompt || "—"}</td>` +
+        idxVis.map(i2 => { const v = f.porMes[i2]; return `<td>${v ? fmt1(v) : ""}</td>`; }).join("") +
+        `<td><b>${fmt1(f.programado)}</b></td>` +
+        (O.filas.some(x => x.toneladas)
+          ? `<td>${f.toneladas ? fmt1(f.toneladas) : "—"}</td>
+             <td>${resto === null ? "—" : `<b style="color:${Math.abs(resto) < 0.01 ? "var(--green)" : resto > 0 ? "var(--amber)" : "var(--red)"}">${fmt1(resto)}</b>`}</td>`
+          : "") + `</tr>`;
+    }
+    h += `<tr class="total"><td>Total</td><td></td><td></td><td></td>` +
+      progPorMes.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td>${fmt1(totalProg)}</td>` +
+      (O.filas.some(x => x.toneladas)
+        ? `<td>${fmt1(O.filas.reduce((a, f) => a + f.toneladas, 0))}</td><td>${fmt1(O.filas.reduce((a, f) => a + (f.toneladas - f.programado), 0))}</td>`
+        : "") + `</tr></table>`;
+    h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px">“Sin programar” es lo contratado menos lo repartido en los meses${UI.pipePasado ? "" : " (incluye también los meses pasados, aunque no se muestren)"}: en ámbar falta asignar, en rojo hay más programado que contratado.
+      ${borrables.length ? `<br>🧹 Columnas que ya podés borrar: ${borrables.map(m => m.label).join(", ")}.` : ""}</p>`;
+    tabla.innerHTML = h;
+  }
+}
+
 /* PDF de la sección de contratos, con la vista que esté seleccionada */
 async function exportarContractsPdf(){
   const D = LAST_CONTRACTS_PDF;
@@ -3526,7 +3819,7 @@ function renderSecNav(){
   items.push({ id: "prodCard", label: "Productos" });
   if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
   if (bz && bz.partnerViews) items.push({ id: "partnerCard", label: "Exportadores / importadores" });
-  if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" });
+  if (bz && bz.contractViews) items.push({ id: "pipeCard", label: "Programación" }, { id: "contractsCard", label: "Contratos" });
   const visibles = items.filter(it => {
     const el = document.getElementById(it.id);
     return el && el.style.display !== "none";
@@ -3600,7 +3893,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard"].forEach(id => {
+    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -3630,7 +3923,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard"].forEach(id => {
+    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -3729,6 +4022,7 @@ function render(){
   renderOilExp(recs, yA);
   renderFocusExporter(recs);
   renderContracts();
+  renderPipeline(recs);
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
   renderSecNav();
 
@@ -4018,6 +4312,7 @@ function fillConfigForm(){
   document.getElementById("cfgFocusExporter").value = c.FOCUS_EXPORTER || "";
   document.getElementById("cfgContractsSheet").value = c.CONTRACTS_SHEET || "";
   document.getElementById("cfgContractsGid").value = c.CONTRACTS_GID || "";
+  document.getElementById("cfgOpenSheet").value = c.OPEN_SHEET || "";
   document.getElementById("cfgColEtd").value = c.COLS.etd;
   document.getElementById("cfgColTns").value = c.COLS.tns;
   document.getElementById("cfgColProduct").value = c.COLS.product;
@@ -4092,6 +4387,7 @@ document.getElementById("cfgSave").onclick = async () => {
     FOCUS_EXPORTER: txt("cfgFocusExporter"),
     CONTRACTS_SHEET: txt("cfgContractsSheet"),
     CONTRACTS_GID: txt("cfgContractsGid").replace(/\D/g, ""),
+    OPEN_SHEET: txt("cfgOpenSheet"),
     USD_COL: txt("cfgColUsd") || D.USD_COL,
     COMISION: { mode: document.getElementById("cfgComMode").value, col: txt("cfgColCom") || D.COMISION.col },
     COLS: {
@@ -4199,7 +4495,7 @@ async function init(opts){
   const cached = force ? null : readCache();
   const hasConfig = BUSINESSES.some(b => b.status === "active" && CONFIG[b.key].SHEET_ID);
   if (cached && hasConfig && Date.now() - cached.ts < CACHE_MAX_AGE && Object.keys(cached.biz || {}).length){
-    DATA = cached.biz; CONTRACTS = cached.contratos || {}; demoMode = false; paintedFromCache = true;
+    DATA = cached.biz; CONTRACTS = cached.contratos || {}; OPEN = cached.abiertos || {}; demoMode = false; paintedFromCache = true;
     const n = Object.values(DATA).reduce((s, r) => s + r.length, 0);
     document.getElementById("statusLine").innerHTML =
       `⚡ ${fmt0(n)} cargas desde la última lectura (${cacheAgeText(cached.ts)}) · <span style="opacity:.75">actualizando…</span>`;
