@@ -94,6 +94,26 @@
   .tab .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
   .tab .badge{background:var(--tint-amber-bg);color:var(--tint-amber-tx);border:1px solid var(--tint-amber-bd);font-size:.6rem;padding:2px 6px;border-radius:20px;font-weight:600}
 
+  .ctlab{color:var(--faint);font-size:.74rem;font-weight:500;margin-right:-8px}
+  @media(max-width:720px){.ctlab{width:100%;margin:0}}
+
+  /* Resumen de la programación: embarcado + pendiente = total */
+  .pipestats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:720px){.pipestats{grid-template-columns:1fr;gap:8px}}
+  .pstat{background:var(--panel2);border-radius:var(--r-sm);padding:14px 16px;position:relative}
+  .pstat .plabel{color:var(--faint);font-size:.75rem;font-weight:500;display:flex;align-items:center;gap:7px}
+  .pstat .plabel i{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .pstat .pval{font-size:1.4rem;font-weight:600;margin-top:5px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .pstat .phint{color:var(--faint);font-size:.72rem;margin-top:2px}
+  .pstat.suma{background:var(--accent-soft)}
+  .pstat.suma .pval{color:var(--accent)}
+  .pstat.link{cursor:pointer;transition:background .2s var(--ease)}
+  .pstat.link:hover{background:var(--accent);color:#fff}
+  .pstat.link:hover .plabel,.pstat.link:hover .phint,.pstat.link:hover .pval{color:#fff}
+  .pstat .vermas{color:var(--accent);font-weight:600}
+  .pstat .op{position:absolute;left:-9px;top:50%;transform:translateY(-50%);color:var(--faint);font-size:1rem;font-weight:600}
+  @media(max-width:720px){.pstat .op{display:none}}
+
   /* Tres tortas del Total, lado a lado */
   .bizgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
   @media(max-width:820px){.bizgrid{grid-template-columns:1fr;gap:20px}}
@@ -174,6 +194,8 @@
     transition:all .25s var(--ease);display:inline-flex;align-items:center;gap:6px
   }
   .secnav a:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .secnav a.navhi{border-color:var(--border);color:var(--muted)}
+  .secnav a.navhi:hover{border-color:var(--accent);color:var(--accent)}
   .secnav a .num{background:var(--panel2);border-radius:20px;padding:1px 7px;font-size:.7rem;font-weight:600}
   @media(max-width:720px){
     .secnav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:14px}
@@ -230,8 +252,14 @@
     box-shadow:var(--shadow);animation:fadeUp .5s var(--ease) both;
     transition:background .35s var(--ease),border-color .35s var(--ease)
   }
+  .card h2.clickhead{cursor:pointer;user-select:none}
+  .card h2.clickhead:hover{color:var(--accent)}
+  .card h2 .caret{margin-left:auto;color:var(--faint);font-size:.8rem;transition:transform .3s var(--ease);flex:0 0 auto}
+  .card.collapsed h2 .caret{transform:rotate(-90deg)}
+  .card.collapsed .cardbody{display:none}
+  .card.collapsed .csub{display:none}
   .card h2{font-size:1rem;font-weight:600;color:var(--text);display:flex;align-items:center;gap:9px;flex-wrap:wrap;letter-spacing:-.015em}
-  .card .csub{color:var(--faint);font-size:.78rem;margin:4px 0 16px;line-height:1.5;letter-spacing:0}
+  .card .csub{color:var(--faint);font-size:.76rem;margin:4px 0 14px;line-height:1.45;letter-spacing:0;max-width:80ch}
   .card.wide{grid-column:1/-1}
   .chartbox{position:relative;height:280px}
   .chartbox.tall{height:340px}
@@ -597,8 +625,9 @@
       <div class="chartbox"><canvas id="chEtd" aria-label="Gráfico de cantidad de embarques por mes" role="img"></canvas></div>
     </div>
     <div class="card wide" id="oilexpCard" style="display:none">
-      <h2>Aceite y Expeller por separado — <span id="lblOilexpYear"></span></h2>
-      <p class="csub">Estadísticas de cada producto por su cuenta: volumen, facturación, comisión, precio por tonelada y estacionalidad. Según fecha de <b>ETD</b>.</p>
+      <h2 class="clickhead">Aceite y Expeller por separado — <span id="lblOilexpYear"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Cada producto por separado, según <b>ETD</b>.</p>
+      <div class="cardbody">
       <div class="oxgrid" id="oilexpStats"></div>
       <div class="chartbox tall" style="margin-top:18px"><canvas id="chOilexp" aria-label="Aceite y expeller por mes" role="img"></canvas></div>
       <h3 class="subhead">Clientes de aceite y expeller — participación en toneladas</h3>
@@ -614,9 +643,11 @@
       <div class="tablewrap" id="oilexpTable" style="margin-top:18px"></div>
       <div class="tablewrap" id="oilexpYears" style="margin-top:18px"></div>
     </div>
+    </div>
     <div class="card wide" id="focusCard" style="display:none">
-      <h2 id="focusTitle"></h2>
-      <p class="csub">Solo las cargas de este exportador, separando <b>aceite</b> de <b>expeller</b>. Los totales no se mezclan con los de otras empresas que también exportan aceite. Según fecha de <b>ETD</b>.</p>
+      <h2 class="clickhead" id="focusTitle"><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Solo las cargas de este exportador, sin mezclar con otras empresas que también exportan aceite.</p>
+      <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="focusMetric" role="group" aria-label="Métrica">
           <button type="button" data-fm="tns">Toneladas</button>
@@ -628,9 +659,10 @@
       <div class="tablewrap" id="focusTable" style="margin-top:18px"></div>
       <div class="tablewrap" id="focusYears" style="margin-top:18px"></div>
     </div>
+    </div>
     <div class="card wide" id="trendCard">
       <h2>Tendencia histórica mes a mes <span class="clickable">CLICK PARA VER CARGAS</span></h2>
-      <p class="csub">Toda la historia sin cortes por año, cada métrica con su propia escala. No depende del año elegido arriba.</p>
+      <p class="csub">Toda la historia mes a mes, cada métrica con su escala. No depende del año elegido.</p>
       <div class="trendgrid">
         <div class="trendcell">
           <span class="tlabel"><i class="sw" style="background:#0071e3"></i>Toneladas</span>
@@ -647,8 +679,9 @@
       </div>
     </div>
     <div class="card wide" id="bizCard" style="display:none">
-      <h2>Participación de cada negocio — <span id="lblBizYear"></span></h2>
-      <p class="csub">De dónde viene cada parte del total en el año seleccionado: volumen, facturación y comisión, una al lado de la otra. Cada negocio mantiene su color en las tres.</p>
+      <h2 class="clickhead">Participación de cada negocio — <span id="lblBizYear"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Volumen, facturación y comisión del año. Cada negocio mantiene su color en las tres.</p>
+      <div class="cardbody">
       <div class="bizlegend" id="bizLegend"></div>
       <div class="bizgrid">
         <div class="bizcell"><span class="tlabel">Toneladas</span><div class="chartbox sm2"><canvas id="chBizTns" aria-label="Participación en toneladas" role="img"></canvas></div></div>
@@ -656,6 +689,7 @@
         <div class="bizcell"><span class="tlabel">Comisión</span><div class="chartbox sm2"><canvas id="chBizCom" aria-label="Participación en comisión" role="img"></canvas></div></div>
       </div>
       <div class="tablewrap" id="bizTable" style="margin-top:18px"></div>
+    </div>
     </div>
     <div class="card wide" id="prodCard">
       <h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2>
@@ -668,8 +702,9 @@
       <div class="tablewrap" id="prodTable"></div>
     </div>
     <div class="card wide" id="consSection">
-      <h2>Consolidación — producto, mes y destino <span id="lblConsYear" class="clickable">2026</span></h2>
-      <p class="csub">Esta sección usa la fecha de <b>Consolidación</b> (no la de ETD, como el resto del tablero). Respeta el año elegido arriba y el filtro de productos.</p>
+      <h2 class="clickhead">Consolidación — producto, mes y destino <span id="lblConsYear" class="clickable">2026</span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Usa la fecha de <b>Consolidación</b>, no la de ETD.</p>
+      <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="consMetric" role="group" aria-label="Métrica de la sección Consolidación">
           <button type="button" data-cm="tns" title="Ver toneladas">Toneladas</button>
@@ -692,10 +727,12 @@
       <h3 class="subhead">Participación de cada destino</h3>
       <div class="chartbox" id="portChartBox"><canvas id="chPort" aria-label="Toneladas por destino" role="img"></canvas></div>
     </div>
+    </div>
 
     <div class="card wide" id="gruposCard" style="display:none">
-      <h2>Grupos comerciales — <span id="lblGruposYear" class="clickable"></span></h2>
-      <p class="csub">Blancheados separados por región de destino, y pastas y roasted por tipo de packing. Toneladas consolidadas, facturación y cuántos días tarda en cobrarse cada grupo. Usa la fecha de <b>Consolidación</b> y respeta el año, el filtro y el <b>rango de meses</b> elegido arriba.</p>
+      <h2 class="clickhead">Grupos comerciales — <span id="lblGruposYear" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Blancheados por región y pastas/roasted por packing. Usa <b>Consolidación</b> y el rango de meses de arriba.</p>
+      <div class="cardbody">
       <div class="consbar">
         <div class="rangebox">
           <label for="gruposFrom">Meses</label>
@@ -708,10 +745,12 @@
       </div>
       <div class="tablewrap" id="gruposTable"></div>
     </div>
+    </div>
 
     <div class="card wide" id="partnerCard" style="display:none">
-      <h2>Exportadores e importadores <span class="clickable">CLICK EN UNA FILA PARA VER LAS CARGAS</span></h2>
-      <p class="csub">Toneladas por empresa según la fecha de <b>ETD</b>. El año en curso se muestra hasta el mes actual, y a la derecha tenés el histórico de todos los años.</p>
+      <h2 class="clickhead">Exportadores e importadores <span class="clickable">CLICK EN UNA FILA PARA VER LAS CARGAS</span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Toneladas por empresa según <b>ETD</b>. El año en curso llega hasta el mes actual.</p>
+      <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="partnerSeg" role="group" aria-label="Ver exportadores o importadores">
           <button type="button" data-pk="exporter" title="Toneladas exportadas por cada exportador">Exportadores</button>
@@ -737,27 +776,11 @@
       <div class="chartbox tall"><canvas id="chPartner" aria-label="Toneladas por empresa" role="img"></canvas></div>
       <div class="tablewrap" id="partnerTable" style="margin-top:18px"></div>
     </div>
-    <div class="card wide" id="pipeCard" style="display:none">
-      <h2>Programación de embarques <span id="lblPipeN" class="clickable"></span></h2>
-      <p class="csub">Lee las columnas de mes de la hoja de contratos abiertos. Compara lo <b>programado</b> con lo que realmente salió según <b>ETD</b>, mes por mes.</p>
-      <div class="consbar">
-        <div class="seg" id="pipeSeg" role="group" aria-label="Vista de la programación">
-          <button type="button" data-pv="cruce">Programado vs embarcado</button>
-          <button type="button" data-pv="cliente">Pipeline por cliente</button>
-          <button type="button" data-pv="contrato">Detalle por contrato</button>
-        </div>
-        <label class="switch" id="swPipeWrap" for="swPipePasado" title="Mostrar u ocultar los meses que ya pasaron">
-          <input type="checkbox" id="swPipePasado">
-          <span class="track" aria-hidden="true"><span class="knob"></span></span>
-          <span class="swtext">Ver meses pasados</span>
-        </label>
-      </div>
-      <div class="chartbox tall"><canvas id="chPipe" aria-label="Programación de embarques" role="img"></canvas></div>
-      <div class="tablewrap" id="pipeTable" style="margin-top:18px"></div>
     </div>
     <div class="card wide" id="contractsCard" style="display:none">
-      <h2>Contratos <span id="lblContractsN" class="clickable"></span></h2>
-      <p class="csub">Lee la pestaña de contratos de la planilla y agrupa por la <b>Fecha del contrato</b>. Independiente de los embarques de arriba.</p>
+      <h2 class="clickhead">Contratos <span id="lblContractsN" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Agrupado por <b>fecha del contrato</b>. Independiente de los embarques.</p>
+      <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="contractsSeg" role="group" aria-label="Vista de contratos">
           <button type="button" data-cv="exportador">Por exportador</button>
@@ -790,6 +813,34 @@
           </div>
         </div>
       </div>
+    </div>
+    </div>
+    <div class="card wide" id="pipeCard" style="display:none">
+      <h2 class="clickhead">Programación y proyección de embarques <span id="lblPipeN" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Lo ya embarcado (<b>ETD</b>) más lo que queda programado en la hoja de contratos abiertos: cuánto va a ser el total de cada mes.</p>
+      <div class="cardbody">
+      <div class="consbar">
+        <span class="ctlab">Ver</span>
+        <div class="seg" id="pipeSeg" role="group" aria-label="Vista de la programación">
+          <button type="button" data-pv="cruce">Programado vs embarcado</button>
+          <button type="button" data-pv="cliente">Pipeline por cliente</button>
+          <button type="button" data-pv="contrato">Detalle por contrato</button>
+        </div>
+        <span class="ctlab" id="labPipeModo">Gráfico</span>
+        <div class="seg" id="pipeModo" role="group" aria-label="Cómo mostrar el gráfico">
+          <button type="button" data-pm="comparar" title="Ver las dos barras una al lado de la otra">Comparar</button>
+          <button type="button" data-pm="sumar" title="Apilar: lo embarcado más lo que falta embarcar = total del mes">Sumar → total del mes</button>
+        </div>
+        <label class="switch" id="swPipeWrap" for="swPipePasado" title="Mostrar u ocultar los meses que ya pasaron">
+          <input type="checkbox" id="swPipePasado">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          <span class="swtext">Ver meses pasados</span>
+        </label>
+      </div>
+      <div class="pipestats" id="pipeStats"></div>
+      <div class="chartbox tall"><canvas id="chPipe" aria-label="Programación de embarques" role="img"></canvas></div>
+      <div class="tablewrap" id="pipeTable" style="margin-top:18px"></div>
+    </div>
     </div>
     <div class="card wide" id="compareCard">
       <h2>Comparación anual por producto</h2>
@@ -1020,12 +1071,14 @@ function loadUI(){
   if (typeof ui.contractSearch !== "string") ui.contractSearch = "";
   if (!ui.contractSort) ui.contractSort = { by: "total", dir: "desc" };
   if (!Array.isArray(ui.contractYears)) ui.contractYears = [];   // vacío = todos los años
+  if (!Array.isArray(ui.cerradas)) ui.cerradas = [];             // secciones plegadas
   if (ui.focusMetric !== "usd") ui.focusMetric = "tns";
   if (!ui.bizSub || typeof ui.bizSub !== "object") ui.bizSub = {};
   if (typeof ui.verExcluidos !== "boolean") ui.verExcluidos = false;
   if (!["ambos", "oil", "exp"].includes(ui.oxClientes)) ui.oxClientes = "ambos";
   if (!["cruce", "cliente", "contrato"].includes(ui.pipeView)) ui.pipeView = "cruce";
   if (typeof ui.pipePasado !== "boolean") ui.pipePasado = false;
+  if (typeof ui.pipeProy !== "boolean") ui.pipeProy = true;   // arranca en "total del mes"
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
   ui.consTo   = Math.min(12, Math.max(1, parseInt(ui.consTo)   || 12));
@@ -3176,6 +3229,10 @@ function renderPipeline(recs){
     return;
   }
   const vista = UI.pipeView;
+  const bp = document.getElementById("pipeModo"), lbp = document.getElementById("labPipeModo");
+  const verModo = vista === "cruce" ? "" : "none";
+  if (bp) bp.style.display = verModo;
+  if (lbp) lbp.style.display = verModo;
   document.querySelectorAll("#pipeSeg button").forEach(btn => {
     const on = btn.dataset.pv === vista;
     btn.classList.toggle("active", on);
@@ -3227,28 +3284,79 @@ function renderPipeline(recs){
   if (charts.chPipe) charts.chPipe.destroy();
 
   if (vista === "cruce"){
+    const proy = !!UI.pipeProy;
+    document.querySelectorAll("#pipeModo button").forEach(btn => {
+      const on = (btn.dataset.pm === "sumar") === proy;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", String(on));
+      btn.onclick = () => { UI.pipeProy = btn.dataset.pm === "sumar"; saveUI(); render(); };
+    });
+    // en modo proyectado las barras se apilan: embarcado + lo que falta programado = total del mes
+    const pendPorMes = progPorMes.map((p, i) => Math.max(0, p - realPorMes[i]));
+    const totalMes = realPorMes.map((r, i) => r + pendPorMes[i]);
+    // resumen visible siempre: no hay que tocar nada para ver el total (la tarjeta del total lleva al modo apilado)
+    const sEmb = realPorMes.reduce((a, v) => a + v, 0);
+    const sPen = pendPorMes.reduce((a, v) => a + v, 0);
+    document.getElementById("pipeStats").innerHTML =
+      `<div class="pstat"><span class="plabel"><i style="background:#34c759"></i>Ya embarcado</span>
+         <div class="pval">${fmt1(sEmb)} t</div>
+         <div class="phint">cargas con ETD en estos meses</div></div>
+       <div class="pstat"><span class="op">+</span><span class="plabel"><i style="background:#0071e3"></i>Falta embarcar</span>
+         <div class="pval">${fmt1(sPen)} t</div>
+         <div class="phint">programado que todavía no salió</div></div>
+       <div class="pstat suma${proy ? "" : " link"}" id="pstatSuma" ${proy ? "" : 'role="button" tabindex="0" title="Ver el total sumado en el gráfico"'}><span class="op">=</span><span class="plabel">Total del período${proy ? "" : " <span class=\'vermas\'>ver en el gráfico →</span>"}</span>
+         <div class="pval">${fmt1(sEmb + sPen)} t</div>
+         <div class="phint">${UI.pipePasado ? "todos los meses de la planilla" : "del mes en curso en adelante"}</div></div>`;
+    const cSuma = document.getElementById("pstatSuma");
+    if (cSuma && !proy){
+      const ir = () => { UI.pipeProy = true; saveUI(); render(); };
+      cSuma.onclick = ir;
+      cSuma.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); ir(); } };
+    }
+    const datasets = proy
+      ? [{ label: "Embarcado (ETD)", data: realPorMes, backgroundColor: "#34c759", borderRadius: 4, borderSkipped: false, maxBarThickness: 44, stack: "t" },
+         { label: "Programado pendiente", data: pendPorMes, backgroundColor: "#0071e3", borderRadius: 4, borderSkipped: false, maxBarThickness: 44, stack: "t" }]
+      : [{ label: "Programado", data: progPorMes, backgroundColor: "#0071e3", borderRadius: 5, borderSkipped: false, maxBarThickness: 34 },
+         { label: "Embarcado (ETD)", data: realPorMes, backgroundColor: "#34c759", borderRadius: 5, borderSkipped: false, maxBarThickness: 34 }];
+    // en modo proyectado se escribe el total arriba de cada barra
+    const totPlugin = {
+      id: "totProy",
+      afterDatasetsDraw(chart){
+        if (!proy) return;
+        const { ctx } = chart;
+        const meta = chart.getDatasetMeta(1);
+        ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        ctx.font = "700 11px -apple-system, 'Segoe UI', system-ui, sans-serif";
+        ctx.fillStyle = cssVar("--text");
+        meta.data.forEach((bar, i) => { if (totalMes[i]) ctx.fillText(fmt1(totalMes[i]), bar.x, bar.y - 4); });
+        ctx.restore();
+      },
+    };
     charts.chPipe = new Chart(document.getElementById("chPipe"), {
       type: "bar",
-      data: { labels, datasets: [
-        { label: "Programado", data: progPorMes, backgroundColor: "#0071e3", borderRadius: 5, borderSkipped: false, maxBarThickness: 34 },
-        { label: "Embarcado (ETD)", data: realPorMes, backgroundColor: "#34c759", borderRadius: 5, borderSkipped: false, maxBarThickness: 34 },
-      ]},
+      data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        layout: { padding: { top: proy ? 18 : 0 } },
         plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
-          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t` } } },
-        scales: { x: { ticks: { color: cssVar("--tick") }, grid: { display: false } },
-                  y: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
+          tooltip: { callbacks: {
+            label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t`,
+            footer: items => proy && items.length ? `Total del mes: ${fmt1(totalMes[items[0].dataIndex])} t` : "" } } },
+        scales: { x: { stacked: proy, ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                  y: { stacked: proy, beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") },
                        title: { display: true, text: "Tns", color: cssVar("--tick") } } },
       },
+      plugins: [totPlugin],
     });
-    let h = `<table><tr><th>Mes</th><th>Programado</th><th>Embarcado</th><th>Diferencia</th><th>Cumplimiento</th><th>Estado</th></tr>`;
-    O.meses.forEach((m, i) => {
+    let h = `<table><tr><th>Mes</th><th>Programado</th><th>Embarcado</th><th>Total proyectado</th><th>Diferencia</th><th>Cumplimiento</th><th>Estado</th></tr>`;
+    mesesVis.forEach((m, i) => {
       const p = progPorMes[i], r = realPorMes[i], d = r - p;
       const cum = p ? r / p * 100 : null;
       const atrasado = pasado[i] && p > 0 && r < p * 0.999;
+      const tot = r + Math.max(0, p - r);
       h += `<tr><td>${m.label}</td><td>${p ? fmt1(p) : ""}</td><td>${r ? fmt1(r) : ""}</td>
+        <td><b>${tot ? fmt1(tot) : ""}</b></td>
         <td class="delta ${d >= 0 ? "up" : "down"}">${p || r ? (d >= 0 ? "+" : "") + fmt1(d) : ""}</td>
         <td>${cum === null ? "—" : `<b style="color:${cum >= 99.9 ? "var(--green)" : atrasado ? "var(--red)" : "var(--amber)"}">${cum.toFixed(0)}%</b>`}</td>
         <td>${!p ? "" : atrasado ? `<span style="color:var(--red)">atrasado</span>`
@@ -3256,17 +3364,20 @@ function renderPipeline(recs){
              : `<span style="color:var(--faint)">a futuro</span>`}</td></tr>`;
     });
     const tr = realPorMes.reduce((a, v) => a + v, 0);
+    const tProy = realPorMes.reduce((a, r2, i2) => a + r2 + Math.max(0, progPorMes[i2] - r2), 0);
     h += `<tr class="total"><td>Total</td><td>${fmt1(totalProg)}</td><td>${fmt1(tr)}</td>
+      <td>${fmt1(tProy)}</td>
       <td class="delta ${tr - totalProg >= 0 ? "up" : "down"}">${tr - totalProg >= 0 ? "+" : ""}${fmt1(tr - totalProg)}</td>
       <td>${totalProg ? (tr / totalProg * 100).toFixed(0) + "%" : "—"}</td><td></td></tr></table>`;
     const atrasadas = O.meses.reduce((n, m, i) => n + (pasado[i] && progPorMes[i] > 0 && realPorMes[i] < progPorMes[i] * 0.999 ? 1 : 0), 0);
     h += `<p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.5">
-      “Embarcado” son las cargas de la hoja de embarques con ETD en ese mes.
+      “Embarcado” son las cargas con ETD en ese mes; “Total proyectado” suma lo embarcado más lo que queda programado.
       ${atrasadas ? `<b style="color:var(--red)">${atrasadas} mes(es) ya pasados quedaron por debajo de lo programado.</b>` : "Los meses ya pasados cumplieron lo programado."}
       ${borrables.length ? `<br>🧹 <b>Ya podés borrar estas columnas de la planilla</b> (mes pasado y sin pendientes): ${borrables.map(m => m.label).join(", ")}. Borrarlas no afecta al dashboard.` : ""}</p>`;
     tabla.innerHTML = h;
 
   } else if (vista === "cliente"){
+    document.getElementById("pipeStats").innerHTML = "";
     const porCli = new Map();
     for (const f of O.filas){
       const n = f.importador;
@@ -3302,6 +3413,7 @@ function renderPipeline(recs){
     tabla.innerHTML = h;
 
   } else {
+    document.getElementById("pipeStats").innerHTML = "";
     charts.chPipe = new Chart(document.getElementById("chPipe"), {
       type: "bar",
       data: { labels, datasets: [
@@ -3803,6 +3915,35 @@ function renderProductCompare(a, b, yA, yB){
   el.innerHTML = html;
 }
 
+/* Secciones que se pueden plegar para despejar la pantalla */
+const PLEGABLES = ["oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
+function aplicarPlegado(){
+  const cerradas = new Set(UI.cerradas || []);
+  for (const id of PLEGABLES){
+    const card = document.getElementById(id);
+    if (!card) continue;
+    const h2 = card.querySelector ? card.querySelector("h2") : null;
+    card.classList.toggle("collapsed", cerradas.has(id));
+    if (h2){
+      h2.setAttribute("role", "button");
+      h2.setAttribute("tabindex", "0");
+      h2.setAttribute("aria-expanded", String(!cerradas.has(id)));
+      const toggle = () => {
+        const set = new Set(UI.cerradas || []);
+        set.has(id) ? set.delete(id) : set.add(id);
+        UI.cerradas = [...set];
+        saveUI();
+        card.classList.toggle("collapsed", set.has(id));
+        h2.setAttribute("aria-expanded", String(!set.has(id)));
+        // los gráficos necesitan recalcular tamaño al reaparecer
+        setTimeout(() => Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} }), 60);
+      };
+      h2.onclick = toggle;
+      h2.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); } };
+    }
+  }
+}
+
 /* Accesos directos: solo a las secciones que existen en la pestaña actual */
 function renderSecNav(){
   const nav = document.getElementById("secNav");
@@ -3819,19 +3960,24 @@ function renderSecNav(){
   items.push({ id: "prodCard", label: "Productos" });
   if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
   if (bz && bz.partnerViews) items.push({ id: "partnerCard", label: "Exportadores / importadores" });
-  if (bz && bz.contractViews) items.push({ id: "pipeCard", label: "Programación" }, { id: "contractsCard", label: "Contratos" });
+  if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" }, { id: "pipeCard", label: "Programación" });
   const visibles = items.filter(it => {
     const el = document.getElementById(it.id);
     return el && el.style.display !== "none";
   });
   if (visibles.length < 3){ nav.innerHTML = ""; return; }
   nav.innerHTML = `<span class="navlabel">Ir a</span>` + visibles.map(it =>
-    `<a href="#${it.id}" data-go="${it.id}"${it.destacado ? ' style="border-color:var(--accent);color:var(--accent)"' : ""}>${it.label}</a>`).join("");
+    `<a href="#${it.id}" data-go="${it.id}" class="${it.destacado ? "navhi" : ""}">${it.label}</a>`).join("");
   nav.querySelectorAll("a").forEach(a => {
     a.onclick = e => {
       e.preventDefault();
       const el = document.getElementById(a.dataset.go);
       if (!el) return;
+      if (el.classList && el.classList.contains("collapsed")){
+        UI.cerradas = (UI.cerradas || []).filter(x => x !== a.dataset.go);
+        saveUI(); aplicarPlegado();
+        setTimeout(() => Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} }), 60);
+      }
       if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
       el.classList.add("justjumped");
       setTimeout(() => el.classList.remove("justjumped"), 1200);
@@ -4024,6 +4170,7 @@ function render(){
   renderContracts();
   renderPipeline(recs);
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
+  aplicarPlegado();
   renderSecNav();
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
