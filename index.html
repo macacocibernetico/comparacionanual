@@ -460,8 +460,8 @@
   .trendcell .tlabel{display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
   .trendcell .sw{width:10px;height:10px;border-radius:50%;display:inline-block}
   .chartbox.sm{height:150px}
-  .chartbox.md{height:210px}
-  @media(max-width:720px){ .chartbox.md{height:170px} }
+  .chartbox.md{height:320px}
+  @media(max-width:720px){ .chartbox.md{height:220px} }
   @media(max-width:720px){ .chartbox.sm{height:128px} .trendgrid{gap:14px} }
 
   /* Encabezado y área que solo se usan al imprimir */
@@ -664,7 +664,7 @@
     </div>
     <div class="card wide" id="rollCard">
       <h2 class="clickhead">Tendencia · últimos 12 meses móviles <span id="lblRoll" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Cada punto suma ese mes y los 11 anteriores (por ETD). Toda la historia, no depende del año elegido.</p>
+      <p class="csub">Cada punto suma ese mes y los 11 anteriores (por ETD), hasta el mes en curso. No depende del año elegido.</p>
       <div class="cardbody">
       <div class="consbar" id="rollBar" style="display:none">
         <label class="switch" for="swRollBiz" title="Agregar una línea por negocio">
@@ -1909,7 +1909,9 @@ function serieRolling(R, min, max){
   }
   return out;
 }
-function renderRolling(recs){
+function renderRolling(recsIn){
+  const hoy = new Date(), hoyK = hoy.getFullYear() * 12 + hoy.getMonth();
+  const recs = recsIn.filter(r => r.year && r.month && (r.year * 12 + r.month - 1) <= hoyK);
   const IDS = ["chRollTns", "chRollUsd", "chRollCom", "chRollPx", "chRollPct"];
   IDS.forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
   const R = rolling12(recs);
@@ -1931,7 +1933,7 @@ function renderRolling(recs){
   bar.style.display = esTotal ? "" : "none";
   const sw = document.getElementById("swRollBiz");
   sw.checked = !!UI.rollBiz;
-  sw.onchange = () => { UI.rollBiz = !!sw.checked; saveUI(); renderRolling(recs); };
+  sw.onchange = () => { UI.rollBiz = !!sw.checked; saveUI(); renderRolling(recsIn); };
   let partes = [];
   if (esTotal && UI.rollBiz){
     const nombres = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
@@ -1958,10 +1960,10 @@ function renderRolling(recs){
     const ds = [{
       label: esTotal ? "Total" : "12 meses", data: tot[key], borderColor: partes.length ? cssVar("--text") : color,
       backgroundColor: color + "1a", fill: !partes.length, borderWidth: partes.length ? 2.6 : 2.2,
-      tension: .3, pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 12, spanGaps: false,
+      tension: 0, pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 12, spanGaps: false,
     }];
     partes.forEach(p => ds.push({ label: p.name, data: p.s[key], borderColor: p.color, backgroundColor: p.color,
-      borderWidth: 1.4, tension: .3, pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 10, fill: false }));
+      borderWidth: 1.4, tension: 0, pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 10, fill: false }));
     charts[id] = new Chart(document.getElementById(id), {
       type: "line", data: { labels, datasets: ds },
       options: {
