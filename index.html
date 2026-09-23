@@ -460,6 +460,8 @@
   .trendcell .tlabel{display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
   .trendcell .sw{width:10px;height:10px;border-radius:50%;display:inline-block}
   .chartbox.sm{height:150px}
+  .chartbox.md{height:210px}
+  @media(max-width:720px){ .chartbox.md{height:170px} }
   @media(max-width:720px){ .chartbox.sm{height:128px} .trendgrid{gap:14px} }
 
   /* Encabezado y área que solo se usan al imprimir */
@@ -660,22 +662,25 @@
       <div class="tablewrap" id="focusYears" style="margin-top:18px"></div>
     </div>
     </div>
-    <div class="card wide" id="trendCard">
-      <h2>Tendencia histórica mes a mes <span class="clickable">CLICK PARA VER CARGAS</span></h2>
-      <p class="csub">Toda la historia mes a mes, cada métrica con su escala. No depende del año elegido.</p>
+    <div class="card wide" id="rollCard">
+      <h2 class="clickhead">Tendencia · últimos 12 meses móviles <span id="lblRoll" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Cada punto suma ese mes y los 11 anteriores (por ETD). Toda la historia, no depende del año elegido.</p>
+      <div class="cardbody">
+      <div class="consbar" id="rollBar" style="display:none">
+        <label class="switch" for="swRollBiz" title="Agregar una línea por negocio">
+          <input type="checkbox" id="swRollBiz">
+          <span class="track" aria-hidden="true"><span class="knob"></span></span>
+          <span class="swtext">Ver por negocio</span>
+        </label>
+        <div class="bizlegend" id="rollLegend" style="margin:0"></div>
+      </div>
       <div class="trendgrid">
-        <div class="trendcell">
-          <span class="tlabel"><i class="sw" style="background:#0071e3"></i>Toneladas</span>
-          <div class="chartbox sm"><canvas id="chTrendTns" aria-label="Tendencia de toneladas" role="img"></canvas></div>
-        </div>
-        <div class="trendcell">
-          <span class="tlabel"><i class="sw" style="background:#34c759"></i>Facturación USD</span>
-          <div class="chartbox sm"><canvas id="chTrendUsd" aria-label="Tendencia de facturación" role="img"></canvas></div>
-        </div>
-        <div class="trendcell">
-          <span class="tlabel"><i class="sw" style="background:#ff9500"></i>Comisión USD</span>
-          <div class="chartbox sm"><canvas id="chTrendCom" aria-label="Tendencia de comisión" role="img"></canvas></div>
-        </div>
+        <div class="trendcell"><span class="tlabel"><i class="sw" style="background:#0071e3"></i>Toneladas · 12 meses</span><div class="chartbox md"><canvas id="chRollTns" role="img" aria-label="Toneladas 12 meses móviles"></canvas></div></div>
+        <div class="trendcell"><span class="tlabel"><i class="sw" style="background:#34c759"></i>Facturación · 12 meses</span><div class="chartbox md"><canvas id="chRollUsd" role="img" aria-label="Facturación 12 meses móviles"></canvas></div></div>
+        <div class="trendcell"><span class="tlabel"><i class="sw" style="background:#ff9500"></i>Comisión · 12 meses</span><div class="chartbox md"><canvas id="chRollCom" role="img" aria-label="Comisión 12 meses móviles"></canvas></div></div>
+        <div class="trendcell"><span class="tlabel"><i class="sw" style="background:#5856d6"></i>Precio promedio (USD/t) · 12 meses</span><div class="chartbox md"><canvas id="chRollPx" role="img" aria-label="Precio promedio 12 meses móviles"></canvas></div></div>
+        <div class="trendcell"><span class="tlabel"><i class="sw" style="background:#ff2d55"></i>% de comisión sobre facturación · 12 meses</span><div class="chartbox md"><canvas id="chRollPct" role="img" aria-label="Porcentaje de comisión 12 meses móviles"></canvas></div></div>
+      </div>
       </div>
     </div>
     <div class="card wide" id="bizCard" style="display:none">
@@ -690,11 +695,6 @@
       </div>
       <div class="tablewrap" id="bizTable" style="margin-top:18px"></div>
     </div>
-    </div>
-    <div class="card wide" id="prodCard">
-      <h2>Toneladas por producto y mes — <span id="lblProdYear"></span></h2>
-      <p class="csub">Barras apiladas: la altura de cada mes es el total, y cada color es un producto.</p>
-      <div class="chartbox tall"><canvas id="chProd" aria-label="Toneladas por producto y mes" role="img"></canvas></div>
     </div>
     <div class="card wide">
       <h2>Detalle mensual por producto — <span id="lblTableYear"></span></h2>
@@ -1078,6 +1078,7 @@ function loadUI(){
   if (!["ambos", "oil", "exp"].includes(ui.oxClientes)) ui.oxClientes = "ambos";
   if (!["cruce", "cliente", "contrato"].includes(ui.pipeView)) ui.pipeView = "cruce";
   if (typeof ui.pipePasado !== "boolean") ui.pipePasado = false;
+  if (typeof ui.rollBiz !== "boolean") ui.rollBiz = false;
   if (typeof ui.pipeProy !== "boolean") ui.pipeProy = true;   // arranca en "total del mes"
   // rango de meses de las vistas por Consolidación (1..12)
   ui.consFrom = Math.min(12, Math.max(1, parseInt(ui.consFrom) || 1));
@@ -1474,9 +1475,10 @@ function aggregate(recs, year, maxMonth = 12){
       if (!agg.products[r.product]) agg.products[r.product] = byMonth();
       agg.products[r.product][m] += r.tns;
       agg.prodTotals[r.product] = (agg.prodTotals[r.product] || 0) + r.tns;
-      agg.bizTotals[r.biz] = (agg.bizTotals[r.biz] || 0) + r.tns;
-      agg.bizUsd[r.biz] = (agg.bizUsd[r.biz] || 0) + r.usd;
-      agg.bizCom[r.biz] = (agg.bizCom[r.biz] || 0) + r.comision;
+      const bk = bizKeyTotal(r);
+      agg.bizTotals[bk] = (agg.bizTotals[bk] || 0) + r.tns;
+      agg.bizUsd[bk] = (agg.bizUsd[bk] || 0) + r.usd;
+      agg.bizCom[bk] = (agg.bizCom[bk] || 0) + r.comision;
     }
     if (r.etd && r.etd.y === year && r.etd.mo <= maxMonth) agg.etdCount[r.etd.mo - 1] += 1;
   }
@@ -1697,10 +1699,17 @@ async function loadData(){
   status.innerHTML = `✅ ${parts.join(' <span class="dotsep">|</span> ')} <span class="dotsep">|</span> actualizado ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+/* Clave para las tortas del Total: los negocios con sub-vistas se abren en sus partes */
+function bizKeyTotal(r){
+  const vs = SUBVISTAS[r.biz];
+  if (!vs) return r.biz;
+  const v = vs.find(x => x.test && x.test(r));
+  return v ? r.biz + ":" + v.key : r.biz;
+}
+
 /* Sub-vistas de un negocio (Brokerage: total / maní / aceite+expeller) */
 const SUBVISTAS = {
   brokerage: [
-    { key: "total",  label: "Brokerage Total",  color: "#8e8e93", tip: "Todos los productos de la hoja", test: null },
     { key: "mani",   label: "Brokerage Maní",   color: "#0071e3", tip: "Todo menos aceite y expeller",   test: r => !isOilOrExpeller(r.product) },
     { key: "oilexp", label: "Brokerage Aceite + Expeller", color: "#ff9500", tip: "Solo aceite y expeller", test: r => isOilOrExpeller(r.product) },
   ],
@@ -1709,7 +1718,7 @@ function subVistas(){ return SUBVISTAS[UI.biz] || null; }
 function subActual(){
   const vs = subVistas();
   if (!vs) return null;
-  const k = (UI.bizSub || {})[UI.biz] || "total";
+  const k = (UI.bizSub || {})[UI.biz] || vs[0].key;
   return vs.find(v => v.key === k) || vs[0];
 }
 
@@ -1800,7 +1809,24 @@ function renderKpis(a, b, aN, aC, yA, SP, aParts){
     ["Comisión", "totCom", fmtUsd],
     ["Contenedores (est.)", "contEst", v => "~" + fmt0(v)],
   ];
-  document.getElementById("kpis").innerHTML = defs.map(([label, key, f]) => {
+  const pxT = t => t.totTns ? t.totUsd / t.totTns : 0, cxT = t => t.totTns ? t.totCom / t.totTns : 0;
+  const pctF = t => t.totUsd ? (t.totCom / t.totUsd * 100) : 0;
+  const unit = v => fmtUsd(v) + " /t";
+  const d2 = (va, vb) => b ? `<div>${deltaHtml(va, vb)}</div>` : "";
+  const extras = `
+    <div class="kpi solo">
+      <div class="label">Precio promedio · ${yA}</div>
+      <div class="value">${unit(pxT(a))}</div>
+      ${b ? d2(pxT(a), pxT(b)) : ""}
+      <div class="extra">facturación ÷ toneladas</div>
+    </div>
+    <div class="kpi solo">
+      <div class="label">Comisión por tonelada · ${yA}</div>
+      <div class="value">${unit(cxT(a))}</div>
+      <div class="extra"><b style="color:var(--text);font-weight:600">${pctF(a).toFixed(2).replace(".", ",")}%</b> de la facturación${b ? ` · año comp.: ${pctF(b).toFixed(2).replace(".", ",")}%` : ""}</div>
+      ${b ? d2(cxT(a), cxT(b)) : ""}
+    </div>`;
+  document.getElementById("kpis").innerHTML = extras.length && defs.map(([label, key, f]) => {
     const lines = [];
     if (b) lines.push(`<div>${deltaHtml(a[key], b[key])}</div>`);
     if (UI.split && aN && aC && SP){
@@ -1818,7 +1844,7 @@ function renderKpis(a, b, aN, aC, yA, SP, aParts){
       <div class="value">${f(a[key])}</div>
       ${lines.join("")}
     </div>`;
-  }).join("");
+  }).join("") + extras;
 }
 
 /* series: [{ label, data, color, stack?, year, group? }] */
@@ -1853,6 +1879,120 @@ function makeChart(id, series, opts = {}){
 
 /* Tendencia: tres gráficos de línea independientes (una escala por métrica,
    así las toneladas no quedan aplastadas contra los dólares). */
+/* ============ Tendencia de 12 meses móviles ============ */
+const ROLL_COLORS = { axt: "#34c759", buzaram: "#af52de", "brokerage:mani": "#0071e3", "brokerage:oilexp": "#ff9500" };
+function rolling12(recs, keyFn){
+  // serie mensual continua (meses sin cargas = 0) y suma de los últimos 12
+  const ks = recs.filter(r => r.year && r.month).map(r => r.year * 12 + (r.month - 1));
+  if (!ks.length) return null;
+  const min = Math.min(...ks), max = Math.max(...ks);
+  const mes = {};
+  for (const r of recs){
+    if (!r.year || !r.month) continue;
+    const k = r.year * 12 + (r.month - 1);
+    const m = mes[k] || (mes[k] = { t: 0, u: 0, c: 0 });
+    m.t += r.tns || 0; m.u += r.usd || 0; m.c += r.comision || 0;
+  }
+  return { min, max, mes };
+}
+function serieRolling(R, min, max){
+  const out = { t: [], u: [], c: [], px: [], pct: [], mt: [], mu: [], mc: [] };
+  for (let k = min; k <= max; k++){
+    let t = 0, u = 0, c = 0;
+    for (let j = k - 11; j <= k; j++){ const m = R && R.mes[j]; if (m){ t += m.t; u += m.u; c += m.c; } }
+    const m0 = (R && R.mes[k]) || { t: 0, u: 0, c: 0 };
+    const completo = R && (k - 11) >= R.min;          // la primera ventana completa es el mes 12
+    const push = (a, v) => a.push(completo ? v : null);
+    push(out.t, t); push(out.u, u); push(out.c, c);
+    push(out.px, t ? u / t : null); push(out.pct, u ? c / u * 100 : null);
+    out.mt.push(m0.t); out.mu.push(m0.u); out.mc.push(m0.c);
+  }
+  return out;
+}
+function renderRolling(recs){
+  const IDS = ["chRollTns", "chRollUsd", "chRollCom", "chRollPx", "chRollPct"];
+  IDS.forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
+  const R = rolling12(recs);
+  const lbl = document.getElementById("lblRoll");
+  if (!R || R.max - R.min < 11){
+    lbl.textContent = "hace falta al menos 12 meses de historia";
+    return;
+  }
+  const { min, max } = R;
+  const labels = [], meta = [];
+  for (let k = min; k <= max; k++){ const y = Math.floor(k / 12), m = k % 12; labels.push(`${MESES[m]} ${y}`); meta.push({ y, m }); }
+  const tot = serieRolling(R, min, max);
+  const last = tot.t.length - 1;
+  lbl.textContent = `${labels[min + 11 - min]} → ${labels[last]}`;
+
+  // en el Total: una línea por negocio (mismos colores que las tortas)
+  const esTotal = UI.biz === TOTAL_KEY;
+  const bar = document.getElementById("rollBar");
+  bar.style.display = esTotal ? "" : "none";
+  const sw = document.getElementById("swRollBiz");
+  sw.checked = !!UI.rollBiz;
+  sw.onchange = () => { UI.rollBiz = !!sw.checked; saveUI(); renderRolling(recs); };
+  let partes = [];
+  if (esTotal && UI.rollBiz){
+    const nombres = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
+    for (const [bk, vs] of Object.entries(SUBVISTAS)) vs.forEach(v => { nombres[bk + ":" + v.key] = v.label; });
+    const grupos = {};
+    for (const r of recs){ const k = bizKeyTotal(r); (grupos[k] || (grupos[k] = [])).push(r); }
+    partes = Object.entries(grupos).map(([k, arr]) => {
+      const Rk = rolling12(arr);
+      // ventana completa medida desde el inicio de la historia total, no la del negocio
+      if (Rk) Rk.min = Math.min(Rk.min, min);
+      return { k, name: nombres[k] || k, color: ROLL_COLORS[k] || "#8e8e93", s: serieRolling(Rk, min, max) };
+    }).sort((a, b) => (b.s.t[last] || 0) - (a.s.t[last] || 0));
+  }
+  document.getElementById("rollLegend").innerHTML = partes.length
+    ? `<span><i style="background:var(--text)"></i>Total</span>` + partes.map(p => `<span><i style="background:${p.color}"></i>${p.name}</span>`).join("")
+    : "";
+
+  const fmts = {
+    t: v => fmt0(v) + " t", u: fmtUsd, c: fmtUsd,
+    px: v => fmtUsd(v) + "/t", pct: v => v.toFixed(2).replace(".", ",") + "%",
+  };
+  const yoy = (arr, i) => (i >= 12 && arr[i] != null && arr[i - 12]) ? (arr[i] / arr[i - 12] - 1) * 100 : null;
+  const linea = (id, key, color, mesKey, tick) => {
+    const ds = [{
+      label: esTotal ? "Total" : "12 meses", data: tot[key], borderColor: partes.length ? cssVar("--text") : color,
+      backgroundColor: color + "1a", fill: !partes.length, borderWidth: partes.length ? 2.6 : 2.2,
+      tension: .3, pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 12, spanGaps: false,
+    }];
+    partes.forEach(p => ds.push({ label: p.name, data: p.s[key], borderColor: p.color, backgroundColor: p.color,
+      borderWidth: 1.4, tension: .3, pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 10, fill: false }));
+    charts[id] = new Chart(document.getElementById(id), {
+      type: "line", data: { labels, datasets: ds },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: {
+            label: c => c.parsed.y == null ? null : ` ${c.dataset.label}: ${fmts[key](c.parsed.y)}`,
+            footer: items => {
+              const i = items[0].dataIndex, out = [];
+              if (mesKey) out.push(`Solo ${labels[i]}: ${fmts[key](tot[mesKey][i])}`);
+              const d = yoy(tot[key], i);
+              if (d != null) out.push(`vs 12 meses a ${labels[i - 12]}: ${d >= 0 ? "+" : ""}${d.toFixed(1).replace(".", ",")}%`);
+              return out;
+            } } } },
+        scales: {
+          x: { ticks: { color: cssVar("--tick"), maxRotation: 0, autoSkip: true, maxTicksLimit: 10, font: { size: 10 } }, grid: { display: false } },
+          y: { beginAtZero: key !== "px" && key !== "pct", ticks: { color: cssVar("--tick"), maxTicksLimit: 5, font: { size: 10 }, callback: tick },
+               grid: { color: cssVar("--grid") } },
+        },
+      },
+    });
+  };
+  linea("chRollTns", "t", "#0071e3", "mt", v => fmt0(v));
+  linea("chRollUsd", "u", "#34c759", "mu", v => "$" + fmt0(v));
+  linea("chRollCom", "c", "#ff9500", "mc", v => "$" + fmt0(v));
+  linea("chRollPx", "px", "#5856d6", null, v => "$" + fmt0(v));
+  linea("chRollPct", "pct", "#ff2d55", null, v => v.toFixed(2).replace(".", ",") + "%");
+}
+
 function renderTrend(recs){
   ["chTrendTns","chTrendUsd","chTrendCom"].forEach(id => {
     if (charts[id]){ charts[id].destroy(); delete charts[id]; }
@@ -3781,8 +3921,11 @@ function renderBizChart(a, yA){
   document.getElementById("lblBizYear").textContent = yA;
 
   const names = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
-  // color estable por negocio: el mismo en las tres tortas
+  for (const [bk, vs] of Object.entries(SUBVISTAS)) vs.forEach(v => { names[bk + ":" + v.key] = v.label; });
+  // color estable por negocio/sub-vista: el mismo en las tres tortas
+  const FIJOS = { axt: "#34c759", buzaram: "#af52de", "brokerage:mani": "#0071e3", "brokerage:oilexp": "#ff9500" };
   const colorDe = k => {
+    if (FIJOS[k]) return FIJOS[k];
     const i2 = BUSINESSES.findIndex(b => b.key === k);
     return PALETTE[(i2 < 0 ? 0 : i2) % PALETTE.length];
   };
@@ -3916,7 +4059,7 @@ function renderProductCompare(a, b, yA, yB){
 }
 
 /* Secciones que se pueden plegar para despejar la pantalla */
-const PLEGABLES = ["oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
+const PLEGABLES = ["rollCard", "oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
 function aplicarPlegado(){
   const cerradas = new Set(UI.cerradas || []);
   for (const id of PLEGABLES){
@@ -3955,9 +4098,8 @@ function renderSecNav(){
   const sv = subActual();
   if (sv && sv.key === "oilexp") items.push({ id: "oilexpCard", label: "Aceite vs Expeller", destacado: true });
   if (bz && bz.focusExporter && focusName) items.push({ id: "focusCard", label: focusName, destacado: true });
-  items.push({ id: "trendCard", label: "Tendencia" });
+  items.push({ id: "rollCard", label: "Tendencia 12m" });
   if (UI.biz === TOTAL_KEY) items.push({ id: "bizCard", label: "Por negocio" });
-  items.push({ id: "prodCard", label: "Productos" });
   if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
   if (bz && bz.partnerViews) items.push({ id: "partnerCard", label: "Exportadores / importadores" });
   if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" }, { id: "pipeCard", label: "Programación" });
@@ -4157,9 +4299,8 @@ function render(){
   mk("chUsd", "usd", { usd: true });
   mk("chCom", "com", { usd: true });
   mk("chEtd", "etdCount");
-  renderTrend(recs);
+  renderRolling(recs);
   renderBizChart(a, yA);
-  renderProductChart(a, yA);
   renderProductTable(a, yA);
   renderProductCompare(a, b, yA, yB);
   renderConsolidacion(recs, yA, MM);
@@ -4199,7 +4340,8 @@ function renderTabs(){
   }
   tabs.push({ key: TOTAL_KEY, name: "Σ Total", tip: "Consolidado de todos los negocios" });
 
-  const subDe = k => (UI.bizSub || {})[k] || (SUBVISTAS[k] ? SUBVISTAS[k][0].key : null);
+  const subDe = k => { const vs = SUBVISTAS[k]; if (!vs) return null;
+    const v = (UI.bizSub || {})[k]; return vs.some(x => x.key === v) ? v : vs[0].key; };
   el.innerHTML = tabs.map(t => {
     const activo = UI.biz === t.key && (!t.sub || subDe(t.key) === t.sub);
     return `<button type="button" role="tab" class="tab ${activo ? "active" : ""} ${t.soon ? "soon" : ""} ${t.key === TOTAL_KEY ? "total" : ""}"
