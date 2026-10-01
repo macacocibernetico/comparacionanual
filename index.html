@@ -713,7 +713,13 @@
     </div>
     <div class="card wide">
       <h2>Detalle mensual por producto — <span id="lblTableYear"></span></h2>
-      <p class="csub">Toneladas exportadas de cada producto, mes por mes, con totales.</p>
+      <p class="csub">Cada producto mes por mes según <b>ETD</b>, con totales.</p>
+      <div class="consbar">
+        <div class="seg" id="prodMetric" role="group" aria-label="Métrica del detalle mensual">
+          <button type="button" data-pm2="tns" title="Ver toneladas">Toneladas</button>
+          <button type="button" data-pm2="usd" title="Ver facturación en dólares">Facturación USD</button>
+        </div>
+      </div>
       <div class="tablewrap" id="prodTable"></div>
     </div>
     <div class="card wide" id="consSection">
@@ -1093,6 +1099,7 @@ function loadUI(){
   if (!["ambos", "oil", "exp"].includes(ui.oxClientes)) ui.oxClientes = "ambos";
   if (!["cruce", "cliente", "contrato"].includes(ui.pipeView)) ui.pipeView = "cruce";
   if (typeof ui.pipePasado !== "boolean") ui.pipePasado = false;
+  if (ui.prodMetric !== "usd") ui.prodMetric = "tns";
   if (typeof ui.rollBiz !== "boolean") ui.rollBiz = false;
   if (typeof ui.pipeProy !== "boolean") ui.pipeProy = true;   // arranca en "total del mes"
   // rango de meses de las vistas por Consolidación (1..12)
@@ -1479,7 +1486,7 @@ function aggregate(recs, year, maxMonth = 12){
   const agg = {
     tns: byMonth(), usd: byMonth(), com: byMonth(), etdCount: byMonth(),
     totTns: 0, totUsd: 0, totCom: 0, totCont: 0, totNeg: 0,
-    products: {}, prodTotals: {}, bizTotals: {}, bizUsd: {}, bizCom: {},
+    products: {}, prodTotals: {}, productsUsd: {}, prodUsd: {}, bizTotals: {}, bizUsd: {}, bizCom: {},
   };
   for (const r of recs){
     if (r.year === year && r.month <= maxMonth){
@@ -1490,6 +1497,9 @@ function aggregate(recs, year, maxMonth = 12){
       if (!agg.products[r.product]) agg.products[r.product] = byMonth();
       agg.products[r.product][m] += r.tns;
       agg.prodTotals[r.product] = (agg.prodTotals[r.product] || 0) + r.tns;
+      if (!agg.productsUsd[r.product]) agg.productsUsd[r.product] = byMonth();
+      agg.productsUsd[r.product][m] += r.usd;
+      agg.prodUsd[r.product] = (agg.prodUsd[r.product] || 0) + r.usd;
       const bk = bizKeyTotal(r);
       agg.bizTotals[bk] = (agg.bizTotals[bk] || 0) + r.tns;
       agg.bizUsd[bk] = (agg.bizUsd[bk] || 0) + r.usd;
@@ -4171,12 +4181,20 @@ function renderProductChart(a, yA){
 
 function renderProductTable(a, yA){
   document.getElementById("lblTableYear").textContent = yA;
-  const prods = Object.keys(a.prodTotals).sort((x, y) => a.prodTotals[y] - a.prodTotals[x]);
-  let html = "<table><tr><th>Producto</th>" + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
+  const usd = UI.prodMetric === "usd";
+  document.querySelectorAll("#prodMetric button").forEach(b => {
+    const on = (b.dataset.pm2 === "usd") === usd;
+    b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI.prodMetric = b.dataset.pm2; saveUI(); renderProductTable(a, yA); try { decorarExportables(); } catch(e){} };
+  });
+  const porMes = usd ? a.productsUsd : a.products, tot = usd ? a.prodUsd : a.prodTotals;
+  const f = usd ? fmtUsd : fmt1;
+  const prods = Object.keys(a.prodTotals).sort((x, y) => (tot[y] || 0) - (tot[x] || 0));
+  let html = `<table><tr><th>Producto${usd ? " (USD)" : " (t)"}</th>` + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
   for (const p of prods){
-    html += `<tr><td>${p}</td>` + a.products[p].map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td><b>${fmt1(a.prodTotals[p])}</b></td></tr>`;
+    html += `<tr><td>${p}</td>` + (porMes[p] || []).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td><b>${f(tot[p] || 0)}</b></td></tr>`;
   }
-  html += `<tr class="total"><td>Total</td>` + a.tns.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td>${fmt1(a.totTns)}</td></tr></table>`;
+  html += `<tr class="total"><td>Total</td>` + (usd ? a.usd : a.tns).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td>${f(usd ? a.totUsd : a.totTns)}</td></tr></table>`;
   document.getElementById("prodTable").innerHTML = html;
 }
 
