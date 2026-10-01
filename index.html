@@ -255,6 +255,16 @@
     box-shadow:var(--shadow);animation:fadeUp .5s var(--ease) both;
     transition:background .35s var(--ease),border-color .35s var(--ease)
   }
+  .card{position:relative}
+  .cardtools{position:absolute;top:16px;right:44px;display:flex;gap:6px;z-index:2;opacity:.55;transition:opacity .2s var(--ease)}
+  .card:hover .cardtools,.cardtools:focus-within{opacity:1}
+  .cardtools button,.tblcopy{font:inherit;font-size:.72rem;font-weight:600;color:var(--muted);background:var(--panel2);
+    border:1px solid var(--border);border-radius:8px;padding:5px 9px;cursor:pointer;min-height:30px}
+  .cardtools button:hover,.tblcopy:hover{color:var(--accent);border-color:var(--accent)}
+  .tblcopy{display:inline-flex;align-items:center;gap:5px;margin:0 0 8px auto}
+  .tblcopybar{display:flex;justify-content:flex-end}
+  .tblcopy.ok,.cardtools button.ok{color:#fff;background:var(--green);border-color:var(--green)}
+  @media(max-width:720px){ .cardtools{position:static;justify-content:flex-end;margin:-4px 0 8px;opacity:1} }
   .card h2.clickhead{cursor:pointer;user-select:none}
   .card h2.clickhead:hover{color:var(--accent)}
   .card h2 .caret{margin-left:auto;color:var(--faint);font-size:.8rem;transition:transform .3s var(--ease);flex:0 0 auto}
@@ -1940,7 +1950,7 @@ function renderRolling(recsIn){
   sw.checked = !!UI.rollBiz;
   sw.onchange = () => { UI.rollBiz = !!sw.checked; saveUI(); renderRolling(recsIn); };
   let partes = [];
-  if (esTotal && UI.rollBiz){
+  if (esTotal){
     const nombres = Object.fromEntries(BUSINESSES.map(b => [b.key, b.name]));
     for (const [bk, vs] of Object.entries(SUBVISTAS)) vs.forEach(v => { nombres[bk + ":" + v.key] = v.label; });
     const grupos = {};
@@ -1952,6 +1962,15 @@ function renderRolling(recsIn){
       return { k, name: nombres[k] || k, color: ROLL_COLORS[k] || "#8e8e93", s: serieRolling(Rk, min, max) };
     }).sort((a, b) => (b.s.t[last] || 0) - (a.s.t[last] || 0));
   }
+  // lo que queda fuera por la exclusión (Latinut en Brokerage), para poder conciliar con la planilla
+  let excl = null;
+  if (esTotal && !UI.verExcluidos){
+    const fuera = Object.entries(DATA).flatMap(([k, arr]) => arr.filter(r => esExcluida(r, k)))
+      .filter(r => r.year && r.month && (r.year * 12 + r.month - 1) <= hoyK);
+    if (fuera.length){ const Rx = rolling12(fuera); if (Rx){ Rx.min = min; excl = serieRolling(Rx, min, max); } }
+  }
+  const desglose = partes;
+  partes = UI.rollBiz ? partes : [];
   document.getElementById("rollLegend").innerHTML = partes.length
     ? `<span><i style="background:var(--text)"></i>Total</span>` + partes.map(p => `<span><i style="background:${p.color}"></i>${p.name}</span>`).join("")
     : "";
@@ -1981,6 +2000,11 @@ function renderRolling(recsIn){
             footer: items => {
               const i = items[0].dataIndex, out = [];
               if (mesKey) out.push(`Solo ${labels[i]}: ${fmts[key](tot[mesKey][i])}`);
+              if (esTotal && !partes.length && desglose.length && key !== "px" && key !== "pct"){
+                desglose.forEach(p => { const v = p.s[key][i]; if (v) out.push(`  ${p.name}: ${fmts[key](v)}`); });
+              }
+              if (excl && key !== "px" && key !== "pct" && excl[key][i])
+                out.push(`No incluye excluidos (${excluidosDe("brokerage").join(", ") || "exclusión"}): ${fmts[key](excl[key][i])}`);
               const d = yoy(tot[key], i);
               if (d != null) out.push(`vs 12 meses a ${labels[i - 12]}: ${d >= 0 ? "+" : ""}${d.toFixed(1).replace(".", ",")}%`);
               return out;
@@ -2518,6 +2542,119 @@ function renderGrupos(recs, year, maxMonth){
 let LAST_PARTNER_PDF = null;
 
 /* Carga una librería del CDN una sola vez */
+/* ============ Exportar cuadros (PNG / PDF) y copiar tablas para Excel ============ */
+function nombreArchivo(card){
+  const h2 = card.querySelector("h2");
+  const t = (h2 ? h2.textContent : "cuadro").replace(/[▾]/g, "").replace(/CLICK.*$/i, "").trim();
+  const biz = UI.biz === TOTAL_KEY ? "Total" : ((subActual() || {}).label || (BUSINESSES.find(b => b.key === UI.biz) || {}).name || UI.biz);
+  return (biz + " - " + t).replace(/[\\/:*?"<>|—]+/g, "-").replace(/\s+/g, " ").slice(0, 90);
+}
+async function capturarCard(card){
+  await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+  const ancho = Math.max(card.scrollWidth, ...[...card.querySelectorAll(".tablewrap")].map(w => w.scrollWidth + 44));
+  return window.html2canvas(card, {
+    backgroundColor: getComputedStyle(document.body).backgroundColor || "#fff",
+    scale: Math.max(2, window.devicePixelRatio || 1), useCORS: true, logging: false,
+    windowWidth: Math.max(document.documentElement.clientWidth, ancho + 80),
+    ignoreElements: el => el.classList && (el.classList.contains("cardtools") || el.classList.contains("tblcopybar")),
+    onclone: doc => {
+      const c = doc.getElementById(card.id) || doc.querySelector("[data-exp='" + card.dataset.exp + "']");
+      if (!c) return;
+      c.style.width = ancho + "px"; c.style.animation = "none"; c.style.boxShadow = "none";
+      c.querySelectorAll(".tablewrap").forEach(w => { w.style.overflow = "visible"; w.style.maxHeight = "none"; });
+    },
+  });
+}
+async function exportarCard(card, formato, btn){
+  const txt = btn.textContent;
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const cv = await capturarCard(card);
+    const nombre = nombreArchivo(card);
+    if (formato === "png"){
+      const a = document.createElement("a");
+      a.download = nombre + ".png"; a.href = cv.toDataURL("image/png"); a.click();
+    } else {
+      await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+      const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      const land = cv.width >= cv.height * 0.9;
+      const doc = new JsPDF({ orientation: land ? "landscape" : "portrait", unit: "mm", format: "a4" });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 8;
+      const w = W - 2 * M, hTot = cv.height * w / cv.width, hPag = H - 2 * M;
+      if (hTot <= hPag){
+        doc.addImage(cv.toDataURL("image/png"), "PNG", M, M, w, hTot);
+      } else {
+        // cuadro largo: se corta en páginas
+        const pxPag = Math.floor(cv.width * hPag / w);
+        for (let y = 0, n = 0; y < cv.height; y += pxPag, n++){
+          const part = document.createElement("canvas");
+          part.width = cv.width; part.height = Math.min(pxPag, cv.height - y);
+          part.getContext("2d").drawImage(cv, 0, y, cv.width, part.height, 0, 0, cv.width, part.height);
+          if (n) doc.addPage();
+          doc.addImage(part.toDataURL("image/png"), "PNG", M, M, w, part.height * w / cv.width);
+        }
+      }
+      doc.save(nombre + ".pdf");
+    }
+    btn.textContent = "✓"; btn.classList.add("ok");
+  } catch (e){
+    console.error(e); alert("No pude exportar el cuadro: " + (e.message || e));
+    btn.textContent = txt;
+  } finally {
+    setTimeout(() => { btn.textContent = txt; btn.classList.remove("ok"); btn.disabled = false; }, 1400);
+  }
+}
+async function copiarTabla(tabla, btn){
+  const filas = [...tabla.querySelectorAll("tr")].map(tr => [...tr.querySelectorAll("th,td")].map(td =>
+    td.innerText.replace(/[\t\n\r]+/g, " ").replace(/^■\s*/, "").trim()));
+  const tsv = filas.map(f => f.join("\t")).join("\n");
+  const esc = x => x.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const html = "<table>" + filas.map((f, i) => "<tr>" + f.map(c => (i ? "<td>" : "<th>") + esc(c) + (i ? "</td>" : "</th>")).join("") + "</tr>").join("") + "</table>";
+  try {
+    if (navigator.clipboard && window.ClipboardItem){
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/plain": new Blob([tsv], { type: "text/plain" }), "text/html": new Blob([html], { type: "text/html" }) })]);
+    } else if (navigator.clipboard){
+      await navigator.clipboard.writeText(tsv);
+    } else throw new Error("sin portapapeles");
+  } catch (e){
+    const ta = document.createElement("textarea"); ta.value = tsv; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  const t = btn.innerHTML; btn.innerHTML = "✓ Copiada — pegala en Excel"; btn.classList.add("ok");
+  setTimeout(() => { btn.innerHTML = t; btn.classList.remove("ok"); }, 1800);
+}
+let EXP_N = 0;
+function decorarExportables(){
+  document.querySelectorAll(".card").forEach(card => {
+    if (card.closest && card.closest(".modal, #modalBg, #detailBg, .sheet")) return;
+    if (!card.querySelector("canvas, table")) return;
+    if (!card.id && !card.dataset.exp) card.dataset.exp = "c" + (++EXP_N);
+    if (!card.querySelector(":scope > .cardtools")){
+      const tools = document.createElement("div");
+      tools.className = "cardtools";
+      tools.innerHTML = `<button type="button" data-f="png" title="Descargar este cuadro como imagen">🖼 Imagen</button>
+                         <button type="button" data-f="pdf" title="Descargar este cuadro en PDF">📄 PDF</button>`;
+      tools.querySelectorAll("button").forEach(b => b.onclick = e => { e.stopPropagation(); exportarCard(card, b.dataset.f, b); });
+      tools.onclick = e => e.stopPropagation();
+      card.insertBefore(tools, card.firstChild);
+    }
+    // un botón "Copiar" sobre cada tabla (se regeneran en cada render)
+    card.querySelectorAll(".tablewrap").forEach(w => {
+      const tabla = w.querySelector("table");
+      let bar = w.previousElementSibling;
+      const tiene = bar && bar.classList && bar.classList.contains("tblcopybar");
+      if (!tabla){ if (tiene) bar.remove(); return; }
+      if (!tiene){
+        bar = document.createElement("div"); bar.className = "tblcopybar";
+        bar.innerHTML = `<button type="button" class="tblcopy" title="Copiar la tabla para pegarla en Excel o Sheets">📋 Copiar tabla</button>`;
+        w.parentNode.insertBefore(bar, w);
+      }
+      bar.querySelector("button").onclick = () => copiarTabla(w.querySelector("table"), bar.querySelector("button"));
+    });
+  });
+}
+
 function cargarScript(src){
   return new Promise((ok, err) => {
     if ([...document.querySelectorAll("script")].some(s2 => s2.src === src)) return ok();
@@ -4317,6 +4454,7 @@ function render(){
   renderPipeline(recs);
   renderContext({ biz, yA, cmpYears, splitOn, splitCharts, ytd, cutoff, nRecs: recs.length, SP });
   aplicarPlegado();
+  decorarExportables();
   renderSecNav();
 
   const bizName = UI.biz === TOTAL_KEY ? "Total (todos los negocios)" : (biz ? biz.name : UI.biz);
