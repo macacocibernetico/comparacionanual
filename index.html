@@ -1520,9 +1520,9 @@ function bestMonth(arr){
 // ---- DOM ----
 
 const fmt0 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 0});
-const fmt1 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 1});
+const fmt1 = n => (Math.round(n * 100) / 100).toLocaleString("es-AR", {maximumFractionDigits: 2});
 const fmt3 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 3});
-const fmtUsd = n => "US$ " + fmt0(n);
+const fmtUsd = n => "US$ " + Math.round(n).toLocaleString("es-AR", {maximumFractionDigits: 0});
 const fmtDate = d => d ? `${d.d ?? "?"}/${d.mo}/${d.y}` : "—";
 
 const PALETTE = ["#0071e3","#ff9500","#34c759","#af52de","#ff2d55","#5ac8fa","#ffcc00","#ff6482","#30b0c7","#a2845e","#64d2ff","#bf5af2"];
@@ -1599,6 +1599,28 @@ async function fetchCsvText(url){
      valores como se muestran en pantalla.
    Si el export trae más filas que gviz, hay un filtro ocultando datos → se usa
    el export completo. Si traen lo mismo, se usa gviz (máxima precisión). */
+/* El export trae TODAS las filas pero con los valores redondeados por el formato de
+   la celda; gviz trae los valores exactos pero solo las filas visibles. Se recorren
+   las dos en el orden de la planilla: cada fila del export que coincide con la
+   siguiente de gviz se reemplaza por la exacta; solo las ocultas quedan del export. */
+function mezclarExactos(full, exact){
+  const cerca = (a, b, tol) => Math.abs((a || 0) - (b || 0)) <= tol;
+  const igual = (f, e) => f.year === e.year && f.month === e.month &&
+    String(f.product || "").trim().toLowerCase() === String(e.product || "").trim().toLowerCase() &&
+    cerca(f.tns, e.tns, Math.max(1, Math.abs(e.tns) * 0.01)) &&
+    cerca(f.usd, e.usd, Math.max(1, Math.abs(e.usd) * 0.01));
+  const out = [];
+  let j = 0;
+  for (const f of full){
+    let k = -1;
+    // tolera algún salto (filas ocultas en el medio): busca un poco hacia adelante
+    for (let d = 0; d < 6 && j + d < exact.length; d++) if (igual(f, exact[j + d])){ k = j + d; break; }
+    if (k >= 0){ out.push(exact[k]); j = k + 1; } else out.push(f);
+  }
+  // si alguna exacta no se emparejó, igual se cuenta (mejor que perderla)
+  return out;
+}
+
 async function fetchBiz(key){
   const cfg = CONFIG[key];
   const base = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}`;
@@ -1632,7 +1654,7 @@ async function fetchBiz(key){
       sameTab = recsJson.length > 0 && hits / recsJson.length >= 0.8;
     }
     if (sameTab && recsFull.length > recsJson.length)
-      return { recs: recsFull, src: "completo, filtro activo en Sheets" };
+      return { recs: mezclarExactos(recsFull, recsJson), src: "completo, filtro activo en Sheets" };
     return { recs: recsJson, src: "valores exactos" };
   }
   if (recsJson) return { recs: recsJson, src: "valores exactos" };
