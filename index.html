@@ -107,6 +107,10 @@
   .pstat .phint{color:var(--faint);font-size:.72rem;margin-top:2px}
   .pstat.suma{background:var(--accent-soft)}
   .pstat.suma .pval{color:var(--accent)}
+  .subh{font-size:.86rem;font-weight:600;color:var(--muted);margin:6px 0 10px}
+  .tag{display:inline-block;font-size:.68rem;font-weight:600;padding:2px 7px;border-radius:6px;margin-left:6px;vertical-align:1px}
+  .tag.loc{background:rgba(52,199,89,.15);color:var(--green)}
+  .tag.exp{background:var(--accent-soft);color:var(--accent)}
   .pstat.link{cursor:pointer;transition:background .2s var(--ease)}
   .pstat.link:hover{background:var(--accent);color:#fff}
   .pstat.link:hover .plabel,.pstat.link:hover .phint,.pstat.link:hover .pval{color:#fff}
@@ -773,6 +777,30 @@
     </div>
     </div>
 
+    <div class="card wide" id="mktCard" style="display:none">
+      <h2 class="clickhead">Mercado, clientes y frecuencia <span id="lblMkt" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Local = clientes con país <b>Argentina</b>; el resto es exportación. Cargas por <b>ETD</b> (hoja ALL), contratos por su <b>Fecha</b>.</p>
+      <div class="cardbody">
+      <div class="consbar">
+        <div class="seg" id="mktPeriodo" role="group" aria-label="Período">
+          <button type="button" data-mp="anio">Año elegido</button>
+          <button type="button" data-mp="hist">Histórico</button>
+        </div>
+        <div class="seg" id="mktMetric" role="group" aria-label="Métrica de participación">
+          <button type="button" data-mm="tns">Toneladas</button>
+          <button type="button" data-mm="usd">Facturación</button>
+          <button type="button" data-mm="com">Comisión</button>
+        </div>
+      </div>
+      <div class="pipestats" id="mktStats"></div>
+      <div class="grid" style="margin:0">
+        <div><h3 class="subh">Exportadores · participación</h3><div class="tablewrap" id="mktExp"></div></div>
+        <div><h3 class="subh">Clientes · participación</h3><div class="tablewrap" id="mktCli"></div></div>
+      </div>
+      <h3 class="subh" style="margin-top:22px">Frecuencia con cada cliente</h3>
+      <div class="tablewrap" id="mktFreq"></div>
+      </div>
+    </div>
     <div class="card wide" id="partnerCard" style="display:none">
       <h2 class="clickhead">Exportadores e importadores <span class="clickable">CLICK EN UNA FILA PARA VER LAS CARGAS</span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Toneladas por empresa según <b>ETD</b>. El año en curso llega hasta el mes actual.</p>
@@ -1114,6 +1142,8 @@ function loadUI(){
   if (!["cruce", "cliente", "contrato"].includes(ui.pipeView)) ui.pipeView = "cruce";
   if (typeof ui.pipePasado !== "boolean") ui.pipePasado = false;
   if (ui.prodMetric !== "usd") ui.prodMetric = "tns";
+  if (ui.mktPeriodo !== "hist") ui.mktPeriodo = "anio";
+  if (!["tns","usd","com"].includes(ui.mktMetric)) ui.mktMetric = "tns";
   if (typeof ui.rollBiz !== "boolean") ui.rollBiz = false;
   if (typeof ui.pipeProy !== "boolean") ui.pipeProy = true;   // arranca en "total del mes"
   // rango de meses de las vistas por Consolidación (1..12)
@@ -1460,7 +1490,13 @@ function buildRecords(rows, cfg, bizKey){
   const sepCom = forced || detectDecimalSep(colValues(comIdx));
   const sepFlete = forced || detectDecimalSep(colValues(C.flete));
   const sepBroker = forced || detectDecimalSep(colValues(C.comBroker));
+  // país del cliente (para separar mercado local de exportación)
+  let paisIdx = -1;
+  for (const h of [cfg.PAIS_COL, "Country", "País", "Pais", "Destination Country", "Country of destination"].filter(Boolean)){
+    const ix = findInMap(h, hmap); if (ix !== undefined){ paisIdx = ix; break; }
+  }
   const recs = [];
+  recs.paisCol = paisIdx >= 0;
   for (let i = headerRowIdx + 1; i < rows.length; i++){
     const r = rows[i]; if (!r) continue;
     const etd = parseDate(r[C.etd], cfg.DATE_FORMAT);   // el mes/año lo define ETD
@@ -1490,6 +1526,7 @@ function buildRecords(rows, cfg, bizKey){
       flete: C.flete >= 0 ? Math.abs(parseNumber(r[C.flete], sepFlete)) : 0,
       comBroker: C.comBroker >= 0 ? Math.abs(parseNumber(r[C.comBroker], sepBroker)) : 0,
       negocio: String(r[C.negocio] ?? "").trim(),
+      pais: paisIdx >= 0 ? String(r[paisIdx] ?? "").trim() : "",
     });
   }
   return recs;
@@ -2902,6 +2939,109 @@ function aggPartners(recs, campo){
 
 let LAST_PARTNERS = new Map();
 
+/* ============ Mercado local vs exportación, participación y frecuencia (Brokerage) ============ */
+const esLocal = r => /^arg(entina)?\b/i.test(String(r.pais || "").normalize("NFD").replace(COMBINING_MARKS, "").trim());
+function diasEntre(fechas){
+  const ts = fechas.filter(Boolean).map(f => Date.UTC(f.y, f.mo - 1, f.d || 1)).sort((a, b) => a - b);
+  const uniq = ts.filter((t, i) => !i || t !== ts[i - 1]);
+  if (uniq.length < 2) return null;
+  return (uniq[uniq.length - 1] - uniq[0]) / 86400000 / (uniq.length - 1);
+}
+const fechaTxt = f => f ? `${String(f.d || 1).padStart(2, "0")}/${String(f.mo).padStart(2, "0")}/${f.y}` : "—";
+const fechaNum = f => f ? f.y * 10000 + f.mo * 100 + (f.d || 1) : 0;
+
+function renderMercado(recs, yA){
+  const card = document.getElementById("mktCard");
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  if (!bz || bz.partnerViews !== true){ card.style.display = "none"; return; }
+  card.style.display = "";
+  const hist = UI.mktPeriodo === "hist";
+  const met = ["usd", "com"].includes(UI.mktMetric) ? UI.mktMetric : "tns";
+  const wire = (sel, attr, key) => document.querySelectorAll(sel).forEach(b => {
+    const on = b.dataset[attr] === (key === "mktPeriodo" ? (hist ? "hist" : "anio") : met);
+    b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI[key] = b.dataset[attr]; saveUI(); render(); };
+  });
+  wire("#mktPeriodo button", "mp", "mktPeriodo");
+  wire("#mktMetric button", "mm", "mktMetric");
+
+  const R = recs.filter(r => r.etd && (hist || r.etd.y === yA));
+  const sv = subActual();
+  // contratos de la hoja ALL CONTRATOS (Fecha, Exportador, Importador, Producto…)
+  const contr = (CONTRACTS[UI.biz] || []).filter(c => {
+    if (!c.fecha || !(hist || c.fecha.y === yA)) return false;
+    if (sv && sv.test && !sv.test({ product: c.producto || "" })) return false;
+    if (!UI.verExcluidos && excluidosDe(UI.biz).some(n => mismaEmpresa(c.exportador, n))) return false;
+    return true;
+  });
+  document.getElementById("lblMkt").textContent = hist ? "Histórico" : String(yA);
+  const sinPais = !R.some(r => r.pais);
+
+  const v = r => met === "usd" ? r.usd : met === "com" ? r.comision : r.tns;
+  const fm = met === "tns" ? (x => fmt1(x) + " t") : fmtUsd;
+  const pc = (x, t) => t ? (x / t * 100).toFixed(1).replace(".", ",") + "%" : "—";
+
+  // 1) Local vs exportación
+  const loc = R.filter(esLocal), exp = R.filter(r => !esLocal(r));
+  const sum = (a, f) => a.reduce((s2, r) => s2 + (f(r) || 0), 0);
+  const tot = sum(R, v);
+  const caja = (titulo, arr, color, cls) => `<div class="pstat ${cls || ""}"><span class="plabel"><i style="background:${color}"></i>${titulo}</span>
+      <div class="pval">${fm(sum(arr, v))} <span style="font-size:.9rem;color:var(--faint)">${pc(sum(arr, v), tot)}</span></div>
+      <div class="phint">${fmt0(arr.length)} cargas · ${fmt1(sum(arr, r => r.tns))} t · ${fmtUsd(sum(arr, r => r.usd))}</div></div>`;
+  document.getElementById("mktStats").innerHTML = sinPais
+    ? `<p class="empty" style="grid-column:1/-1">No encontré una columna de país en la hoja de cargas (busqué “Country”, “País”, “Pais”). Agregá una columna <b>Country</b> (o “País”) en la hoja ALL y tocá ↻ Actualizar.</p>`
+    : caja("Exportación", exp, "#0071e3") + caja("Mercado local (Argentina)", loc, "#34c759") +
+      `<div class="pstat suma"><span class="plabel">Total</span><div class="pval">${fm(tot)}</div><div class="phint">${fmt0(R.length)} cargas</div></div>`;
+
+  // 2) Participación por exportador y por cliente
+  const tabla = (campo, conTipo) => {
+    const g = new Map();
+    for (const r of R){
+      const n = r[campo] || "(sin dato)", k = normEmpresa(n) || n;   // "Cli SA" = "Cli S.A."
+      const x = g.get(k) || { n, val: 0, tns: 0, cargas: 0, loc: 0 };
+      x.val += v(r) || 0; x.tns += r.tns || 0; x.cargas++; if (esLocal(r)) x.loc++;
+      g.set(k, x);
+    }
+    const filas = [...g.values()].sort((a, b) => b.val - a.val);
+    let h = `<table><tr><th>${campo === "exporter" ? "Exportador" : "Cliente"}</th><th>${met === "tns" ? "Toneladas" : met === "usd" ? "Facturación" : "Comisión"}</th><th>% del total</th><th>Cargas</th></tr>`;
+    for (const x of filas){
+      const tipo = conTipo && !sinPais ? (x.loc === x.cargas ? `<span class="tag loc">Local</span>` : x.loc ? `<span class="tag loc">Mixto</span>` : `<span class="tag exp">Export</span>`) : "";
+      h += `<tr><td>${x.n}${tipo}</td><td>${fm(x.val)}</td><td><b>${pc(x.val, tot)}</b></td><td>${fmt0(x.cargas)}</td></tr>`;
+    }
+    return h + `<tr class="total"><td>Total</td><td>${fm(tot)}</td><td>100%</td><td>${fmt0(R.length)}</td></tr></table>`;
+  };
+  document.getElementById("mktExp").innerHTML = R.length ? tabla("exporter", false) : `<p class="empty">Sin cargas en el período.</p>`;
+  document.getElementById("mktCli").innerHTML = R.length ? tabla("importer", true) : `<p class="empty">Sin cargas en el período.</p>`;
+
+  // 3) Frecuencia: cargas (ETD) y contratos (Fecha) por cliente
+  const F = new Map();
+  const get = n => { const k = normEmpresa(n) || n;
+    return F.get(k) || (F.set(k, { n, etds: [], fechas: [], local: 0, cargas: 0 }), F.get(k)); };
+  for (const r of R){ const x = get(r.importer || "(sin dato)"); x.etds.push(r.etd); x.cargas++; if (esLocal(r)) x.local++; }
+  for (const c of contr) get(c.importador || "(sin dato)").fechas.push(c.fecha);
+  const meses = hist
+    ? Math.max(1, (() => { const ts = R.map(r => r.etd.y * 12 + r.etd.mo); return ts.length ? Math.max(...ts) - Math.min(...ts) + 1 : 12; })())
+    : (yA === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
+  const cada = d => d == null ? "—" : d < 1.5 ? "a diario" : `cada ${fmt0(Math.round(d))} días`;
+  const filas = [...F.values()].sort((a, b) => b.cargas - a.cargas || b.fechas.length - a.fechas.length);
+  let h = `<table><tr><th>Cliente</th><th>Cargas</th><th>Cargas / mes</th><th>Frecuencia de carga</th><th>Última carga</th>
+    <th>Contratos</th><th>Frecuencia de contratos</th><th>Último contrato</th></tr>`;
+  for (const x of filas){
+    const ultC = x.etds.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
+    const ultK = x.fechas.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
+    const tipo = !sinPais && x.cargas ? (x.local === x.cargas ? `<span class="tag loc">Local</span>` : x.local ? `<span class="tag loc">Mixto</span>` : `<span class="tag exp">Export</span>`) : "";
+    h += `<tr><td>${x.n}${tipo}</td><td>${x.cargas ? fmt0(x.cargas) : ""}</td>
+      <td>${x.cargas ? (x.cargas / meses).toFixed(1).replace(".", ",") : ""}</td>
+      <td>${x.cargas ? cada(diasEntre(x.etds)) : ""}</td><td>${x.cargas ? fechaTxt(ultC) : ""}</td>
+      <td>${x.fechas.length ? fmt0(x.fechas.length) : ""}</td><td>${x.fechas.length ? cada(diasEntre(x.fechas)) : ""}</td>
+      <td>${x.fechas.length ? fechaTxt(ultK) : ""}</td></tr>`;
+  }
+  h += `</table><p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.5">
+    Frecuencia = días promedio entre una fecha y la siguiente (con 1 sola fecha no se puede calcular).
+    Cargas / mes sobre ${meses} mes(es) del período. Los contratos se emparejan con el cliente por nombre (ignora S.A., SRL, puntos).</p>`;
+  document.getElementById("mktFreq").innerHTML = filas.length ? h : `<p class="empty">Sin cargas ni contratos en el período.</p>`;
+}
+
 function renderPartners(recs){
   const card = document.getElementById("partnerCard");
   if (!bizHasPartnerViews()){
@@ -4285,7 +4425,7 @@ function renderProductCompare(a, b, yA, yB){
 }
 
 /* Secciones que se pueden plegar para despejar la pantalla */
-const PLEGABLES = ["rollCard", "oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
+const PLEGABLES = ["rollCard", "mktCard", "oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
 function aplicarPlegado(){
   const cerradas = new Set(UI.cerradas || []);
   for (const id of PLEGABLES){
@@ -4327,7 +4467,7 @@ function renderSecNav(){
   items.push({ id: "rollCard", label: "Tendencia 12m" });
   if (UI.biz === TOTAL_KEY) items.push({ id: "bizCard", label: "Por negocio" });
   if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
-  if (bz && bz.partnerViews) items.push({ id: "partnerCard", label: "Exportadores / importadores" });
+  if (bz && bz.partnerViews) items.push({ id: "mktCard", label: "Mercado y clientes" }, { id: "partnerCard", label: "Exportadores / importadores" });
   if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" }, { id: "pipeCard", label: "Programación" });
   const visibles = items.filter(it => {
     const el = document.getElementById(it.id);
@@ -4531,6 +4671,7 @@ function render(){
   renderProductCompare(a, b, yA, yB);
   renderConsolidacion(recs, yA, MM);
   renderGrupos(recs, yA, MM);
+  renderMercado(recs, yA);
   renderPartners(recs);
   renderOilExp(recs, yA);
   renderFocusExporter(recs);

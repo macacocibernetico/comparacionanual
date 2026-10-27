@@ -69,3 +69,8 @@ Las columnas **no se buscan por posición** sino por su encabezado en la fila de
 - Fechas: se esperan en formato dd/mm/aaaa. Si tu planilla usa mm/dd, cambiá `DATE_FORMAT` a `"MDY"`.
 - Números: acepta tanto `1.234,56` como `1,234.56`.
 - Si aparece "La planilla no es pública", revisá el paso 1.
+
+## Desarrollo
+
+- `CLAUDE.md`: contexto completo del proyecto para seguir trabajando con Claude Code.
+- `node tests/run.js`: pruebas rápidas sin navegador.
