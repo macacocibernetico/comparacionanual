@@ -473,9 +473,14 @@
   .trendcell .tlabel{display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
   .trendcell .sw{width:10px;height:10px;border-radius:50%;display:inline-block}
   .chartbox.sm{height:150px}
-  .rollgrid{grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:22px}
+  .rollgrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:26px}
+  @media(max-width:1100px){ .rollgrid{grid-template-columns:repeat(2,minmax(0,1fr))} }
   @media(max-width:720px){ .rollgrid{grid-template-columns:1fr} }
-  .chartbox.md{height:auto;aspect-ratio:4/3}
+  .rollgrid .trendcell{cursor:zoom-in;border-radius:var(--r-sm);padding:10px;margin:-10px;transition:background .2s var(--ease)}
+  .rollgrid .trendcell:hover{background:var(--panel2)}
+  .rollgrid .trendcell .tlabel::after{content:"⤢ ampliar";margin-left:auto;font-weight:500;color:var(--faint);font-size:.72rem}
+  .modal.rollzoom{max-width:min(1200px,94vw);width:94vw}
+  .chartbox.md{height:auto;aspect-ratio:5/4}
   @media(max-width:720px){ .chartbox.md{aspect-ratio:3/2} }
   @media(max-width:720px){ .chartbox.sm{height:128px} .trendgrid{gap:14px} }
 
@@ -880,6 +885,15 @@
   <h3>Opciones</h3>
   <div id="sheetSlots"></div>
   <div class="closebar"><button id="sheetClose" type="button" class="primary">Listo</button></div>
+</div>
+
+<div class="modal-bg" id="rollZoomBg">
+  <div class="modal wide rollzoom">
+    <h2 id="rollZoomTitle"></h2>
+    <p class="hint" id="rollZoomSub"></p>
+    <div class="chartbox" style="height:min(62vh,560px)"><canvas id="chRollZoom" role="img" aria-label="Gráfico ampliado"></canvas></div>
+    <div class="actions"><button class="primary" id="rollZoomClose">Cerrar</button></div>
+  </div>
 </div>
 
 <div class="modal-bg" id="detailBg">
@@ -1927,6 +1941,28 @@ function makeChart(id, series, opts = {}){
 /* Tendencia: tres gráficos de línea independientes (una escala por métrica,
    así las toneladas no quedan aplastadas contra los dólares). */
 /* ============ Tendencia de 12 meses móviles ============ */
+const ROLL_CFG = {};
+function abrirRollZoom(id){
+  const def = ROLL_CFG[id]; if (!def) return;
+  const bg = document.getElementById("rollZoomBg");
+  document.getElementById("rollZoomTitle").textContent = def.titulo;
+  const sub = document.getElementById("lblRoll");
+  document.getElementById("rollZoomSub").textContent = (sub ? sub.textContent : "") + " · pasá el mouse para ver cada mes";
+  bg.classList.add("open");
+  if (charts.chRollZoom){ charts.chRollZoom.destroy(); delete charts.chRollZoom; }
+  const cfg = def.mk();
+  cfg.data.datasets.forEach(d => { d.pointRadius = 2.5; d.pointHoverRadius = 7; d.borderWidth = (d.borderWidth || 2) + .6; });
+  cfg.options.animation = { duration: 350 };
+  cfg.options.plugins.legend = { display: cfg.data.datasets.length > 1, labels: { color: cssVar("--muted"), boxWidth: 12 } };
+  const x = cfg.options.scales.x.ticks, y = cfg.options.scales.y.ticks;
+  x.maxTicksLimit = 24; x.font = { size: 12 }; x.maxRotation = 45;
+  y.maxTicksLimit = 10; y.font = { size: 12 };
+  charts.chRollZoom = new Chart(document.getElementById("chRollZoom"), cfg);
+}
+function cerrarRollZoom(){
+  document.getElementById("rollZoomBg").classList.remove("open");
+  if (charts.chRollZoom){ charts.chRollZoom.destroy(); delete charts.chRollZoom; }
+}
 const ROLL_COLORS = { axt: "#34c759", buzaram: "#af52de", "brokerage:mani": "#0071e3", "brokerage:oilexp": "#ff9500" };
 function rolling12(recs, keyFn){
   // serie mensual continua (meses sin cargas = 0) y suma de los últimos 12
@@ -2020,8 +2056,8 @@ function renderRolling(recsIn){
     }];
     partes.forEach(p => ds.push({ label: p.name, data: p.s[key], borderColor: p.color, backgroundColor: p.color,
       borderWidth: 1.4, tension: 0, pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 10, fill: false }));
-    charts[id] = new Chart(document.getElementById(id), {
-      type: "line", data: { labels, datasets: ds },
+    const mk = () => ({
+      type: "line", data: { labels: [...labels], datasets: ds.map(d => ({ ...d, data: [...d.data] })) },
       options: {
         responsive: true, maintainAspectRatio: false,
         animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
@@ -2048,7 +2084,15 @@ function renderRolling(recsIn){
         },
       },
     });
+    ROLL_CFG[id] = { mk, titulo: (document.getElementById(id).closest(".trendcell") || {}).querySelector
+      ? document.getElementById(id).closest(".trendcell").querySelector(".tlabel").textContent.trim() : id };
+    const cfg = mk();
+    charts[id] = new Chart(document.getElementById(id), cfg);
   };
+  document.querySelectorAll(".rollgrid .trendcell").forEach(cell => {
+    const cv = cell.querySelector("canvas");
+    if (cv) cell.onclick = () => abrirRollZoom(cv.id);
+  });
   linea("chRollTns", "t", "#0071e3", "mt", v => fmt0(v));
   linea("chRollUsd", "u", "#34c759", "mu", v => "$" + fmt0(v));
   linea("chRollCom", "c", "#ff9500", "mc", v => "$" + fmt0(v));
@@ -4968,9 +5012,13 @@ if (typeof matchMedia === "function"){
   }
 })();
 
+document.getElementById("rollZoomClose").onclick = cerrarRollZoom;
+document.getElementById("rollZoomBg").onclick = e => { if (e.target.id === "rollZoomBg") cerrarRollZoom(); };
+
 /* Cerrar modales con Escape */
 window.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
+  cerrarRollZoom();
   document.getElementById("detailBg").classList.remove("open");
   document.getElementById("modalBg").classList.remove("open");
   closeSheet();
