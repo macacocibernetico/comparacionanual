@@ -86,3 +86,5 @@ Código muerto conocido (no se llama, se puede borrar): `renderTrend`, `renderPr
 - Gráficos con escalas distintas van separados (no mezclar tns con USD).
 - El usuario compara contra su planilla a mano: los números deben coincidir (redondeos, ETD, exclusiones). Diferencias típicas: Latinut excluida, filas sin ETD, filtro de productos activo, filas ocultas por filtro.
 - Prefiere controles visibles y obvios (aprendido con el botón "Σ Total proyectado" que no encontraba) y una vista no sobrecargada.
+
+- **Database de clientes** (config Brokerage `CLIENTS_URL`): `fetchClientes` lee la planilla (columnas Cliente/Customer/Importer + Country/País) y `aplicarPaises` pone `r.pais` a cada carga por importador. Country ARGENTINA = mercado local (`esLocal`). Gráfico `chMkt`: cargas por mes exportación vs local.

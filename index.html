@@ -779,7 +779,7 @@
 
     <div class="card wide" id="mktCard" style="display:none">
       <h2 class="clickhead">Mercado, clientes y frecuencia <span id="lblMkt" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Local = clientes con país <b>Argentina</b>; el resto es exportación. Cargas por <b>ETD</b> (hoja ALL), contratos por su <b>Fecha</b>.</p>
+      <p class="csub">Local = importador con Country <b>ARGENTINA</b> en la database de clientes; el resto es exportación. Cargas por <b>ETD</b> (hoja ALL), contratos por su <b>Fecha</b>.</p>
       <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="mktPeriodo" role="group" aria-label="Período">
@@ -792,6 +792,11 @@
           <button type="button" data-mm="com">Comisión</button>
         </div>
       </div>
+      <h3 class="subh">Exportación vs mercado local · todo Brokerage</h3>
+      <div class="tablewrap" id="mktSplit" style="margin-bottom:18px"></div>
+      <h3 class="subh">Cantidad de cargas por mes · exportación vs local</h3>
+      <div class="chartbox" style="height:260px;margin-bottom:18px"><canvas id="chMkt" role="img" aria-label="Cargas por mes, exportación y mercado local"></canvas></div>
+      <h3 class="subh">Vista actual</h3>
       <div class="pipestats" id="mktStats"></div>
       <div class="grid" style="margin:0">
         <div><h3 class="subh">Exportadores · participación</h3><div class="tablewrap" id="mktExp"></div></div>
@@ -977,6 +982,10 @@
         <div><label for="cfgContractsSheet">Pestaña de contratos <span style="color:var(--faint);font-weight:400">— opcional</span></label><input id="cfgContractsSheet" placeholder="ALL CONTRATOS"></div>
         <div><label for="cfgContractsGid">GID de esa pestaña</label><input id="cfgContractsGid" placeholder="0"></div>
       </div>
+      <label for="cfgClientsUrl">Planilla “database clientes” <span style="color:var(--faint);font-weight:400">— link de Sheets; los clientes con Country ARGENTINA son mercado local</span></label>
+      <input id="cfgClientsUrl" placeholder="https://docs.google.com/spreadsheets/d/…/edit">
+      <label for="cfgClientsSheet">Pestaña de la database de clientes</label>
+      <input id="cfgClientsSheet" placeholder="Database_old">
       <label for="cfgOpenSheet">Pestaña de contratos abiertos <span style="color:var(--faint);font-weight:400">— la de la programación mes a mes</span></label>
       <input id="cfgOpenSheet" placeholder="Contratos Abiertos">
       <label for="cfgDecimal">Separador decimal de la planilla</label>
@@ -1060,7 +1069,9 @@ const SHEET_DEFAULTS = {
   EXCLUDE_EXPORTERS: "",                           // exportadores que no se cuentan (separados por coma)
   CONTRACTS_SHEET: "ALL CONTRATOS",                // pestaña de contratos (Brokerage)
   CONTRACTS_GID: "",
-  OPEN_SHEET: "Contratos Abiertos",                // pestaña con la programación mes a mes
+  OPEN_SHEET: "Contratos Abiertos",
+  CLIENTS_URL: "",
+  CLIENTS_SHEET: "Database_old",                   // pestaña de la database de clientes                                 // planilla "database clientes" (Country por cliente)                // pestaña con la programación mes a mes
   USD_COL: "TOTAL FINAL",                          // encabezado de la columna de facturación
   COMISION: { mode: "suma", col: "Monto LT" },     // "suma" o "porTon" (comisión × Tns)
   /* Encabezados de las columnas que usa el dashboard. Editables por negocio
@@ -1672,6 +1683,61 @@ function mezclarExactos(full, exact){
   return out;
 }
 
+/* ---------- Database de clientes: Country de cada importador ---------- */
+const CLI_NOMBRE = ["Company", "Customer Name", "Client", "Nombre cliente", "Cliente", "Clientes", "Customer", "Importer", "Importador", "Razon social", "Razón social", "Company", "Nombre", "Name", "Empresa"];
+const CLI_PAIS = ["Country", "País", "Pais"];
+async function fetchClientes(cfg){
+  const raw = (cfg.CLIENTS_URL || "").trim();
+  if (!raw) return null;
+  const m = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/);
+  const id = m ? m[1] : raw;
+  const g = raw.match(/[#&?]gid=(\d+)/);
+  const base = `https://docs.google.com/spreadsheets/d/${id}`;
+  const hoja = (cfg.CLIENTS_SHEET || "Database_old").trim();
+  const urls = [
+    // por nombre de pestaña (Database_old): no depende de qué pestaña estaba abierta al copiar el link
+    `${base}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(hoja)}&t=${Date.now()}`,
+    `${base}/gviz/tq?tqx=out:csv&headers=0${g ? `&gid=${g[1]}` : ""}&t=${Date.now()}`,
+    `${base}/export?format=csv&gid=${g ? g[1] : 0}&t=${Date.now()}`,
+  ];
+  let rows = null, err = null;
+  for (const u of urls){ try { rows = parseCSV(await fetchCsvText(u)); if (rows && rows.length) break; } catch(e){ err = e; } }
+  if (!rows) throw err || new Error("No pude leer la database de clientes");
+  // fila de encabezados: la primera (de las 10 primeras) que tenga Country/País
+  let h = -1, iPais, iNom;
+  for (let i = 0; i < Math.min(10, rows.length) && h < 0; i++){
+    const hm = headerMap(rows[i]);
+    iPais = CLI_PAIS.map(x => findInMap(x, hm)).find(x => x !== undefined);
+    if (iPais !== undefined){
+      iNom = CLI_NOMBRE.map(x => findInMap(x, hm)).find(x => x !== undefined);
+      if (iNom === undefined) iNom = (rows[i] || []).findIndex((c, j) => j !== iPais && String(c || "").trim());
+      h = i;
+    }
+  }
+  if (h < 0) throw new Error("La database de clientes no tiene una columna Country / País");
+  const mapa = new Map();
+  for (const r of rows.slice(h + 1)){
+    const n = String((r || [])[iNom] ?? "").trim(), p = String((r || [])[iPais] ?? "").trim();
+    if (n && p) mapa.set(normEmpresa(n) || n.toLowerCase(), { n, pais: p });
+  }
+  return mapa;
+}
+/* Pone el país de la database a cada carga según su importador */
+function aplicarPaises(recs, mapa){
+  if (!mapa || !mapa.size || !recs) return 0;
+  const cache = new Map(); let n = 0;
+  const buscar = imp => {
+    if (cache.has(imp)) return cache.get(imp);
+    const k = normEmpresa(imp);
+    let hit = k && mapa.get(k);
+    if (!hit && k) for (const [k2, v] of mapa) if (mismaEmpresa(k2, k)){ hit = v; break; }
+    cache.set(imp, hit ? hit.pais : null);
+    return cache.get(imp);
+  };
+  for (const r of recs){ const p = r.importer ? buscar(r.importer) : null; if (p){ r.pais = p; r.paisDb = true; n++; } }
+  return n;
+}
+
 async function fetchBiz(key){
   const cfg = CONFIG[key];
   const base = `https://docs.google.com/spreadsheets/d/${cfg.SHEET_ID}`;
@@ -1778,6 +1844,10 @@ async function loadData(){
       if (b.contractViews){
         try { CONTRACTS[b.key] = await fetchContracts(b.key); } catch(e){ CONTRACTS[b.key] = []; }
         try { OPEN[b.key] = await fetchOpenContracts(b.key); } catch(e){ OPEN[b.key] = null; }
+      }
+      if (CONFIG[b.key].CLIENTS_URL){
+        try { aplicarPaises(DATA[b.key], await fetchClientes(CONFIG[b.key])); }
+        catch(e){ errors.push(`<b>${b.name} · database de clientes:</b> ${e.message}`); }
       }
     }
     catch(e){ errors.push(`<b>${b.name}:</b> ${e.message}`); }
@@ -2989,9 +3059,57 @@ function renderMercado(recs, yA){
       <div class="pval">${fm(sum(arr, v))} <span style="font-size:.9rem;color:var(--faint)">${pc(sum(arr, v), tot)}</span></div>
       <div class="phint">${fmt0(arr.length)} cargas · ${fmt1(sum(arr, r => r.tns))} t · ${fmtUsd(sum(arr, r => r.usd))}</div></div>`;
   document.getElementById("mktStats").innerHTML = sinPais
-    ? `<p class="empty" style="grid-column:1/-1">No encontré una columna de país en la hoja de cargas (busqué “Country”, “País”, “Pais”). Agregá una columna <b>Country</b> (o “País”) en la hoja ALL y tocá ↻ Actualizar.</p>`
+    ? `<p class="empty" style="grid-column:1/-1">Todavía no sé el país de los clientes. Pegá el link de la planilla <b>database clientes</b> en ⚙️ Configurar → Brokerage → <b>Planilla “database clientes”</b>: los importadores con Country ARGENTINA cuentan como mercado local.</p>`
     : caja("Exportación", exp, "#0071e3") + caja("Mercado local (Argentina)", loc, "#34c759") +
       `<div class="pstat suma"><span class="plabel">Total</span><div class="pval">${fm(tot)}</div><div class="phint">${fmt0(R.length)} cargas</div></div>`;
+
+  // 1b) Brokerage completo (Maní + Aceite/Expeller), sin importar la vista elegida
+  const base = applyFilter(quitarExcluidas(DATA[UI.biz] || [], UI.biz)).filter(r => r.etd && (hist || r.etd.y === yA));
+  const svs = SUBVISTAS[UI.biz] || [];
+  const cols = [...svs.map(x => ({ name: x.label.replace(/^Brokerage /, ""), arr: base.filter(x.test) })), { name: "Brokerage total", arr: base, total: true }];
+  const celda = (arr, f, totArr) => { const val = sum(arr, f), tt = sum(totArr, f);
+    return `${f === tnsF ? fmt1(val) + " t" : fmtUsd(val)} <span style="color:var(--faint);font-size:.78rem">${pc(val, tt)}</span>`; };
+  const tnsF = r => r.tns, usdF = r => r.usd, comF = r => r.comision;
+  let hs = `<table><tr><th></th>${cols.map(c => `<th${c.total ? ' style="background:var(--accent-soft)"' : ""}>${c.name}</th>`).join("")}</tr>`;
+  const filaS = (lab, color, fil) => [["Toneladas", tnsF], ["Facturación", usdF], ["Comisión", comF]].map(([m2, f], i) =>
+    `<tr${i === 0 ? ' style="border-top:2px solid var(--border)"' : ""}><td>${i === 0 ? `<b><span style="color:${color}">■</span> ${lab}</b><br>` : ""}<span style="color:var(--faint)">${m2}</span></td>` +
+    cols.map(c => `<td>${celda(c.arr.filter(fil), f, c.arr)}</td>`).join("") + `</tr>`).join("") +
+    `<tr><td><span style="color:var(--faint)">Cargas</span></td>${cols.map(c => `<td>${fmt0(c.arr.filter(fil).length)}</td>`).join("")}</tr>`;
+  hs += filaS("Exportación", "#0071e3", r => !esLocal(r)) + filaS("Mercado local (Argentina)", "#34c759", esLocal) + `</table>`;
+  const sinDb = [...new Set(base.filter(r => !r.pais).map(r => r.importer || "(sin importador)"))];
+  if (!sinPais && sinDb.length)
+    hs += `<p style="color:var(--amber);font-size:.76rem;margin-top:8px;line-height:1.5">⚠️ ${sinDb.length} importador(es) no figuran en la database de clientes y se cuentan como exportación: ${sinDb.slice(0, 12).join(", ")}${sinDb.length > 12 ? "…" : ""}</p>`;
+  document.getElementById("mktSplit").innerHTML = sinPais ? "" : (base.length ? hs : `<p class="empty">Sin cargas en el período.</p>`);
+
+  // 1c) cargas por mes (todo Brokerage): barras apiladas
+  if (charts.chMkt){ charts.chMkt.destroy(); delete charts.chMkt; }
+  if (!sinPais && base.length){
+    let labelsM, keyM;
+    if (hist){
+      const ks = [...new Set(base.map(r => r.etd.y * 12 + r.etd.mo - 1))].sort((a, b) => a - b);
+      const k0 = ks[0], k1 = ks[ks.length - 1];
+      labelsM = []; for (let k = k0; k <= k1; k++) labelsM.push(`${MESES[k % 12]} ${String(Math.floor(k / 12)).slice(2)}`);
+      keyM = r => r.etd.y * 12 + r.etd.mo - 1 - k0;
+    } else { labelsM = MESES; keyM = r => r.etd.mo - 1; }
+    const ex = Array(labelsM.length).fill(0), lo = Array(labelsM.length).fill(0);
+    for (const r of base) (esLocal(r) ? lo : ex)[keyM(r)]++;
+    charts.chMkt = new Chart(document.getElementById("chMkt"), {
+      type: "bar",
+      data: { labels: labelsM, datasets: [
+        { label: `Exportación (${fmt0(ex.reduce((a, b) => a + b, 0))})`, data: ex, backgroundColor: "#0071e3", stack: "c", borderRadius: 4, maxBarThickness: 40 },
+        { label: `Mercado local (${fmt0(lo.reduce((a, b) => a + b, 0))})`, data: lo, backgroundColor: "#34c759", stack: "c", borderRadius: 4, maxBarThickness: 40 },
+      ]},
+      options: { responsive: true, maintainAspectRatio: false,
+        animation: { duration: paintedFromCache ? 0 : 400 },
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } },
+          tooltip: { callbacks: { label: c => ` ${c.dataset.label.replace(/ \(.*\)$/, "")}: ${c.parsed.y} cargas`,
+            footer: it => { const t = it.reduce((a, x) => a + x.parsed.y, 0); return t ? `Total: ${t} · local ${(it[1] ? it[1].parsed.y / t * 100 : 0).toFixed(0)}%` : ""; } } } },
+        scales: { x: { stacked: true, ticks: { color: cssVar("--tick"), autoSkip: true, maxRotation: 0 }, grid: { display: false } },
+                  y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick"), precision: 0 }, grid: { color: cssVar("--grid") },
+                       title: { display: true, text: "Cargas", color: cssVar("--tick") } } } },
+    });
+  }
 
   // 2) Participación por exportador y por cliente
   const tabla = (campo, conTipo) => {
@@ -3015,10 +3133,23 @@ function renderMercado(recs, yA){
 
   // 3) Frecuencia: cargas (ETD) y contratos (Fecha) por cliente
   const F = new Map();
-  const get = n => { const k = normEmpresa(n) || n;
-    return F.get(k) || (F.set(k, { n, etds: [], fechas: [], local: 0, cargas: 0 }), F.get(k)); };
+  const get = n => {
+    const k = normEmpresa(n) || n;
+    if (F.has(k)) return F.get(k);
+    for (const [k2, x] of F) if (mismaEmpresa(k2, k) || mismaEmpresa(x.n, n)) return x;   // "Wehry" = "Wehry GmbH & Co. KG"
+    F.set(k, { n, etds: [], fechas: [], local: 0, cargas: 0 });
+    return F.get(k);
+  };
   for (const r of R){ const x = get(r.importer || "(sin dato)"); x.etds.push(r.etd); x.cargas++; if (esLocal(r)) x.local++; }
   for (const c of contr) get(c.importador || "(sin dato)").fechas.push(c.fecha);
+  // último contrato: el más reciente de TODA la hoja ALL CONTRATOS para ese cliente,
+  // sin importar año elegido, vista (maní / aceite) ni exportador excluido
+  const todosC = CONTRACTS[UI.biz] || [];
+  for (const x of F.values()){
+    const suyos = todosC.filter(c => c.fecha && mismaEmpresa(c.importador, x.n));
+    x.ultK = suyos.reduce((m, c) => fechaNum(c.fecha) > fechaNum(m) ? c.fecha : m, null);
+    x.nTodos = suyos.length;
+  }
   const meses = hist
     ? Math.max(1, (() => { const ts = R.map(r => r.etd.y * 12 + r.etd.mo); return ts.length ? Math.max(...ts) - Math.min(...ts) + 1 : 12; })())
     : (yA === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
@@ -3028,17 +3159,17 @@ function renderMercado(recs, yA){
     <th>Contratos</th><th>Frecuencia de contratos</th><th>Último contrato</th></tr>`;
   for (const x of filas){
     const ultC = x.etds.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
-    const ultK = x.fechas.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
+    const ultK = x.ultK || x.fechas.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
     const tipo = !sinPais && x.cargas ? (x.local === x.cargas ? `<span class="tag loc">Local</span>` : x.local ? `<span class="tag loc">Mixto</span>` : `<span class="tag exp">Export</span>`) : "";
     h += `<tr><td>${x.n}${tipo}</td><td>${x.cargas ? fmt0(x.cargas) : ""}</td>
       <td>${x.cargas ? (x.cargas / meses).toFixed(1).replace(".", ",") : ""}</td>
       <td>${x.cargas ? cada(diasEntre(x.etds)) : ""}</td><td>${x.cargas ? fechaTxt(ultC) : ""}</td>
       <td>${x.fechas.length ? fmt0(x.fechas.length) : ""}</td><td>${x.fechas.length ? cada(diasEntre(x.fechas)) : ""}</td>
-      <td>${x.fechas.length ? fechaTxt(ultK) : ""}</td></tr>`;
+      <td${x.nTodos && x.nTodos !== x.fechas.length ? ` title="${x.nTodos} contrato(s) en toda la hoja ALL CONTRATOS"` : ""}>${ultK ? fechaTxt(ultK) : ""}</td></tr>`;
   }
   h += `</table><p style="color:var(--faint);font-size:.74rem;margin-top:10px;line-height:1.5">
     Frecuencia = días promedio entre una fecha y la siguiente (con 1 sola fecha no se puede calcular).
-    Cargas / mes sobre ${meses} mes(es) del período. Los contratos se emparejan con el cliente por nombre (ignora S.A., SRL, puntos).</p>`;
+    Cargas / mes sobre ${meses} mes(es) del período. “Último contrato” mira toda la hoja ALL CONTRATOS (cualquier año, producto o exportador). Los contratos se emparejan con el cliente por nombre (ignora S.A., SRL, puntos).</p>`;
   document.getElementById("mktFreq").innerHTML = filas.length ? h : `<p class="empty">Sin cargas ni contratos en el período.</p>`;
 }
 
@@ -3317,7 +3448,9 @@ let LAST_SALDOS_PDF = null;
    "NEWSAN SA", "Newsan S.A.", "newsan s a" y "NEWSAN" se consideran la misma. */
 function normEmpresa(x){
   let t = normHeader(x).replace(/[^a-z0-9]+/g, "");
-  t = t.replace(/(sa|srl|sas|sca|saic|sacif|ltd|ltda|llc|inc|spa|gmbh|bv|nv|plc|co)$/,"");
+  // saca sufijos legales encadenados: "Wehry GmbH & Co. KG" → "wehry"
+  const SUF = /(sa|srl|sas|sca|saic|sacif|sacifia|ltd|ltda|limited|llc|inc|corp|spa|srl|gmbh|kg|ag|bv|nv|plc|co|cia|ycia|sl|sarl|sro|oy|ab|as|spzoo|pty|company)$/;
+  for (let i = 0; i < 4; i++){ const u = t.replace(SUF, ""); if (u === t || u.length < 3) break; t = u; }
   return t;
 }
 function mismaEmpresa(a, b){
@@ -4467,7 +4600,7 @@ function renderSecNav(){
   items.push({ id: "rollCard", label: "Tendencia 12m" });
   if (UI.biz === TOTAL_KEY) items.push({ id: "bizCard", label: "Por negocio" });
   if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
-  if (bz && bz.partnerViews) items.push({ id: "mktCard", label: "Mercado y clientes" }, { id: "partnerCard", label: "Exportadores / importadores" });
+  if (bz && bz.partnerViews) items.push({ id: "mktCard", label: "Exportación vs local", destacado: true }, { id: "partnerCard", label: "Exportadores / importadores" });
   if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" }, { id: "pipeCard", label: "Programación" });
   const visibles = items.filter(it => {
     const el = document.getElementById(it.id);
@@ -4970,6 +5103,8 @@ function fillConfigForm(){
   document.getElementById("cfgContractsSheet").value = c.CONTRACTS_SHEET || "";
   document.getElementById("cfgContractsGid").value = c.CONTRACTS_GID || "";
   document.getElementById("cfgOpenSheet").value = c.OPEN_SHEET || "";
+  document.getElementById("cfgClientsUrl").value = c.CLIENTS_URL || "";
+  document.getElementById("cfgClientsSheet").value = c.CLIENTS_SHEET || "Database_old";
   document.getElementById("cfgColEtd").value = c.COLS.etd;
   document.getElementById("cfgColTns").value = c.COLS.tns;
   document.getElementById("cfgColProduct").value = c.COLS.product;
@@ -5045,6 +5180,8 @@ document.getElementById("cfgSave").onclick = async () => {
     CONTRACTS_SHEET: txt("cfgContractsSheet"),
     CONTRACTS_GID: txt("cfgContractsGid").replace(/\D/g, ""),
     OPEN_SHEET: txt("cfgOpenSheet"),
+    CLIENTS_URL: txt("cfgClientsUrl"),
+    CLIENTS_SHEET: txt("cfgClientsSheet") || "Database_old",
     USD_COL: txt("cfgColUsd") || D.USD_COL,
     COMISION: { mode: document.getElementById("cfgComMode").value, col: txt("cfgColCom") || D.COMISION.col },
     COLS: {
