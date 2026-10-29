@@ -1036,6 +1036,7 @@
     </div>
     <div class="actions">
       <button class="danger" id="cfgClear" type="button" title="Borra la configuración guardada de todos los negocios">Borrar todo</button>
+      <button id="cfgShare" type="button" title="Copia un link que ya trae todas las planillas configuradas">🔗 Link para compañeros</button>
       <button id="cfgCancel" type="button">Cancelar</button>
       <button class="primary" id="cfgSave" type="button">Guardar y actualizar</button>
     </div>
@@ -1101,6 +1102,33 @@ const LS_KEY = "dashboardConfigV2";
 const UI_KEY = "dashboardUI";
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const TNS_POR_CONTENEDOR = 22;   // toneladas promedio por contenedor (para estimar cant. de contenedores)
+
+/* ---------- Compartir configuración por link ----------
+   La config viaja en el "#" del link (#cfg=…). Lo que va después del # nunca se manda
+   a GitHub ni a ningún servidor y no queda en el repo: solo lo ve quien recibe el link. */
+const b64url = t => btoa(unescape(encodeURIComponent(t))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const deb64url = t => decodeURIComponent(escape(atob(t.replace(/-/g, "+").replace(/_/g, "/"))));
+function linkCompartir(){
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e){}
+  const url = location.href.split("#")[0];
+  return url + "#cfg=" + b64url(JSON.stringify({ v: 1, cfg: saved }));
+}
+let CFG_IMPORTADA = false;
+(function importarDesdeLink(){
+  const m = (location.hash || "").match(/[#&]cfg=([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  try {
+    const obj = JSON.parse(deb64url(m[1]));
+    if (obj && obj.cfg && typeof obj.cfg === "object"){
+      localStorage.setItem(LS_KEY, JSON.stringify(obj.cfg));
+      localStorage.removeItem("dashboardCache");   // datos del navegador anterior: se leen de nuevo
+      CFG_IMPORTADA = true;
+    }
+  } catch(e){ console.warn("Link de configuración inválido", e); }
+  // sacar la config de la barra de direcciones (que no quede en favoritos ni se reenvíe sin querer)
+  try { history.replaceState(null, "", location.href.split("#")[0]); } catch(e){}
+})();
 
 function loadConfig(){
   let saved = {};
@@ -5159,6 +5187,21 @@ document.getElementById("btnConfig").onclick = () => { closeSheet(); openConfig(
 document.getElementById("cfgCancel").onclick = closeConfig;
 modalBg.onclick = e => { if (e.target === modalBg) closeConfig(); };
 
+document.getElementById("cfgShare").onclick = async () => {
+  const btn = document.getElementById("cfgShare");
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e){}
+  if (!Object.values(saved).some(c => c && c.SHEET_ID)){
+    alert("Primero guardá la configuración (Guardar y actualizar) y después generá el link.");
+    return;
+  }
+  const link = linkCompartir();
+  try { await navigator.clipboard.writeText(link); }
+  catch(e){ prompt("Copiá este link y mandáselo a tus compañeros:", link); return; }
+  const t = btn.textContent; btn.textContent = "✓ Link copiado — pegalo en WhatsApp o mail";
+  setTimeout(() => { btn.textContent = t; }, 2600);
+};
+
 document.getElementById("cfgSave").onclick = async () => {
   const raw = document.getElementById("cfgSheetId").value.trim();
   let id = raw;
@@ -5317,6 +5360,10 @@ function paint(){
 /* Arranque: si hay caché reciente, se muestra YA y el refresco ocurre atrás. */
 async function init(opts){
   const force = opts && opts.force;
+  if (CFG_IMPORTADA && !(opts && opts.force)){
+    const st = document.getElementById("statusLine");
+    if (st) setTimeout(() => { st.innerHTML = "✅ Configuración cargada desde el link compartido. " + st.innerHTML; }, 50);
+  }
   paintedFromCache = false;
   const cached = force ? null : readCache();
   const hasConfig = BUSINESSES.some(b => b.status === "active" && CONFIG[b.key].SHEET_ID);

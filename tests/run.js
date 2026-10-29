@@ -51,5 +51,18 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('frecuencia contratos', /Euro BV Export 2 .* 2 cada 60 días/.test(T('mktFreq')));
 }
 
+// link para compartir la configuración
+{
+  const fs = require('fs'), path = require('path');
+  const h = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const code = [...h.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m => m[1]).filter(s => s.trim()).at(-1);
+  localStorage.setItem('dashboardConfigV2', JSON.stringify({ brokerage: { SHEET_ID: 'ABC', CLIENTS_URL: 'u' } }));
+  const link = new Function(code + ';return linkCompartir;')()();
+  localStorage.d = {}; global.location = { href: link, hash: link.slice(link.indexOf('#')) };
+  const b = new Function(code + ';return {CONFIG,CFG_IMPORTADA};')();
+  t('link importa la config', b.CFG_IMPORTADA && b.CONFIG.brokerage.SHEET_ID === 'ABC' && b.CONFIG.brokerage.CLIENTS_URL === 'u');
+  global.location = { href: 'http://localhost/', hash: '' };
+}
+
 console.log(`\n${ok} ok · ${bad} fallas`);
 process.exit(bad ? 1 : 0);

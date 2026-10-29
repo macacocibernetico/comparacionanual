@@ -9,6 +9,7 @@ global.window={addEventListener(){},matchMedia:()=>({matches:false,addEventListe
 global.matchMedia=global.window.matchMedia;
 global.localStorage={d:{},getItem(k){return this.d[k]??null},setItem(k,v){this.d[k]=v},removeItem(k){delete this.d[k]}};
 global.CHARTS=[];global.Chart=class{constructor(c,cfg){CHARTS.push(cfg)}destroy(){}resize(){}};Chart.register=()=>{};Chart.defaults={font:{},plugins:{legend:{labels:{}}}};
+global.location={href:'http://localhost/',hash:''};global.history={replaceState(){}};global.btoa=s=>Buffer.from(s,'binary').toString('base64');global.atob=s=>Buffer.from(s,'base64').toString('binary');
 global.fetch=()=>Promise.reject(new Error('x'));global.getComputedStyle=()=>({getPropertyValue:()=>'#000'});global.requestAnimationFrame=f=>f();global.navigator={userAgent:''};
 module.exports={load(){const h=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 const sc=[...h.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(s=>s.trim());

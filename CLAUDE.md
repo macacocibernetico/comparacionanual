@@ -88,3 +88,4 @@ Código muerto conocido (no se llama, se puede borrar): `renderTrend`, `renderPr
 - Prefiere controles visibles y obvios (aprendido con el botón "Σ Total proyectado" que no encontraba) y una vista no sobrecargada.
 
 - **Database de clientes** (config Brokerage `CLIENTS_URL`): `fetchClientes` lee la planilla (columnas Cliente/Customer/Importer + Country/País) y `aplicarPaises` pone `r.pais` a cada carga por importador. Country ARGENTINA = mercado local (`esLocal`). Gráfico `chMkt`: cargas por mes exportación vs local.
+- **Compartir config**: botón 🔗 en ⚙️ Configurar (`linkCompartir`) genera `URL#cfg=<base64url JSON>`; al abrir, `importarDesdeLink` la guarda en localStorage y limpia el # de la barra. Nunca va al repo.
