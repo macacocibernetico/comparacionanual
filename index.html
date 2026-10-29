@@ -13,7 +13,7 @@
   :root{
     --bg:#f5f5f7; --panel:#ffffff; --panel2:#f5f5f7; --panel3:#ebebed;
     --border:rgba(0,0,0,.09); --border2:rgba(0,0,0,.14);
-    --text:#1d1d1f; --muted:#6e6e73; --faint:#8e8e93;
+    --text:#1d1d1f; --muted:#5a5a5f; --faint:#6e6e73;
     --accent:#0071e3; --accent-soft:rgba(0,113,227,.1);
     --green:#248a3d; --red:#d70015; --amber:#b25000;
     --tint-amber-bg:#fff8e6; --tint-amber-bd:#f0d9a0; --tint-amber-tx:#8a5a00;
@@ -260,7 +260,7 @@
     transition:background .35s var(--ease),border-color .35s var(--ease)
   }
   .card{position:relative}
-  .cardtools{position:absolute;top:16px;right:44px;display:flex;gap:6px;z-index:2;opacity:.55;transition:opacity .2s var(--ease)}
+  .cardtools{position:absolute;top:16px;right:44px;display:flex;gap:6px;z-index:2;opacity:.9;transition:opacity .2s var(--ease)}
   .card:hover .cardtools,.cardtools:focus-within{opacity:1}
   .cardtools button,.tblcopy{font:inherit;font-size:.72rem;font-weight:600;color:var(--muted);background:var(--panel2);
     border:1px solid var(--border);border-radius:8px;padding:5px 9px;cursor:pointer;min-height:30px}
@@ -280,6 +280,7 @@
   .card.wide{grid-column:1/-1}
   .chartbox{position:relative;height:280px}
   .chartbox.tall{height:340px}
+  .meta{color:var(--muted);font-size:.72rem;font-weight:600;background:var(--panel2);padding:3px 9px;border-radius:20px;font-variant-numeric:tabular-nums}
   .clickable{
     background:var(--accent-soft);color:var(--accent);font-size:.67rem;font-weight:600;
     padding:3px 9px;border-radius:20px;letter-spacing:.01em;text-transform:none
@@ -339,6 +340,7 @@
   .modal .actions .danger:hover{background:var(--tint-red-bg)}
   .modal .actions .primary{background:var(--accent);color:#fff;font-weight:600}
   .modal .actions .primary:hover{background:var(--accent);filter:brightness(1.1)}
+  html[data-theme="dark"] .modal .actions .primary, html[data-theme="dark"] .skip-link{color:#000}
   .modal.wide{width:min(780px,96vw)}
   .modal .seg{width:100%;margin:16px 0 4px}
   .modal .seg button{flex:1}
@@ -631,23 +633,23 @@
 
   <div class="grid">
     <div class="card">
-      <h2>Toneladas por mes <span class="clickable">CLICK PARA VER CARGAS</span></h2>
-      <p class="csub">Suma de toneladas de las cargas cuya fecha de ETD cae en cada mes.</p>
+      <h2>Toneladas por mes</h2>
+      <p class="csub">Suma de toneladas de las cargas cuya fecha de ETD cae en cada mes. Tocá una barra para ver sus cargas.</p>
       <div class="chartbox"><canvas id="chTns" aria-label="Gráfico de toneladas por mes" role="img"></canvas></div>
     </div>
     <div class="card">
-      <h2>Facturación USD por mes <span class="clickable">CLICK PARA VER CARGAS</span></h2>
-      <p class="csub">Suma de la columna de facturación configurada, por mes de ETD.</p>
+      <h2>Facturación USD por mes</h2>
+      <p class="csub">Suma de la columna de facturación configurada, por mes de ETD. Tocá una barra para ver sus cargas.</p>
       <div class="chartbox"><canvas id="chUsd" aria-label="Gráfico de facturación por mes" role="img"></canvas></div>
     </div>
     <div class="card">
-      <h2>Comisión por mes <span class="clickable">CLICK PARA VER CARGAS</span></h2>
-      <p class="csub">Suma de la columna de comisión configurada, en dólares, por mes de ETD.</p>
+      <h2>Comisión por mes</h2>
+      <p class="csub">Suma de la columna de comisión configurada, en dólares, por mes de ETD. Tocá una barra para ver sus cargas.</p>
       <div class="chartbox"><canvas id="chCom" aria-label="Gráfico de comisión por mes" role="img"></canvas></div>
     </div>
     <div class="card">
-      <h2>Cantidad de embarques <span class="clickable">CLICK PARA VER CARGAS</span></h2>
-      <p class="csub">Cuántas cargas salieron cada mes.</p>
+      <h2>Cantidad de embarques</h2>
+      <p class="csub">Cuántas cargas salieron cada mes. Tocá una barra para ver sus cargas.</p>
       <div class="chartbox"><canvas id="chEtd" aria-label="Gráfico de cantidad de embarques por mes" role="img"></canvas></div>
     </div>
     <div class="card wide" id="oilexpCard" style="display:none">
@@ -687,7 +689,7 @@
     </div>
     </div>
     <div class="card wide" id="rollCard">
-      <h2 class="clickhead">Tendencia · últimos 12 meses móviles <span id="lblRoll" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <h2 class="clickhead">Tendencia · últimos 12 meses móviles <span id="lblRoll" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Cada punto suma ese mes y los 11 anteriores (por ETD), hasta el mes en curso. No depende del año elegido.</p>
       <div class="cardbody">
       <div class="consbar" id="rollBar" style="display:none">
@@ -732,7 +734,7 @@
       <div class="tablewrap" id="prodTable"></div>
     </div>
     <div class="card wide" id="consSection">
-      <h2 class="clickhead">Consolidación — producto, mes y destino <span id="lblConsYear" class="clickable">2026</span><span class="caret" aria-hidden="true">▾</span></h2>
+      <h2 class="clickhead">Consolidación — producto, mes y destino <span id="lblConsYear" class="meta">2026</span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Usa la fecha de <b>Consolidación</b>, no la de ETD.</p>
       <div class="cardbody">
       <div class="consbar">
@@ -760,7 +762,7 @@
     </div>
 
     <div class="card wide" id="gruposCard" style="display:none">
-      <h2 class="clickhead">Grupos comerciales — <span id="lblGruposYear" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <h2 class="clickhead">Grupos comerciales — <span id="lblGruposYear" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Blancheados por región y pastas/roasted por packing. Usa <b>Consolidación</b> y el rango de meses de arriba.</p>
       <div class="cardbody">
       <div class="consbar">
@@ -778,8 +780,8 @@
     </div>
 
     <div class="card wide" id="mktCard" style="display:none">
-      <h2 class="clickhead">Mercado, clientes y frecuencia <span id="lblMkt" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Local = importador con Country <b>ARGENTINA</b> en la database de clientes; el resto es exportación. Cargas por <b>ETD</b> (hoja ALL), contratos por su <b>Fecha</b>.</p>
+      <h2 class="clickhead">Mercado, clientes y frecuencia <span id="lblMkt" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Local = importador con Country <b>ARGENTINA</b> en la database de clientes; cualquier otro país o Country vacío es exportación. Cargas por <b>ETD</b> (hoja ALL), contratos por su <b>Fecha</b>.</p>
       <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="mktPeriodo" role="group" aria-label="Período">
@@ -807,8 +809,8 @@
       </div>
     </div>
     <div class="card wide" id="partnerCard" style="display:none">
-      <h2 class="clickhead">Exportadores e importadores <span class="clickable">CLICK EN UNA FILA PARA VER LAS CARGAS</span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Toneladas por empresa según <b>ETD</b>. El año en curso llega hasta el mes actual.</p>
+      <h2 class="clickhead">Exportadores e importadores<span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Toneladas por empresa según <b>ETD</b>. El año en curso llega hasta el mes actual. Tocá una fila para ver sus cargas.</p>
       <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="partnerSeg" role="group" aria-label="Ver exportadores o importadores">
@@ -837,7 +839,7 @@
     </div>
     </div>
     <div class="card wide" id="contractsCard" style="display:none">
-      <h2 class="clickhead">Contratos <span id="lblContractsN" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <h2 class="clickhead">Contratos <span id="lblContractsN" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Agrupado por <b>fecha del contrato</b>. Independiente de los embarques.</p>
       <div class="cardbody">
       <div class="consbar">
@@ -875,7 +877,7 @@
     </div>
     </div>
     <div class="card wide" id="pipeCard" style="display:none">
-      <h2 class="clickhead">Programación y proyección de embarques <span id="lblPipeN" class="clickable"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <h2 class="clickhead">Programación y proyección de embarques <span id="lblPipeN" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Lo ya embarcado (<b>ETD</b>) más lo que queda programado en la hoja de contratos abiertos: cuánto va a ser el total de cada mes.</p>
       <div class="cardbody">
       <div class="consbar">
@@ -1121,6 +1123,14 @@ let CFG_IMPORTADA = false;
   try {
     const obj = JSON.parse(deb64url(m[1]));
     if (obj && obj.cfg && typeof obj.cfg === "object"){
+      const actual = localStorage.getItem(LS_KEY);
+      const igual = actual && actual === JSON.stringify(obj.cfg);
+      if (actual && !igual && actual !== "{}" &&
+          !confirm("Este link trae una configuración de planillas.\n\nReemplaza la que tenés ahora (se guarda una copia por las dudas). ¿Continuar?")){
+        try { history.replaceState(null, "", location.href.split("#")[0]); } catch(e){}
+        return;
+      }
+      if (actual && !igual) localStorage.setItem(LS_KEY + "_backup", actual);
       localStorage.setItem(LS_KEY, JSON.stringify(obj.cfg));
       localStorage.removeItem("dashboardCache");   // datos del navegador anterior: se leen de nuevo
       CFG_IMPORTADA = true;
@@ -1712,6 +1722,7 @@ function mezclarExactos(full, exact){
 }
 
 /* ---------- Database de clientes: Country de cada importador ---------- */
+const CLI_INFO = {};
 const CLI_NOMBRE = ["Company", "Customer Name", "Client", "Nombre cliente", "Cliente", "Clientes", "Customer", "Importer", "Importador", "Razon social", "Razón social", "Company", "Nombre", "Name", "Empresa"];
 const CLI_PAIS = ["Country", "País", "Pais"];
 async function fetchClientes(cfg){
@@ -1722,14 +1733,22 @@ async function fetchClientes(cfg){
   const g = raw.match(/[#&?]gid=(\d+)/);
   const base = `https://docs.google.com/spreadsheets/d/${id}`;
   const hoja = (cfg.CLIENTS_SHEET || "Database_old").trim();
+  // con gid, primero el export: trae TODAS las filas aunque la pestaña tenga un filtro puesto
+  // (gviz solo devuelve las filas visibles del filtro)
   const urls = [
-    // por nombre de pestaña (Database_old): no depende de qué pestaña estaba abierta al copiar el link
+    ...(g ? [`${base}/export?format=csv&gid=${g[1]}&t=${Date.now()}`] : []),
     `${base}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(hoja)}&t=${Date.now()}`,
-    `${base}/gviz/tq?tqx=out:csv&headers=0${g ? `&gid=${g[1]}` : ""}&t=${Date.now()}`,
-    `${base}/export?format=csv&gid=${g ? g[1] : 0}&t=${Date.now()}`,
+    ...(g ? [`${base}/gviz/tq?tqx=out:csv&headers=0&gid=${g[1]}&t=${Date.now()}`] : []),
   ];
+  // se queda con la primera respuesta que realmente tenga la columna Country
   let rows = null, err = null;
-  for (const u of urls){ try { rows = parseCSV(await fetchCsvText(u)); if (rows && rows.length) break; } catch(e){ err = e; } }
+  for (const u of urls){
+    try {
+      const rr = parseCSV(await fetchCsvText(u));
+      if (rr && rr.slice(0, 10).some(r => CLI_PAIS.some(x => findInMap(x, headerMap(r)) !== undefined))){ rows = rr; break; }
+      err = new Error(`La pestaña “${hoja}” no tiene una columna Country (revisá el nombre de la pestaña en ⚙️ Configurar)`);
+    } catch(e){ err = e; }
+  }
   if (!rows) throw err || new Error("No pude leer la database de clientes");
   // fila de encabezados: la primera (de las 10 primeras) que tenga Country/País
   let h = -1, iPais, iNom;
@@ -1746,8 +1765,13 @@ async function fetchClientes(cfg){
   const mapa = new Map();
   for (const r of rows.slice(h + 1)){
     const n = String((r || [])[iNom] ?? "").trim(), p = String((r || [])[iPais] ?? "").trim();
-    if (n && p) mapa.set(normEmpresa(n) || n.toLowerCase(), { n, pais: p });
+    if (!n) continue;
+    const k = normEmpresa(n) || n.toLowerCase();
+    const prev = mapa.get(k);
+    if (!prev || (!prev.pais && p)) mapa.set(k, { n, pais: p });   // si está repetido, gana la fila con Country
   }
+  mapa.filas = rows.length - h - 1;
+  mapa.colNombre = String(rows[h][iNom] ?? "");
   return mapa;
 }
 /* Pone el país de la database a cada carga según su importador */
@@ -1759,10 +1783,14 @@ function aplicarPaises(recs, mapa){
     const k = normEmpresa(imp);
     let hit = k && mapa.get(k);
     if (!hit && k) for (const [k2, v] of mapa) if (mismaEmpresa(k2, k)){ hit = v; break; }
-    cache.set(imp, hit ? hit.pais : null);
+    cache.set(imp, hit ? (hit.pais || "") : null);
     return cache.get(imp);
   };
-  for (const r of recs){ const p = r.importer ? buscar(r.importer) : null; if (p){ r.pais = p; r.paisDb = true; n++; } }
+  for (const r of recs){
+    const p = r.importer ? buscar(r.importer) : null;
+    if (p){ r.pais = p; r.paisDb = true; n++; }
+    else if (r.importer && cache.get(r.importer) === "") r.paisVacio = true;   // está en la database pero sin Country
+  }
   return n;
 }
 
@@ -1874,9 +1902,16 @@ async function loadData(){
         try { OPEN[b.key] = await fetchOpenContracts(b.key); } catch(e){ OPEN[b.key] = null; }
       }
       if (CONFIG[b.key].CLIENTS_URL){
-        try { aplicarPaises(DATA[b.key], await fetchClientes(CONFIG[b.key])); }
-        catch(e){ errors.push(`<b>${b.name} · database de clientes:</b> ${e.message}`); }
-      }
+        try {
+          const mapa = await fetchClientes(CONFIG[b.key]);
+          const n = aplicarPaises(DATA[b.key], mapa);
+          CLI_INFO[b.key] = { ok: true, clientes: mapa.size, filas: mapa.filas, col: mapa.colNombre, cargas: n, total: DATA[b.key].length };
+        }
+        catch(e){
+          CLI_INFO[b.key] = { ok: false, err: e.message };
+          errors.push(`<b>${b.name} · database de clientes:</b> ${e.message}`);
+        }
+      } else CLI_INFO[b.key] = null;
     }
     catch(e){ errors.push(`<b>${b.name}:</b> ${e.message}`); }
   }));
@@ -3045,6 +3080,7 @@ function diasEntre(fechas){
   if (uniq.length < 2) return null;
   return (uniq[uniq.length - 1] - uniq[0]) / 86400000 / (uniq.length - 1);
 }
+const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fechaTxt = f => f ? `${String(f.d || 1).padStart(2, "0")}/${String(f.mo).padStart(2, "0")}/${f.y}` : "—";
 const fechaNum = f => f ? f.y * 10000 + f.mo * 100 + (f.d || 1) : 0;
 
@@ -3086,8 +3122,9 @@ function renderMercado(recs, yA){
   const caja = (titulo, arr, color, cls) => `<div class="pstat ${cls || ""}"><span class="plabel"><i style="background:${color}"></i>${titulo}</span>
       <div class="pval">${fm(sum(arr, v))} <span style="font-size:.9rem;color:var(--faint)">${pc(sum(arr, v), tot)}</span></div>
       <div class="phint">${fmt0(arr.length)} cargas · ${fmt1(sum(arr, r => r.tns))} t · ${fmtUsd(sum(arr, r => r.usd))}</div></div>`;
+  const ci = CLI_INFO[UI.biz];
   document.getElementById("mktStats").innerHTML = sinPais
-    ? `<p class="empty" style="grid-column:1/-1">Todavía no sé el país de los clientes. Pegá el link de la planilla <b>database clientes</b> en ⚙️ Configurar → Brokerage → <b>Planilla “database clientes”</b>: los importadores con Country ARGENTINA cuentan como mercado local.</p>`
+    ? `<p class="empty" style="grid-column:1/-1">${ci && !ci.ok ? `❌ No pude leer la database de clientes: ${ci.err}<br>` : ci && ci.ok ? `Leí ${fmt0(ci.clientes)} clientes de la database, pero ningún importador de las cargas coincidió con la columna Company.<br>` : (CONFIG[UI.biz] || {}).CLIENTS_URL ? "⏳ Leyendo la database de clientes… tocá ↻ Actualizar si no aparece.<br>" : ""}Todavía no sé el país de los clientes. Pegá el link de la planilla <b>database clientes</b> en ⚙️ Configurar → Brokerage → <b>Planilla “database clientes”</b>: los importadores con Country ARGENTINA cuentan como mercado local.</p>`
     : caja("Exportación", exp, "#0071e3") + caja("Mercado local (Argentina)", loc, "#34c759") +
       `<div class="pstat suma"><span class="plabel">Total</span><div class="pval">${fm(tot)}</div><div class="phint">${fmt0(R.length)} cargas</div></div>`;
 
@@ -3104,9 +3141,13 @@ function renderMercado(recs, yA){
     cols.map(c => `<td>${celda(c.arr.filter(fil), f, c.arr)}</td>`).join("") + `</tr>`).join("") +
     `<tr><td><span style="color:var(--faint)">Cargas</span></td>${cols.map(c => `<td>${fmt0(c.arr.filter(fil).length)}</td>`).join("")}</tr>`;
   hs += filaS("Exportación", "#0071e3", r => !esLocal(r)) + filaS("Mercado local (Argentina)", "#34c759", esLocal) + `</table>`;
-  const sinDb = [...new Set(base.filter(r => !r.pais).map(r => r.importer || "(sin importador)"))];
+  const vacios = [...new Set(base.filter(r => !r.pais && r.paisVacio).map(r => r.importer))];
+  const sinDb = [...new Set(base.filter(r => !r.pais && !r.paisVacio).map(r => r.importer || "(sin importador)"))];
+  const ciX = CLI_INFO[UI.biz];
+  const lista = a => `<details style="display:inline"><summary style="cursor:pointer;display:inline">${a.length} importador(es)</summary> ${esc(a.join(" · "))}</details>`;
+  // Country vacío = exportación (regla del negocio): no se avisa
   if (!sinPais && sinDb.length)
-    hs += `<p style="color:var(--amber);font-size:.76rem;margin-top:8px;line-height:1.5">⚠️ ${sinDb.length} importador(es) no figuran en la database de clientes y se cuentan como exportación: ${sinDb.slice(0, 12).join(", ")}${sinDb.length > 12 ? "…" : ""}</p>`;
+    hs += `<p style="color:var(--amber);font-size:.76rem;margin-top:8px;line-height:1.5">⚠️ ${lista(sinDb)} no los encontré en la columna “${esc(ciX && ciX.col || "Company")}” de la database${ciX && ciX.filas ? ` (leí ${fmt0(ciX.filas)} filas, ${fmt0(ciX.clientes)} empresas distintas)` : ""}: se cuentan como exportación.</p>`;
   document.getElementById("mktSplit").innerHTML = sinPais ? "" : (base.length ? hs : `<p class="empty">Sin cargas en el período.</p>`);
 
   // 1c) cargas por mes (todo Brokerage): barras apiladas
@@ -3152,7 +3193,7 @@ function renderMercado(recs, yA){
     let h = `<table><tr><th>${campo === "exporter" ? "Exportador" : "Cliente"}</th><th>${met === "tns" ? "Toneladas" : met === "usd" ? "Facturación" : "Comisión"}</th><th>% del total</th><th>Cargas</th></tr>`;
     for (const x of filas){
       const tipo = conTipo && !sinPais ? (x.loc === x.cargas ? `<span class="tag loc">Local</span>` : x.loc ? `<span class="tag loc">Mixto</span>` : `<span class="tag exp">Export</span>`) : "";
-      h += `<tr><td>${x.n}${tipo}</td><td>${fm(x.val)}</td><td><b>${pc(x.val, tot)}</b></td><td>${fmt0(x.cargas)}</td></tr>`;
+      h += `<tr><td>${esc(x.n)}${tipo}</td><td>${fm(x.val)}</td><td><b>${pc(x.val, tot)}</b></td><td>${fmt0(x.cargas)}</td></tr>`;
     }
     return h + `<tr class="total"><td>Total</td><td>${fm(tot)}</td><td>100%</td><td>${fmt0(R.length)}</td></tr></table>`;
   };
@@ -3189,7 +3230,7 @@ function renderMercado(recs, yA){
     const ultC = x.etds.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
     const ultK = x.ultK || x.fechas.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
     const tipo = !sinPais && x.cargas ? (x.local === x.cargas ? `<span class="tag loc">Local</span>` : x.local ? `<span class="tag loc">Mixto</span>` : `<span class="tag exp">Export</span>`) : "";
-    h += `<tr><td>${x.n}${tipo}</td><td>${x.cargas ? fmt0(x.cargas) : ""}</td>
+    h += `<tr><td>${esc(x.n)}${tipo}</td><td>${x.cargas ? fmt0(x.cargas) : ""}</td>
       <td>${x.cargas ? (x.cargas / meses).toFixed(1).replace(".", ",") : ""}</td>
       <td>${x.cargas ? cada(diasEntre(x.etds)) : ""}</td><td>${x.cargas ? fechaTxt(ultC) : ""}</td>
       <td>${x.fechas.length ? fmt0(x.fechas.length) : ""}</td><td>${x.fechas.length ? cada(diasEntre(x.fechas)) : ""}</td>
