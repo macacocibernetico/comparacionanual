@@ -157,11 +157,14 @@ Es un dashboard de uso experto, así que no es automáticamente un error. Coinci
 
 ## Estado de los arreglos (30/10/2026)
 
-Resueltos y verificados en el navegador y con `node tests/run.js` (22 ok): **01, 02, 05, 06, 07, 08**.
+Resueltos y verificados en el navegador y con `node tests/run.js` (22 ok): **01, 02, 03, 04, 05, 06, 07, 08**.
 - **01:** un negocio sin planilla ya no muestra tarjetas vacías; ver el mensaje con el botón Configurar. El aviso de datos de ejemplo aclara que son de AXT. Además se corrigió un hallazgo nuevo: la tabla "Comparación anual por producto" de AXT se seguía mostrando dentro de Brokerage.
 - **02:** Δ % y "vs año comp." con coma decimal.
 - **05:** los 3 modales con `role="dialog"`, `aria-modal` y `aria-labelledby`. Falta mover el foco al abrir y devolverlo al cerrar.
 - **06:** tras el cambio, 0 fallas de contraste en claro (224 textos) y en oscuro (225).
 - **07/08:** `<main id="main">` y `aria-pressed` en "Todos".
 
-Pendientes: 03 y 04 (mobile), 09 a 14.
+- **03:** en mobile los 5 negocios se ven en dos filas (todos dentro de 375 px, antes "Σ Total" llegaba a 630 px).
+- **04:** en mobile el filtro de productos queda en la barra, fuera del ☰ (en escritorio vuelve a "Ajustes de vista").
+
+Pendientes: 09 a 14. Observado de paso: los pills de año en mobile siguen en carrusel y "Todos" queda cortado en el borde derecho.

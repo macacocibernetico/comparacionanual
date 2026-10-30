@@ -76,6 +76,10 @@
   .group > .glabel{color:var(--faint);font-size:.7rem;font-weight:600;letter-spacing:.02em}
   .group > .grow{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
   .group.right{margin-left:auto}
+  /* el filtro de productos vive en la toolbar solo en mobile (en escritorio está en "Ajustes de vista") */
+  #grpFilterM{display:none}
+  #grpFilterM.on{display:flex}
+  #grpFilterM .grow button{width:100%;min-height:44px;text-align:left;justify-content:flex-start}
   .vsep{display:none}
   @media(max-width:900px){ .group.right{margin-left:0} .toolbar{gap:18px} }
 
@@ -405,9 +409,9 @@
     .toolbar{padding:12px 12px;gap:14px;border-radius:12px}
     .group{width:100%}
     /* tabs y años en carrusel horizontal, sin romper la grilla */
-    .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:100%}
-    .tabs::-webkit-scrollbar{display:none}
-    .tab{flex:0 0 auto;padding:10px 16px;min-height:44px}
+    /* los negocios en dos filas: en carrusel, "Σ Total" quedaba fuera de pantalla sin ninguna pista */
+    .tabs{display:flex;flex-wrap:wrap;max-width:100%}
+    .tab{flex:1 1 auto;justify-content:center;padding:10px 12px;min-height:44px}
     .yearpills{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;max-width:100%}
     .yearpills::-webkit-scrollbar{display:none}
     .pill{flex:0 0 auto;padding:10px 15px;min-height:44px;font-size:.9rem}
@@ -571,6 +575,11 @@
     <div class="group" id="grpYear">
       <span class="glabel" id="lblGrpYear">Año</span>
       <div class="grow"><div class="yearpills" id="yearPills" role="group" aria-labelledby="lblGrpYear"></div></div>
+    </div>
+
+    <div class="group" id="grpFilterM">
+      <span class="glabel">Filtro</span>
+      <div class="grow"></div>
     </div>
 
     <div class="group" id="grpView">
@@ -4964,6 +4973,7 @@ function renderControls(){
   document.getElementById("grpMode").style.display = hide ? "none" : "";
   document.getElementById("grpView").style.display = hide ? "none" : "";
   document.getElementById("btnFilter").style.display = hide ? "none" : "";
+  document.getElementById("grpFilterM").classList.toggle("on", sheetMode === "mobile" && !hide);
   const btnSplit = document.getElementById("btnSplit");
   const SPc = currentSplit();
   const canSplit = !hide && !!SPc;
@@ -5322,7 +5332,15 @@ function layoutForViewport(){
   const grpView = document.getElementById("grpView");
   const grpData = document.getElementById("grpData");
   const themeRow = document.getElementById("themeRow");
+  const btnFilter = document.getElementById("btnFilter");
+  const grpFilterM = document.getElementById("grpFilterM");
   if (!slots || !toolbar) return;
+  // el filtro cambia todos los números: en mobile queda a la vista, fuera del ☰
+  if (btnFilter && grpFilterM){
+    const dest = (mode === "mobile" ? grpFilterM : grpView).querySelector(".grow");
+    if (dest){ mode === "mobile" ? dest.appendChild(btnFilter) : dest.prepend(btnFilter); }
+    grpFilterM.classList.toggle("on", mode === "mobile" && btnFilter.style.display !== "none");
+  }
   if (mode === "mobile"){
     [grpView, grpData].forEach(g => { if (g){ g.classList.add("slot"); slots.appendChild(g); } });
     if (themeRow) slots.appendChild(themeRow);

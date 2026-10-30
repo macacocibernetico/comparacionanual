@@ -75,6 +75,11 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('3 modales con role=dialog y nombre', (h.match(/class="modal[^"]*" role="dialog" aria-modal="true" aria-labelledby="\w+"/g) || []).length === 3);
   t('hay <main> y el skip-link apunta a él', /<main id="main"/.test(h) && /href="#main" class="skip-link"/.test(h) && /<\/main>/.test(h));
   t('pill Todos con aria-pressed', /data-y="all" aria-pressed=/.test(h));
+
+  // mobile: negocios en dos filas (sin carrusel oculto) y filtro de productos fuera del ☰
+  const mob = h.slice(h.indexOf('@media(max-width:720px)'));
+  t('mobile: pestañas en varias filas', /\.tabs\{display:flex;flex-wrap:wrap/.test(mob) && !/\.tabs\{flex-wrap:nowrap/.test(mob));
+  t('mobile: grupo del filtro en la toolbar', /id="grpFilterM"/.test(h) && /dest\.appendChild\(btnFilter\)/.test(h));
 }
 
 // link para compartir la configuración
