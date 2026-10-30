@@ -123,6 +123,11 @@ reemplazar("Los demás negocios quedan vacíos hasta que conectes su planilla. P
 reemplazar("Datos de ejemplo — todavía no hay planillas conectadas", "Datos de ejemplo — todavía no se cargaron los datos reales", { opcional: true });
 reemplazar("Este negocio todavía no tiene planilla conectada.<br>Tocá <b>⚙️ Configurar</b> arriba a la derecha, elegí el negocio y pegá el enlace de su planilla.",
            "Este negocio todavía no tiene datos cargados.<br>Pedile a Claude que los cargue desde su planilla.", { opcional: true });
+/* 4b · vista inicial del Artifact: Brokerage Maní, el año en curso solo, sin comparar (se aplica en cada apertura) */
+reemplazar(`  if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", sel: null };`,
+`  ui.biz = "brokerage"; ui.mode = "solo"; ui.year = new Date().getFullYear(); ui.cmpSet = [];
+  ui.bizSub = { ...(ui.bizSub || {}), brokerage: "mani" };
+  if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", sel: null };`);
 /* 5 · estilo Zentra: marca, título grande, resumen nuevo y estilos (tools/zentra/) */
 const ZDIR = path.join(__dirname, "zentra");
 const zleer = f => fs.readFileSync(path.join(ZDIR, f), "utf8").replace(/\r\n/g, "\n");
