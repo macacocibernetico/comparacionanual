@@ -751,6 +751,13 @@
     #statusLine{grid-column:2;justify-self:end;align-self:center;margin-bottom:10px;text-align:right}
   }
 
+  /* Mobile: los años en varias filas (en carrusel, "Todos" quedaba cortado sin ninguna pista) */
+  @media(max-width:720px){
+    .yearpills{flex-wrap:wrap;overflow:visible;gap:8px}
+    .yearpills .pill{flex:1 1 72px;justify-content:center;min-height:44px;padding:10px 12px}
+    .yearpills .pillhint{flex:1 1 100%;white-space:normal;margin:0;text-align:center}
+  }
+
   /* Tipografía de los KPIs (como "$41,540" de la referencia): Plus Jakarta Sans,
      bold limpio y símbolos en la misma línea base que los dígitos */
   .kpi{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif}
