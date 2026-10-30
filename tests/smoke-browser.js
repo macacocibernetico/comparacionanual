@@ -119,7 +119,12 @@
     "contractsCard", "pipeCard", "compareCard", "grpYear", "grpMode", "grpView", "btnFilter", "btnSplit", "ytdNote", "banner"];
   const huella = () => {
     const o = { txt: {}, vis: {}, charts: {} };
-    for (const id of IDS){ const el = document.getElementById(id); if (el) o.txt[id] = norm(el.textContent); }
+    for (const id of IDS){
+      const el = document.getElementById(id); if (!el) continue;
+      // lo que está dentro de una tarjeta oculta no se compara (puede quedar texto viejo del arranque)
+      const card = el.closest(".card");
+      o.txt[id] = card && (card.style.display === "none" || card.hidden) ? "(oculto)" : norm(el.textContent);
+    }
     for (const id of CARDS){ const el = document.getElementById(id); if (el) o.vis[id] = el.style.display === "none" || el.hidden ? "oculto" : "visible"; }
     for (const [k, ch] of Object.entries(charts)){
       if (!ch || !ch.data) continue;

@@ -728,6 +728,29 @@
   .cardtools .kmenu button:hover{background:var(--panel2)}
   @media(max-width:720px){ .cardtools{position:absolute;top:14px;right:52px;margin:0} }
 
+  /* Cabecera sintetizada: el aviso de "misma fecha" vive en su chip (con la explicación al pasar el mouse) */
+  #ytdNote{display:none!important}
+  .context{margin-bottom:10px;gap:6px}
+  .ctag{font-size:.78rem;padding:5px 12px}
+  #statusLine{font-size:.78rem;color:var(--faint);margin:0 0 10px}
+  .secnav{margin:2px 0 16px}
+  @media(min-width:1101px){
+    /* Barra de filtros en dos filas: negocio + acciones arriba; vista, años y ajustes abajo */
+    .toolbar{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;
+      grid-template-areas:"biz biz biz data" "mode year view view";column-gap:22px;row-gap:14px;align-items:center;padding:14px 18px}
+    #grpBiz{grid-area:biz} #grpData{grid-area:data;justify-self:end} #grpMode{grid-area:mode}
+    #grpYear{grid-area:year} #grpView{grid-area:view;justify-self:end}
+    .toolbar .group{flex-direction:row;align-items:center;gap:10px}
+    /* los rótulos sobran a la vista (la forma de cada control ya dice qué es); quedan para lectores de pantalla */
+    .toolbar .group > .glabel{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+    #grpYear{border-left:1px solid var(--border2);padding-left:22px}
+    /* Estado de la carga a la derecha de los chips de contexto, en la misma fila */
+    header{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-auto-flow:row dense;column-gap:16px}
+    header > *{grid-column:1/-1}
+    #contextBar{grid-column:1;margin-bottom:10px}
+    #statusLine{grid-column:2;justify-self:end;align-self:center;margin-bottom:10px;text-align:right}
+  }
+
   /* Tipografía de los KPIs (como "$41,540" de la referencia): Plus Jakarta Sans,
      bold limpio y símbolos en la misma línea base que los dígitos */
   .kpi{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif}
@@ -5039,11 +5062,9 @@ function renderContext(s){
   const el = document.getElementById("contextBar");
   const bizName = UI.biz === TOTAL_KEY ? "Todos los negocios" : (s.biz ? s.biz.name : UI.biz);
   const tags = [];
-  const svc = subActual();
-  tags.push(`<span class="ctag">Viendo <b>${svc ? svc.label : bizName}</b></span>`);
-  tags.push(`<span class="ctag">${s.cmpYears.length ? `Comparando <b>${s.yA}</b> con <b>${s.cmpYears.join(" · ")}</b>` : `Año <b>${s.yA}</b>`}</span>`);
-  tags.push(`<span class="ctag"><b>${fmt0(s.nRecs)}</b> cargas en la vista</span>`);
-  if (s.ytd) tags.push(`<span class="ctag act">📅 Comparación a misma fecha (hasta ${MESES[s.cutoff - 1]})</span>`);
+  // el negocio y los años ya se ven marcados en la barra de filtros: acá solo lo que no está a la vista
+  tags.push(`<span class="ctag" title="${esc(bizName)}"><b>${fmt0(s.nRecs)}</b> cargas en la vista</span>`);
+  if (s.ytd) tags.push(`<span class="ctag act" title="Como ${new Date().getFullYear()} está en curso, cada año suma solo de enero a ${MESES[s.cutoff - 1].toLowerCase()}, para que la comparación sea justa.">📅 Comparación a misma fecha (hasta ${MESES[s.cutoff - 1]})</span>`);
   const listaEx = UI.biz === TOTAL_KEY
     ? [...new Set(Object.keys(DATA).flatMap(k => excluidosDe(k)))]
     : excluidosDe(UI.biz);
