@@ -50,19 +50,32 @@ function claveFuente(url){
 async function fetchCsvText(url){
   const archivo = ARTIFACT.manifest && ARTIFACT.manifest.files[claveFuente(url)];
   if (!archivo) throw new Error("HTTP 404");
-  const res = await fetch(archivo);
+  const res = await fetch(ARTIFACT.base + archivo);
   if (!res.ok) throw new Error("HTTP " + res.status);
   return await res.text();
 }
+/* Lee la copia de datos. Prueba varias formas de resolver la dirección y, si ninguna anda,
+   guarda el motivo para mostrarlo (en vez de caer en silencio en los datos de ejemplo). */
 async function cargarDatosArtifact(){
-  try {
-    const res = await fetch("data/manifest.json");
-    if (!res.ok) return;                                   // sin copia de datos: modo demostración
-    const m = await res.json();
-    ARTIFACT.manifest = m;
-    window.__CFG_ARTIFACT = m.config || {};
-    CONFIG = loadConfig();
-  } catch(e){ /* sin datos: modo demostración */ }
+  const MANIFIESTO = "data/manifest.json", errores = [];
+  const candidatas = [MANIFIESTO, "./" + MANIFIESTO];
+  for (const base of [document.baseURI, location.href]){
+    try { candidatas.push(new URL(MANIFIESTO, base).href); } catch(e){}
+  }
+  for (const u of [...new Set(candidatas)]){
+    try {
+      const res = await fetch(u, { cache: "no-store" });
+      if (!res.ok){ errores.push(u + " → HTTP " + res.status); continue; }
+      const m = await res.json();
+      const abs = new URL(u, document.baseURI).href;
+      ARTIFACT.base = abs.slice(0, abs.length - MANIFIESTO.length);   // carpeta de la página
+      ARTIFACT.manifest = m;
+      window.__CFG_ARTIFACT = m.config || {};
+      CONFIG = loadConfig();
+      return;
+    } catch(e){ errores.push(u + " → " + (e && e.message || e)); }
+  }
+  if (__ESPERA_DATOS__) ARTIFACT.error = errores.join(" · ");
 }
 function fechaCopia(){
   const t = ARTIFACT.manifest && ARTIFACT.manifest.generatedAt;
@@ -106,7 +119,7 @@ reemplazar('doc.save(`${bizName}_Contratos_${D.modo}.pdf`);', 'await guardarArch
 reemplazar(`actualizado \${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}\``,
            `copia de datos del \${fechaCopia()}\``);
 reemplazar("Los demás negocios quedan vacíos hasta que conectes su planilla. Para ver tus números reales, tocá <b>⚙️ Configurar</b> arriba a la derecha y pegá el enlace de tu planilla de Google Sheets.",
-           "Los datos reales los carga Claude desde tus planillas: pedile “cargá los datos”.", { opcional: true });
+           '" + (ARTIFACT.error ? "<b>No pude leer la copia de los datos reales</b> (" + esc(ARTIFACT.error) + "). Recargá la página con Ctrl+F5; si sigue igual, avisale a Claude este mensaje." : "Los datos reales los carga Claude desde tus planillas: pedile “cargá los datos”.") + "', { opcional: true });
 reemplazar("Datos de ejemplo — todavía no hay planillas conectadas", "Datos de ejemplo — todavía no se cargaron los datos reales", { opcional: true });
 reemplazar("Este negocio todavía no tiene planilla conectada.<br>Tocá <b>⚙️ Configurar</b> arriba a la derecha, elegí el negocio y pegá el enlace de su planilla.",
            "Este negocio todavía no tiene datos cargados.<br>Pedile a Claude que los cargue desde su planilla.", { opcional: true });
@@ -126,7 +139,9 @@ fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, "index.html"), pagina);
 let nDatos = 0;
-if (fs.existsSync(path.join(DATOS, "manifest.json"))){
+const hayDatos = fs.existsSync(path.join(DATOS, "manifest.json"));
+fs.writeFileSync(path.join(OUT, "index.html"), pagina.replace("__ESPERA_DATOS__", String(hayDatos)));
+if (hayDatos){
   fs.mkdirSync(path.join(OUT, "data"), { recursive: true });
   for (const f of fs.readdirSync(DATOS)){ fs.copyFileSync(path.join(DATOS, f), path.join(OUT, "data", f)); nDatos++; }
 }
