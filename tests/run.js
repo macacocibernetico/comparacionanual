@@ -88,6 +88,17 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   const mob = h.slice(h.indexOf('@media(max-width:720px)'));
   t('mobile: pestañas en varias filas', /\.tabs\{display:flex;flex-wrap:wrap/.test(mob) && !/\.tabs\{flex-wrap:nowrap/.test(mob));
   t('mobile: grupo del filtro en la toolbar', /id="grpFilterM"/.test(h) && /dest\.appendChild\(btnFilter\)/.test(h));
+
+  // plegar: gráficos, detalle y comparación se pliegan; "Plegar todo" cierra todo lo visible y lo vuelve a abrir
+  const p = new Function(code + ';return {UI,PLEGABLES,renderSecNav};')();
+  t('gráficos, detalle y comparación son plegables', ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'prodCard', 'compareCard'].every(id => p.PLEGABLES.includes(id)));
+  ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard', 'compareCard'].forEach(id => { g(id).style.display = ''; });
+  p.UI.biz = 'axt'; p.UI.cerradas = []; p.renderSecNav();
+  t('botón "Plegar todo"', /Plegar todo/.test(g('secNav').innerHTML));
+  g('btnPlegarTodo').onclick();
+  t('"Plegar todo" cierra todas las visibles', ['cardTns', 'prodCard', 'compareCard'].every(id => p.UI.cerradas.includes(id)) && /Desplegar todo/.test(g('secNav').innerHTML));
+  g('btnPlegarTodo').onclick();
+  t('"Desplegar todo" las vuelve a abrir', !p.UI.cerradas.some(id => ['cardTns', 'prodCard', 'compareCard'].includes(id)));
 }
 
 // link para compartir la configuración

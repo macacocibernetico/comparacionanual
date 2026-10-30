@@ -17,13 +17,13 @@
 - `esc()` en todos los textos que vienen de la planilla (productos, empresas, destinos, contratos, filtro).
 - `<title>` = `h1` ("Dashboard de Negocios"); emojis de los botones fijos en `aria-hidden`.
 - Si falla la carga, la sección Mercado ya no queda con datos viejos.
+- Sobrecarga: los 4 gráficos mensuales, el detalle por producto y la comparación anual se pliegan; botón "Plegar todo / Desplegar todo" en la fila "Ir a" (no se cambió el estado inicial: todo arranca abierto).
 - Rediseño visual completo (ver `docs/CHECKLIST-FUNCIONAL.md`).
 
 ## Revisión UX/UI — pendiente
-1. Sobrecarga: hacer plegables el grid mensual, "Detalle mensual por producto" y `#compareCard`; botón "Plegar todo / Desplegar todo" en "Ir a".
-2. Botones "⤓ Exportar a PDF" propios de Exportadores, NEWSAN y Contratos: **no son duplicados** (hacen un PDF con la tabla real, distinto del PDF-imagen del menú "···"). Si se quiere menos ruido, pasarlos adentro del menú "···" de su tarjeta.
-3. Mismo patrón de rótulos en todas las `.consbar` (como `.ctlab` de Programación).
-4. Emojis dentro de botones que arma el JS (🎛 Productos, 🌿/🥜 desglose): el texto lo genera `filterLabel()` y `currentSplit()`.
+1. Botones "⤓ Exportar a PDF" propios de Exportadores, NEWSAN y Contratos: **no son duplicados** (hacen un PDF con la tabla real, distinto del PDF-imagen del menú "···"). Si se quiere menos ruido, pasarlos adentro del menú "···" de su tarjeta.
+2. Mismo patrón de rótulos en todas las `.consbar` (como `.ctlab` de Programación).
+3. Emojis dentro de botones que arma el JS (🎛 Productos, 🌿/🥜 desglose): el texto lo genera `filterLabel()` y `currentSplit()`.
 
 ## Limpieza
 - Borrar código muerto: `renderTrend`, `renderProductChart` (sus canvas ya no existen).
