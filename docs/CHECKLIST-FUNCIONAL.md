@@ -5,10 +5,10 @@ Qué hace el dashboard y cómo se comprueba que sigue igual después de un cambi
 ## Cómo verificar
 
 1. `node tests/run.js`: lectura de números y fechas, agregación, Σ Total, tendencia de 12 meses, mezcla gviz + export, mercado local / exportación, link para compañeros, formato, estado vacío y accesibilidad (24 casos).
-2. Prueba de humo en el navegador (`tests/smoke-browser.js`):
+2. Prueba de humo: `node tests/smoke.js [ref]` (navegador sin ventana, ~30 s; usa `tests/smoke-browser.js`):
    - Sirve tres planillas falsas por `fetch` y las carga por el camino real (`init` → `fetchBiz` → CSV → `buildRecords`, contratos, contratos abiertos y database de clientes).
    - Recorre 75 escenarios y guarda una huella: textos de cada tabla y KPI, qué secciones se ven y los datos de cada gráfico.
-   - Se corre sobre la versión anterior y la nueva, y `node tests/smoke-compare.js antes.json despues.json` tiene que dar **0 diferencias**.
+   - Corre sobre la versión de referencia (`HEAD` o `main`) y la actual, y compara: tiene que dar **0 diferencias** (o solo las buscadas).
    - En el rediseño dio 0 diferencias sobre 4.711 valores.
 
 ## Funciones y dónde se prueban
