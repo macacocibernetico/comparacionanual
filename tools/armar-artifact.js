@@ -123,7 +123,25 @@ reemplazar("Los demás negocios quedan vacíos hasta que conectes su planilla. P
 reemplazar("Datos de ejemplo — todavía no hay planillas conectadas", "Datos de ejemplo — todavía no se cargaron los datos reales", { opcional: true });
 reemplazar("Este negocio todavía no tiene planilla conectada.<br>Tocá <b>⚙️ Configurar</b> arriba a la derecha, elegí el negocio y pegá el enlace de su planilla.",
            "Este negocio todavía no tiene datos cargados.<br>Pedile a Claude que los cargue desde su planilla.", { opcional: true });
-reemplazar("</style>", "  /* Artifact: la configuración de planillas la maneja Claude */\n  #btnConfig{display:none!important}\n</style>");
+/* 5 · estilo Zentra: marca, título grande, resumen nuevo y estilos (tools/zentra/) */
+const ZDIR = path.join(__dirname, "zentra");
+const zleer = f => fs.readFileSync(path.join(ZDIR, f), "utf8").replace(/\r\n/g, "\n");
+reemplazar("</style>", zleer("zentra.css") + "\n  /* Artifact: la configuración de planillas la maneja Claude */\n  #btnConfig{display:none!important}\n</style>");
+reemplazar(`<div class="topbar">
+    <h1>Dashboard de Negocios</h1>`, `<div class="topbar">
+    <span class="zbrand"><span class="zmark" aria-hidden="true">L</span><span>Latinut<small>Exportaciones</small></span></span>
+    <h1>Dashboard de Negocios</h1>`);
+reemplazar(`  <div class="toolbar" role="group" aria-label="Controles del dashboard">`,
+`  <div class="ztitle" id="zTitle"><div class="ztitle-row"><h2 id="zH1">Dashboard</h2><span class="zbadge" id="zBadge" hidden>Datos de ejemplo</span></div><p class="zsub" id="zSub"></p></div>
+
+  <div class="toolbar" role="group" aria-label="Controles del dashboard">`);
+reemplazar(`<div class="kpis" id="kpis"></div>`, zleer("zentra.html").trim() + `\n\n  <div class="kpis" id="kpis"></div>`);
+reemplazar(`let paintedFromCache = false;`, zleer("zentra.js") + `\nlet paintedFromCache = false;`);
+reemplazar(`  mk("chEtd", "etdCount", { dots: true });`, `  mk("chEtd", "etdCount", { dots: true });
+  renderZentra({ a, b, yA, yB, cmpYears, MM, ytd, SP, aN, aC, mk, biz });`);
+reemplazar(`const SECCIONES_CON_DATOS = ["cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard"];`,
+           `const SECCIONES_CON_DATOS = ["zOverview", "cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard"];`);
+reemplazar(`{ id: "kpis", label: "Resumen" }`, `{ id: "zOverview", label: "Resumen" }`);
 reemplazar('<title>Dashboard de Negocios</title>', '<title>Dashboard Exportaciones Latinut</title>');
 
 /* esqueleto: el Artifact agrega <!DOCTYPE>, <html>, <head> y <body> al publicar */

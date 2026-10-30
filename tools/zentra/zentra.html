@@ -1,0 +1,28 @@
+<section id="zOverview" class="zgrid" aria-label="Resumen del período">
+    <article class="card zmain" id="zMain">
+      <div class="zhead"><h2 id="zMainTitle">Resumen</h2><p class="csub">Tocá una métrica para cambiar el gráfico, y una barra para ver sus cargas.</p></div>
+      <div class="zstrip" id="zStrip" role="group" aria-label="Métrica del gráfico"></div>
+      <div class="chartbox"><canvas id="zChart" role="img" aria-label="Gráfico mensual del período elegido"></canvas></div>
+    </article>
+    <article class="card zside" id="zSide">
+      <div class="zhead"><h2>Facturación</h2><p class="csub" id="zSideSub"></p></div>
+      <div class="zbigrow"><div class="zbig" id="zSideBig"></div><span id="zSideDelta"></span></div>
+      <div class="zhr"></div>
+      <div class="zbars" id="zSideBars"></div>
+    </article>
+    <article class="card zsm" id="zShip">
+      <div class="zhead"><h2>Embarques</h2><p class="csub" id="zShipSub"></p></div>
+      <div class="zmini"><div class="zbig zsmall" id="zShipBig"></div><div class="zdots zgreen" id="zShipDots" aria-hidden="true"></div><div class="zvs" id="zShipVs"></div></div>
+    </article>
+    <article class="card zsm" id="zPrice">
+      <div class="zhead"><h2>Precio promedio</h2><p class="csub" id="zPriceSub"></p></div>
+      <div class="zmini"><div class="zbig zsmall" id="zPriceBig"></div><div class="zdots zblue" id="zPriceDots" aria-hidden="true"></div><div class="zvs" id="zPriceVs"></div></div>
+    </article>
+    <article class="card zsm zins" id="zIns">
+      <span class="zichip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Comisión</span>
+      <div class="zbig" id="zInsBig"></div>
+      <p id="zInsTxt">de la facturación queda como comisión</p>
+      <div class="zirow"><span>Por tonelada</span><b id="zInsPerT"></b></div>
+      <div class="zirow"><span id="zInsCmpLbl">Año comparado</span><b id="zInsCmp"></b></div>
+    </article>
+  </section>

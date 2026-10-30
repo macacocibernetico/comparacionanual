@@ -1,0 +1,135 @@
+  /* =====================================================================
+     Estilo Zentra (versión Artifact): gris perla, tarjetas de radio amplio con sombra suave,
+     navegación en cápsula con el activo en negro, título grande y resumen con franja de
+     métricas. Solo estilos y el bloque de resumen: no cambia datos ni eventos del dashboard.
+     ===================================================================== */
+  :root{
+    --bg:#ebebec; --panel:#f7f7f8; --panel2:#e7e7e9; --panel3:#dcdcdf; --raised:#ffffff;
+    --border:rgba(17,17,19,.07); --border2:rgba(17,17,19,.13);
+    --text:#111113; --muted:#44454b; --faint:#5b5c63;
+    --accent:#2f56f5; --accent-soft:rgba(47,86,245,.1);
+    --r:26px; --r-sm:14px;
+    --shadow:0 1px 2px rgba(17,17,19,.04), 0 10px 30px rgba(17,17,19,.05);
+    --shadow-lg:0 24px 64px rgba(17,17,19,.18);
+    --grid:rgba(17,17,19,.06); --tick:#5b5c63;
+    --kpi-label:#5b5c63; --kebab-bg:#e7e7e9;
+    --zc1:#1f9d45; --zc2:#2f56f5; --zc3:#e0367f; --zc4:#e3860f; --zc5:#7a5af5;
+    --zup:#0f6b2e; --zdown:#b0262a;
+    --zdot-g-soft:#bfe6c9; --zdot-g:#1f9d45; --zdot-b-soft:#c3d1ff; --zdot-b:#2f56f5;
+    --zins-a:#f5814a; --zins-b:#3d5cf2; --zins-c:#e0367f; --zins-d:#17183a;
+    --nav-on-bg:#141416; --nav-on-fg:#ffffff;
+  }
+  html[data-theme="dark"]{
+    --bg:#0c0c0e; --panel:#17171a; --panel2:#232327; --panel3:#2d2d32; --raised:#2a2a2f;
+    --border:rgba(255,255,255,.07); --border2:rgba(255,255,255,.14);
+    --text:#f3f3f5; --muted:#c9c9d0; --faint:#a5a5ae;
+    --accent:#6482ff; --accent-soft:rgba(100,130,255,.16);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    --grid:rgba(255,255,255,.07); --tick:#a5a5ae;
+    --kpi-label:#a5a5ae; --kebab-bg:#26272c;
+    --zc1:#4fd17a; --zc2:#6482ff; --zc3:#ff5aa0; --zc4:#f2a03d; --zc5:#a08bff;
+    --zup:#4fd17a; --zdown:#ff7a9c;
+    --zdot-g-soft:#1f4a2c; --zdot-g:#4fd17a; --zdot-b-soft:#24315f; --zdot-b:#7d95ff;
+    --nav-on-bg:#f3f3f5; --nav-on-fg:#111113;
+  }
+  body{font-family:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;letter-spacing:-.005em}
+  .card,.toolbar,.panel{border:none}
+
+  /* Cabecera: marca + navegación en cápsula; el título grande es el nombre de la vista */
+  .topbar{margin-bottom:6px}
+  .topbar h1,.topbar .tagline{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+  .zbrand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px;letter-spacing:-.02em;white-space:nowrap}
+  .zbrand small{display:block;font-weight:400;font-size:12px;color:var(--faint);letter-spacing:0}
+  .zmark{width:30px;height:30px;border-radius:9px;background:#e3860f;display:grid;place-items:center;color:#1c1306;font-weight:700;font-size:15px;box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)}
+  .ztitle{display:flex;flex-direction:column;gap:8px;margin:12px 0 14px;min-width:0}
+  .ztitle-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .ztitle h2{margin:0;font-size:clamp(40px,6vw,66px);font-weight:400;letter-spacing:-.04em;line-height:.95;text-wrap:balance}
+  .zbadge{display:inline-flex;align-items:center;padding:6px 12px;border-radius:9999px;background:var(--tint-amber-bg);color:var(--tint-amber-tx);font-size:12.5px;font-weight:500}
+  .zbadge[hidden]{display:none}
+  .zsub{margin:0;color:var(--faint);font-size:14.5px}
+  .toolbar{background:transparent;box-shadow:none;padding:0;margin-bottom:12px}
+  .tabs{background:var(--panel);box-shadow:var(--shadow);border:1px solid var(--border)}
+  .tab:hover{background:var(--panel2)}
+  .seg{background:var(--panel2)}
+  .seg button.active,html[data-theme="dark"] .seg button.active{background:var(--raised);color:var(--text)}
+  .pill{background:var(--panel)}
+  .pill.cmp{background:var(--raised)}
+
+  /* Resumen */
+  .zgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:18px;margin-bottom:18px}
+  .zmain{grid-column:span 8}.zside{grid-column:span 4}.zsm{grid-column:span 4}
+  .zgrid .card{min-width:0;display:flex;flex-direction:column;gap:14px}
+  .zhead{padding-right:46px}
+  .zgrid .cardtools{right:20px}
+  .zhead h2{font-size:20px;font-weight:500;letter-spacing:-.015em}
+  .zhead .csub{margin:4px 0 0}
+  .zstrip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0 -8px}
+  .zm{border:0;background:transparent;text-align:left;padding:10px 14px 14px;border-left:1px solid var(--border);border-radius:0;display:flex;flex-direction:column;gap:4px;min-width:0}
+  .zm:first-child{border-left-color:transparent}
+  .zm:hover{background:transparent}
+  .zl{font-size:13px;color:var(--faint);font-weight:500}
+  .zv{font-size:clamp(22px,2.2vw,30px);letter-spacing:-.035em;color:var(--faint);line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .zv small{font-size:.55em;letter-spacing:0;margin-right:.15em;font-weight:500}
+  .zv small.unit{margin:0 0 0 .1em}
+  .zmeta{font-size:12.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .zmeta b{font-weight:600;color:var(--text)}
+  .zd{font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums}
+  .zd.up,.zvs b.up{color:var(--zup)}.zd.down,.zvs b.down{color:var(--zdown)}
+  .zm[aria-pressed="true"]{background:linear-gradient(180deg,var(--raised),transparent);border-radius:16px 16px 0 0}
+  .zm[aria-pressed="true"] .zl,.zm[aria-pressed="true"] .zv{color:var(--text)}
+  .zm:hover .zv{color:var(--muted)}.zm[aria-pressed="true"]:hover .zv{color:var(--text)}
+  .zbigrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .zbig{font-size:clamp(40px,4.6vw,66px);font-weight:400;letter-spacing:-.05em;line-height:1;font-variant-numeric:tabular-nums}
+  .zbig .cur,.zbig small.cur{font-size:.42em;letter-spacing:-.01em;color:var(--faint);margin-right:.12em;vertical-align:.62em}
+  .zbig small.unit{font-size:.38em;letter-spacing:0;color:var(--faint);font-weight:500}
+  .zbig.zsmall{font-size:clamp(38px,3.6vw,52px)}
+  .zchip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9999px;background:var(--raised);box-shadow:0 8px 26px rgba(17,17,19,.13);font-weight:500;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .zchip.up span{color:var(--zup)}.zchip.down span{color:var(--zdown)}
+  .zchip.na{box-shadow:none;background:var(--panel2);color:var(--faint)}
+  .zhr{height:1px;background:var(--border2)}
+  .zbars{display:flex;flex-direction:column;gap:16px}
+  .zbt{display:flex;justify-content:space-between;gap:10px;font-size:14.5px;margin-bottom:8px}
+  .zbt span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .zbt b{font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .zbt i{font-style:normal;color:var(--faint);font-size:12.5px;margin-left:6px}
+  .ztrack{height:14px;border-radius:9999px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--border);overflow:hidden}
+  .zfill{height:100%;border-radius:9999px;min-width:6px;background:repeating-linear-gradient(-55deg,var(--c) 0 3px,color-mix(in srgb,var(--c) 45%,transparent) 3px 6px)}
+  .zmini{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .zvs{text-align:right;display:flex;flex-direction:column;gap:2px}
+  .zvs span{font-size:12.5px;color:var(--faint)}
+  .zvs b{font-size:19px;font-weight:500;font-variant-numeric:tabular-nums}
+  .zdots{display:flex;align-items:flex-end;gap:5px;padding-top:30px;position:relative;min-height:112px}
+  .zdcol{display:flex;flex-direction:column-reverse;align-items:center;gap:4px;position:relative;flex:1 1 0;min-width:0}
+  .zdt{width:11px;height:11px;border-radius:50%;background:var(--zds)}
+  .zdcol.peak .zdt{background:var(--zdk)}
+  .zdm{font-size:10.5px;color:var(--faint);margin-top:4px;order:-1}
+  .zpeak{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--raised);box-shadow:0 8px 26px rgba(17,17,19,.13);border-radius:9999px;padding:4px 9px;font-size:11.5px;white-space:nowrap;color:var(--muted)}
+  .zpeak b{color:var(--text);font-weight:600}
+  .zgreen{--zds:var(--zdot-g-soft);--zdk:var(--zdot-g)}.zblue{--zds:var(--zdot-b-soft);--zdk:var(--zdot-b)}
+
+  /* Tarjeta de comisión destacada */
+  .card.zins{color:#fff;overflow:hidden;isolation:isolate;position:relative;
+    background:radial-gradient(120% 80% at 100% 0%,var(--zins-a) 0%,transparent 55%),radial-gradient(90% 90% at 0% 100%,var(--zins-c) 0%,transparent 60%),radial-gradient(120% 120% at 30% 20%,var(--zins-b) 0%,var(--zins-d) 80%)}
+  .card.zins::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(10,10,30,0) 25%,rgba(10,10,30,.5))}
+  .zichip{align-self:flex-start;display:inline-flex;gap:7px;align-items:center;padding:7px 12px;border-radius:9999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);font-size:12.5px;font-weight:500}
+  .zins .zbig{font-size:clamp(52px,5.6vw,84px);color:#fff;margin-top:auto}
+  .zins p{margin:0;font-size:14px;color:rgba(255,255,255,.92)}
+  .zirow{display:flex;justify-content:space-between;gap:10px;border-top:1px solid rgba(255,255,255,.25);padding-top:12px;font-size:13.5px}
+  .zirow b{font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* Tablas con intensidad por valor */
+  td.heat{background:color-mix(in srgb,var(--accent) var(--h),transparent)}
+  tr.total td,tr.total td:first-child{background:var(--panel2)}
+
+  /* El resumen anterior (KPIs y 4 gráficos) queda oculto: su contenido está en el resumen nuevo */
+  #kpis > .kpi,#cardTns,#cardUsd,#cardCom,#cardEtd{display:none!important}
+
+  @media(max-width:1180px){ .zmain,.zside{grid-column:span 12}.zsm{grid-column:span 6} }
+  @media(max-width:760px){
+    .zsm{grid-column:span 12}.zgrid{gap:14px}
+    .zstrip{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:6px}
+    .zm:nth-child(3){border-left-color:transparent}
+    .zv{font-size:clamp(17px,5vw,21px)}
+    .zm{padding:10px 10px 12px}
+    .ztitle{margin:6px 0 10px}
+  }

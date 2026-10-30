@@ -468,7 +468,8 @@
   .rangebox .mini:hover{background:var(--panel);color:var(--text)}
   @media(max-width:720px){ .consbar{gap:10px} .rangebox{width:100%;justify-content:flex-start} .rangebox select{flex:1;min-height:40px} .rangebox .mini{min-height:40px} }
 
-  .saldosgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .saldosgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+  .saldosgrid > div{min-width:0;overflow-x:auto}
   @media(max-width:900px){.saldosgrid{grid-template-columns:1fr}}
   .saldosgrid .tlabel{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:8px}
 
