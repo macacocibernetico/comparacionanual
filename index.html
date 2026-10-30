@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   /* ============ Paleta clara (por defecto) ============ */
@@ -655,6 +655,77 @@
   .chip.active{background:var(--text);color:var(--panel)}
   footer{color:var(--faint)}
   .empty{color:var(--faint)}
+
+  /* =====================================================================
+     Ajuste fino v2 (estilo Outcrowd / Zentra): fondo #EEF2F6, tarjetas blancas
+     sin borde de radio 24 con sombra flotante, KPIs dominantes con badge al
+     costado, avisos como chips de una línea y menú "···" en cada cuadro.
+     ===================================================================== */
+  :root{
+    --bg:#eef2f6; --panel:#ffffff; --r:24px;
+    --shadow:0 10px 30px -4px rgba(15,23,42,.04), 0 4px 12px -2px rgba(15,23,42,.02);
+    --grid:rgba(0,0,0,.035);
+    --kpi-label:#64748b; --kpi-value:#0f172a;
+    --up-bg:#ecfdf5; --up-fg:#047857; --down-bg:#fef2f2; --down-fg:#b91c1c;
+    --kebab-bg:#f1f5f9;
+  }
+  html[data-theme="dark"]{
+    --kpi-label:#a1a1aa; --kpi-value:#f8fafc;
+    --up-bg:rgba(16,185,129,.14); --up-fg:#6ee7b7; --down-bg:rgba(239,68,68,.14); --down-fg:#fca5a5;
+    --kebab-bg:#26272c;
+  }
+  .card,.kpi,.toolbar,.panel{border:none;border-radius:var(--r);box-shadow:var(--shadow)}
+
+  /* KPIs: etiqueta arriba, número dominante y badge al costado */
+  .kpi{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;align-items:center;align-content:start}
+  .kpi > *{grid-column:1/-1}
+  .kpi .label{color:var(--kpi-label);font-weight:600;font-size:.875rem}
+  .kpi .value{grid-column:1;font-size:2.5rem;font-weight:800;letter-spacing:-.04em;color:var(--kpi-value);margin:10px 0 8px}
+  .kpi .value small{font-weight:600;color:var(--kpi-label)}
+  .kpi > div:has(> .delta){grid-column:2;grid-row:2;justify-self:start}
+  .kpi .delta{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:9999px;font-size:.8rem;font-weight:700;white-space:nowrap}
+  .kpi .delta.up,html[data-theme="dark"] .kpi .delta.up{background:var(--up-bg);color:var(--up-fg);box-shadow:0 2px 6px rgba(16,185,129,.12)}
+  .kpi .delta.down,html[data-theme="dark"] .kpi .delta.down{background:var(--down-bg);color:var(--down-fg);box-shadow:0 2px 6px rgba(239,68,68,.12)}
+  .kpi .delta.na{background:var(--panel2);color:var(--faint)}
+  /* donde no entra al costado, el badge baja debajo del número */
+  @media(max-width:1280px){ .kpi > div:has(> .delta){grid-column:1/-1;grid-row:auto} }
+  @media(max-width:720px){
+    .kpis .kpi .value{font-size:1.22rem;letter-spacing:-.03em}
+    .kpi .delta{white-space:normal;max-width:100%;font-size:.72rem;padding:3px 8px}
+  }
+
+  /* Barras de participación: relleno rayado a 45° en dos tonos del mismo color */
+  .hbar{height:10px;border-radius:9999px}
+  .hbar.lg{height:10px}
+  .hbar i{border-radius:9999px;
+    background:repeating-linear-gradient(45deg,var(--c) 0 6px,color-mix(in srgb,var(--c) 78%,#000) 6px 12px)}
+
+  /* Controles en píldora */
+  .seg,.tabs{border-radius:9999px}
+  .seg button,.pill,.chip,.ctag,.secnav a,#grpView button,#grpData button,#grpFilterM button,.checkactions button{border-radius:9999px}
+  .seg button,.pill,#grpView button,#grpData button{padding-top:6px;padding-bottom:6px}
+  .seg button,.pill,.chip,.tab,.secnav a{transition:background .2s var(--ease),color .2s var(--ease),box-shadow .2s var(--ease)}
+  @media(max-width:720px){ .tabs,.seg{border-radius:20px} }
+
+  /* Avisos: chip de una línea; tocándolo se despliega. Los errores se ven siempre completos. */
+  .banner,.banner.ytd{display:block;width:fit-content;max-width:100%;padding:7px 14px;border-radius:9999px;font-size:.8rem;
+    line-height:1.45;margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+    box-shadow:0 1px 2px rgba(15,23,42,.05);animation:none}
+  .banner > span:first-child{margin-right:6px}
+  .banner.expand,.banner.err{white-space:normal;border-radius:16px}
+  .banner.err{cursor:default}
+
+  /* Menú "···" de cada cuadro (exportar imagen / PDF) */
+  .cardtools{top:18px;right:58px;opacity:1}
+  .cardtools .kebab{width:32px;height:32px;min-height:0;padding:0;border:none;border-radius:50%;background:var(--kebab-bg);color:var(--muted);
+    display:inline-flex;align-items:center;justify-content:center}
+  .cardtools .kebab:hover{background:var(--panel3);color:var(--text)}
+  .cardtools .kmenu{display:none;position:absolute;top:38px;right:0;min-width:150px;background:var(--panel);border-radius:14px;
+    box-shadow:0 12px 32px rgba(15,23,42,.16);padding:6px;flex-direction:column;gap:2px;z-index:5}
+  .cardtools.open .kmenu{display:flex}
+  .cardtools .kmenu button{background:transparent;border:none;border-radius:10px;text-align:left;padding:9px 12px;font-size:.84rem;color:var(--text);width:100%}
+  .cardtools .kmenu button:hover{background:var(--panel2)}
+  @media(max-width:720px){ .cardtools{position:absolute;top:14px;right:52px;margin:0} }
 </style>
 </head>
 <body>
@@ -1768,7 +1839,7 @@ const CHART_COLORS = { chTns: "#0071e3", chUsd: "#34c759", chCom: "#ff9500", chE
 
 /* Colores por año: bien distintos entre sí (no apagados) para distinguir barras.
    Se asignan por posición del año (más reciente primero) y son editables en vivo. */
-const YEAR_COLORS_DEFAULT = ["#0071e3", "#ff9500", "#34c759", "#af52de", "#ff2d55", "#5ac8fa", "#ffcc00", "#8e8e93"];
+const YEAR_COLORS_DEFAULT = ["#2563eb", "#f97316", "#34c759", "#af52de", "#ff2d55", "#5ac8fa", "#ffcc00", "#8e8e93"];
 const NOP_COLORS_DEFAULT = { nop: "#34c759", conv: "#0071e3" };
 const COLORS_KEY = "dashboardColors";
 
@@ -3100,6 +3171,19 @@ async function copiarTabla(tabla, btn){
   setTimeout(() => { btn.innerHTML = t; btn.classList.remove("ok"); }, 1800);
 }
 let EXP_N = 0;
+function cerrarMenusCard(){
+  document.querySelectorAll(".cardtools.open").forEach(t => {
+    t.classList.remove("open");
+    const k = t.querySelector(".kebab"); if (k) k.setAttribute("aria-expanded", "false");
+  });
+}
+document.addEventListener("click", cerrarMenusCard);
+document.addEventListener("keydown", e => { if (e.key === "Escape") cerrarMenusCard(); });
+/* Avisos como chip de una línea: tocándolos se ven completos */
+["banner", "ytdNote"].forEach(id => {
+  const el = document.getElementById(id);
+  if (el && el.addEventListener){ el.addEventListener("click", () => el.classList.toggle("expand")); el.title = "Tocá para ver el aviso completo"; }
+});
 function decorarExportables(){
   document.querySelectorAll(".card").forEach(card => {
     if (card.closest && card.closest(".modal, #modalBg, #detailBg, .sheet")) return;
@@ -3108,9 +3192,21 @@ function decorarExportables(){
     if (!card.querySelector(":scope > .cardtools")){
       const tools = document.createElement("div");
       tools.className = "cardtools";
-      tools.innerHTML = `<button type="button" data-f="png" title="Descargar este cuadro como imagen">🖼 Imagen</button>
-                         <button type="button" data-f="pdf" title="Descargar este cuadro en PDF">📄 PDF</button>`;
-      tools.querySelectorAll("button").forEach(b => b.onclick = e => { e.stopPropagation(); exportarCard(card, b.dataset.f, b); });
+      // menú "···": las exportaciones quedan a un toque, sin ensuciar el encabezado
+      tools.innerHTML = `<button type="button" class="kebab" aria-label="Más opciones de este cuadro" aria-haspopup="true" aria-expanded="false" title="Exportar">
+                           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+                         <div class="kmenu" role="menu">
+                           <button type="button" role="menuitem" data-f="png" title="Descargar este cuadro como imagen">🖼 Imagen</button>
+                           <button type="button" role="menuitem" data-f="pdf" title="Descargar este cuadro en PDF">📄 PDF</button>
+                         </div>`;
+      const kb = tools.querySelector(".kebab");
+      kb.onclick = e => {
+        e.stopPropagation();
+        const abrir = !tools.classList.contains("open");
+        cerrarMenusCard();
+        tools.classList.toggle("open", abrir); kb.setAttribute("aria-expanded", String(abrir));
+      };
+      tools.querySelectorAll("[data-f]").forEach(b => b.onclick = e => { e.stopPropagation(); exportarCard(card, b.dataset.f, b); });
       tools.onclick = e => e.stopPropagation();
       card.insertBefore(tools, card.firstChild);
     }
