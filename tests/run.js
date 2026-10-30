@@ -89,6 +89,32 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('mobile: pestañas en varias filas', /\.tabs\{display:flex;flex-wrap:wrap/.test(mob) && !/\.tabs\{flex-wrap:nowrap/.test(mob));
   t('mobile: grupo del filtro en la toolbar', /id="grpFilterM"/.test(h) && /dest\.appendChild\(btnFilter\)/.test(h));
 
+  // empresas que son la misma (nombres inventados: el repo es público)
+  const al = new Function(code + ';return {aliasDe,canonEmpresa};')();
+  const gr = al.aliasDe({ ALIAS_EMPRESAS: 'Acme = Acme Agro S.A. = Acme Agropecuaria\nBeta = Beta Foods Ltd' });
+  t('alias: variantes con S.A. y mayúsculas', al.canonEmpresa('ACME AGRO S.A.', gr) === 'Acme' && al.canonEmpresa('acme agropecuaria', gr) === 'Acme');
+  t('alias: segunda línea', al.canonEmpresa('Beta Foods Ltd.', gr) === 'Beta');
+  t('alias: otra empresa no cambia', al.canonEmpresa('Gamma SA', gr) === 'Gamma SA' && al.canonEmpresa('', gr) === '');
+  t('alias: sin config no hace nada', al.aliasDe({ ALIAS_EMPRESAS: '' }) === null && al.canonEmpresa('Acme Agro', null) === 'Acme Agro');
+
+  // detalle mensual por producto: ranking visual (8 principales + "ver todos") y tabla completa intacta
+  {
+    const pr = new Function(code + ';return {UI,renderProductTable};')();
+    const nombres = Array.from({ length: 12 }, (_, i) => i === 0 ? 'Prod <b>X</b>' : 'Producto ' + i);
+    const mk12 = v => Array.from({ length: 12 }, (_, m) => m < 3 ? v : 0);
+    const a = { prodTotals: {}, prodUsd: {}, products: {}, productsUsd: {}, tns: mk12(100), usd: mk12(1000), totTns: 300, totUsd: 3000 };
+    nombres.forEach((n, i) => { a.prodTotals[n] = 100 - i; a.products[n] = mk12((100 - i) / 3); a.prodUsd[n] = 1000 - i; a.productsUsd[n] = mk12((1000 - i) / 3); });
+    pr.UI.prodVista = 'visual'; pr.UI.prodTodos = false; pr.UI.prodMetric = 'tns';
+    pr.renderProductTable(a, 2026);
+    const viz = g('prodViz').innerHTML;
+    t('detalle visual: 8 productos y botón para ver todos', (viz.match(/class="pvr"/g) || []).length === 8 && /Ver los 12 productos/.test(viz));
+    t('detalle visual: nombres escapados', /Prod &lt;b&gt;X&lt;\/b&gt;/.test(viz) && !/Prod <b>X/.test(viz));
+    t('detalle: la tabla completa sigue generándose', /<table>/.test(g('prodTable').innerHTML) && /Producto 11/.test(g('prodTable').innerHTML));
+    t('detalle: forma de ver visual por defecto', g('prodCard').classList.contains('pv'));
+    pr.UI.prodVista = 'tabla'; pr.renderProductTable(a, 2026);
+    t('detalle: forma de ver tabla', !g('prodCard').classList.contains('pv'));
+  }
+
   // plegar: gráficos, detalle y comparación se pliegan; "Plegar todo" cierra todo lo visible y lo vuelve a abrir
   const p = new Function(code + ';return {UI,PLEGABLES,renderSecNav};')();
   t('gráficos, detalle y comparación son plegables', ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'prodCard', 'compareCard'].every(id => p.PLEGABLES.includes(id)));

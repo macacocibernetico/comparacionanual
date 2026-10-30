@@ -15,6 +15,7 @@
     --kpi-label:#5b5c63; --kebab-bg:#e7e7e9;
     --zc1:#1f9d45; --zc2:#2f56f5; --zc3:#e0367f; --zc4:#e3860f; --zc5:#7a5af5;
     --zup:#0f6b2e; --zdown:#b0262a;
+    --pvp0:var(--zc2); --pvp1:var(--zc1); --pvp2:var(--zc3); --pvp3:var(--zc4); --pvp4:var(--zc5);
     --zdot-g-soft:#bfe6c9; --zdot-g:#1f9d45; --zdot-b-soft:#c3d1ff; --zdot-b:#2f56f5;
     --zins-a:#f5814a; --zins-b:#3d5cf2; --zins-c:#e0367f; --zins-d:#17183a;
     --nav-on-bg:#141416; --nav-on-fg:#ffffff;
@@ -29,6 +30,7 @@
     --kpi-label:#a5a5ae; --kebab-bg:#26272c;
     --zc1:#4fd17a; --zc2:#6482ff; --zc3:#ff5aa0; --zc4:#f2a03d; --zc5:#a08bff;
     --zup:#4fd17a; --zdown:#ff7a9c;
+    --pvp0:var(--zc2); --pvp1:var(--zc1); --pvp2:var(--zc3); --pvp3:var(--zc4); --pvp4:var(--zc5);
     --zdot-g-soft:#1f4a2c; --zdot-g:#4fd17a; --zdot-b-soft:#24315f; --zdot-b:#7d95ff;
     --nav-on-bg:#f3f3f5; --nav-on-fg:#111113;
   }

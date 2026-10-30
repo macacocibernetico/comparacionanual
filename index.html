@@ -338,11 +338,11 @@
   .modal h2{font-size:1.15rem;margin-bottom:7px;font-weight:600;letter-spacing:-.02em}
   .modal .hint{color:var(--muted);font-size:.81rem;margin-bottom:14px;line-height:1.6}
   .modal label{display:block;color:var(--muted);font-size:.79rem;margin:14px 0 6px;font-weight:500}
-  .modal input,.modal select{
+  .modal input,.modal select,.modal textarea{
     width:100%;background:var(--panel2);color:var(--text);border:1px solid transparent;
     border-radius:var(--r-sm);padding:10px 13px;font-size:.9rem;font-family:inherit;transition:all .25s var(--ease)
   }
-  .modal input:focus,.modal select:focus{border-color:var(--accent);outline:none;background:var(--panel)}
+  .modal input:focus,.modal select:focus,.modal textarea:focus{border-color:var(--accent);outline:none;background:var(--panel)}
   .modal .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   @media(max-width:520px){.modal .row{grid-template-columns:1fr}}
   .modal .actions{display:flex;gap:9px;margin-top:24px;justify-content:flex-end;flex-wrap:wrap}
@@ -727,7 +727,7 @@
   .cardtools.open .kmenu{display:flex}
   .cardtools .kmenu button{background:transparent;border:none;border-radius:10px;text-align:left;padding:9px 12px;font-size:.84rem;color:var(--text);width:100%}
   .cardtools .kmenu button:hover{background:var(--panel2)}
-  @media(max-width:720px){ .cardtools{position:absolute;top:14px;right:52px;margin:0} }
+  @media(max-width:720px){ .cardtools{position:static;justify-content:flex-end;margin:-4px 0 6px} .cardtools .kmenu{right:0;top:36px} }
 
   /* Cabecera sintetizada: el aviso de "misma fecha" vive en su chip (con la explicación al pasar el mouse) */
   #ytdNote{display:none!important}
@@ -754,6 +754,45 @@
     header > *{grid-column:1/-1}
     #contextBar{grid-column:1;margin-bottom:10px}
     #statusLine{grid-column:2;justify-self:end;align-self:center;margin-bottom:10px;text-align:right}
+  }
+
+  /* Detalle mensual por producto en formato visual */
+  :root{--pvp0:#2f56f5;--pvp1:#1f9d45;--pvp2:#e0367f;--pvp3:#e3860f;--pvp4:#7a5af5}
+  html[data-theme="dark"]{--pvp0:#6482ff;--pvp1:#4fd17a;--pvp2:#ff5aa0;--pvp3:#f2a03d;--pvp4:#a08bff}
+  #prodCard.pv #prodTable,#prodCard.pv .tblcopybar{display:none}
+  #prodCard:not(.pv) #prodViz{display:none}
+  .prodviz{display:flex;flex-direction:column;gap:8px}
+  .pvtop{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:baseline}
+  .pvsum{font-size:.95rem;color:var(--muted)}.pvsum b{color:var(--text);font-weight:600}
+  .pvmes{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:6px;height:96px;margin:2px 0 10px}
+  .pvmes div{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%}
+  .pvmes i{display:block;width:100%;max-width:38px;min-height:3px;border-radius:9px 9px 4px 4px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 55%,transparent))}
+  .pvmes span{font-size:.72rem;color:var(--faint)}
+  .pvr{border-radius:18px;background:var(--panel2);overflow:hidden}
+  .pvh{width:100%;display:grid;grid-template-columns:28px minmax(0,1fr) minmax(120px,230px) auto;gap:16px;align-items:center;text-align:left;
+    background:transparent;border:0;border-radius:18px;padding:12px 16px;cursor:pointer;font:inherit;color:inherit}
+  .pvh:hover{background:var(--panel3)}
+  .pvrk{width:28px;height:28px;border-radius:50%;background:var(--panel);display:grid;place-items:center;font-size:.78rem;font-weight:600;color:var(--muted)}
+  .pvn{display:flex;flex-direction:column;gap:7px;min-width:0}
+  .pvn b{font-weight:500;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pvbar{display:block;height:8px;border-radius:9999px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--border);overflow:hidden}
+  .pvbar i{display:block;height:100%;width:var(--w);min-width:4px;border-radius:9999px;
+    background:repeating-linear-gradient(-55deg,var(--pvc) 0 3px,color-mix(in srgb,var(--pvc) 45%,transparent) 3px 6px)}
+  .pvspark{display:flex;align-items:flex-end;gap:3px;height:34px}
+  .pvm{flex:1;display:block;min-height:2px;border-radius:3px;background:color-mix(in srgb,var(--pvc) 38%,transparent)}
+  .pvm.pk{background:var(--pvc)}
+  .pvv{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .pvv b{font-weight:600;font-size:.95rem}.pvv small{font-size:.76rem;color:var(--faint)}
+  .pvd{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding:2px 16px 16px}
+  .pvd[hidden]{display:none}
+  .pvc{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:12px;background:var(--panel);font-size:.82rem;font-variant-numeric:tabular-nums}
+  .pvc b{font-size:.7rem;font-weight:500;color:var(--faint)}.pvc.nul{opacity:.6}
+  .pvmore{align-self:center;margin-top:6px;border-radius:9999px;padding:9px 20px;font-weight:500}
+  @media(max-width:720px){
+    .pvh{grid-template-columns:26px minmax(0,1fr) auto;gap:12px;padding:12px}
+    .pvspark{display:none}
+    .pvd{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .pvmes{height:72px;gap:3px}.pvmes span{font-size:.6rem}
   }
 
   /* Aviso breve (en lugar de los avisos del navegador) y botón Reintentar del error de carga */
@@ -983,7 +1022,12 @@
           <button type="button" data-pm2="tns" title="Ver toneladas">Toneladas</button>
           <button type="button" data-pm2="usd" title="Ver facturación en dólares">Facturación USD</button>
         </div>
+        <div class="seg" id="prodVista" role="group" aria-label="Forma de ver el detalle">
+          <button type="button" data-pv="visual" title="Ranking con barras y evolución mensual de cada producto">Vista visual</button>
+          <button type="button" data-pv="tabla" title="Tabla completa: producto por mes">Tabla completa</button>
+        </div>
       </div>
+      <div class="prodviz" id="prodViz"></div>
       <div class="tablewrap" id="prodTable"></div>
       </div>
     </div>
@@ -1233,6 +1277,8 @@
       </div>
       <label for="cfgExcluir">Exportadores excluidos del análisis <span style="color:var(--faint);font-weight:400">— separados por coma</span></label>
       <input id="cfgExcluir" placeholder="Latinut S.A.">
+      <label for="cfgAlias">Empresas que son la misma <span style="color:var(--faint);font-weight:400">— una por línea: Nombre que se muestra = otro nombre</span></label>
+      <textarea id="cfgAlias" rows="2" placeholder="Empresa X = Empresa X S.A. = Empresa X Argentina"></textarea>
       <label for="cfgFocusExporter">Exportador con vista propia <span style="color:var(--faint);font-weight:400">— se le arma una sección aparte</span></label>
       <input id="cfgFocusExporter" placeholder="NEWSAN SA">
       <div class="row">
@@ -1327,6 +1373,7 @@ const SHEET_DEFAULTS = {
   DECIMAL: "auto",                                 // "auto" | "comma" | "dot"
   FOCUS_EXPORTER: "NEWSAN SA",                     // exportador con vista propia (Brokerage)
   EXCLUDE_EXPORTERS: "",                           // exportadores que no se cuentan (separados por coma)
+  ALIAS_EMPRESAS: "",                              // empresas que son la misma: una por línea, "Nombre que se muestra = otro nombre"
   CONTRACTS_SHEET: "ALL CONTRATOS",                // pestaña de contratos (Brokerage)
   CONTRACTS_GID: "",
   OPEN_SHEET: "Contratos Abiertos",
@@ -1763,6 +1810,7 @@ function findHeaderRow(rows, cfg){
 }
 
 function buildRecords(rows, cfg, bizKey){
+  const alias = aliasDe(cfg);
   const headerRowIdx = findHeaderRow(rows, cfg);
   const hmap = headerMap(rows[headerRowIdx]);
   const C = {}, missing = [];
@@ -1827,8 +1875,8 @@ function buildRecords(rows, cfg, bizKey){
       port: String(r[C.port] ?? "").trim() || "(sin destino)",
       packing: String(r[C.packing] ?? "").trim(),
       cobro: parseDate(r[C.cobro], cfg.DATE_FORMAT) || parseDate(r[C.cobroEst], cfg.DATE_FORMAT),
-      exporter: String(r[C.exporter] ?? "").trim(),
-      importer: String(r[C.importer] ?? "").trim(),
+      exporter: canonEmpresa(String(r[C.exporter] ?? "").trim(), alias),
+      importer: canonEmpresa(String(r[C.importer] ?? "").trim(), alias),
       flete: C.flete >= 0 ? Math.abs(parseNumber(r[C.flete], sepFlete)) : 0,
       comBroker: C.comBroker >= 0 ? Math.abs(parseNumber(r[C.comBroker], sepBroker)) : 0,
       negocio: String(r[C.negocio] ?? "").trim(),
@@ -2028,9 +2076,9 @@ async function fetchClientes(cfg){
     }
   }
   if (h < 0) throw new Error("La database de clientes no tiene una columna Country / País");
-  const mapa = new Map();
+  const mapa = new Map(), alias = aliasDe(cfg);
   for (const r of rows.slice(h + 1)){
-    const n = String((r || [])[iNom] ?? "").trim(), p = String((r || [])[iPais] ?? "").trim();
+    const n = canonEmpresa(String((r || [])[iNom] ?? "").trim(), alias), p = String((r || [])[iPais] ?? "").trim();
     if (!n) continue;
     const k = normEmpresa(n) || n.toLowerCase();
     const prev = mapa.get(k);
@@ -2725,6 +2773,7 @@ const CONTRACT_COLS = {
 };
 
 function buildContracts(rows, cfg){
+  const alias = aliasDe(cfg);
   // los contratos tienen su propia fila de encabezados: se busca por nombre
   let hIdx = 0, best = 0;
   const esperados = Object.values(CONTRACT_COLS);
@@ -2762,8 +2811,8 @@ function buildContracts(rows, cfg){
     if (!fecha && !tns && !contrato) continue;
     out.push({
       fecha, fechaOrd: fecha ? fecha.y * 10000 + fecha.mo * 100 + (fecha.d || 0) : 0,
-      contrato, exportador: txt(r, "exportador") || "(sin dato)",
-      importador: txt(r, "importador") || "(sin dato)",
+      contrato, exportador: canonEmpresa(txt(r, "exportador"), alias) || "(sin dato)",
+      importador: canonEmpresa(txt(r, "importador"), alias) || "(sin dato)",
       producto: txt(r, "producto"), tipo: txt(r, "tipo"),
       toneladas: tns, precio: num(r, "precio"), total: num(r, "total"),
       packaging: txt(r, "packaging"), incoterm: txt(r, "incoterm"), pago: txt(r, "pago"),
@@ -2790,6 +2839,7 @@ function parseMesEncabezado(h){
 
 /* Contratos abiertos: identidad + la matriz de toneladas por mes */
 function buildOpenContracts(rows, cfg){
+  const alias = aliasDe(cfg);
   // fila de encabezados: la que tenga más columnas de mes reconocibles
   let hIdx = -1, best = 0;
   for (let i = 0; i < Math.min(rows.length, 12); i++){
@@ -2823,8 +2873,8 @@ function buildOpenContracts(rows, cfg){
     if (!contrato && !prog) continue;
     filas.push({
       contrato: contrato || "(sin número)",
-      exportador: txt(r, C.exportador) || "(sin dato)",
-      importador: txt(r, C.importador) || "(sin dato)",
+      exportador: canonEmpresa(txt(r, C.exportador), alias) || "(sin dato)",
+      importador: canonEmpresa(txt(r, C.importador), alias) || "(sin dato)",
       producto: txt(r, C.producto),
       prompt: txt(r, C.prompt),
       toneladas: C.toneladas >= 0 ? parseNumber(r[C.toneladas], sepT) : 0,
@@ -3926,6 +3976,24 @@ function normEmpresa(x){
   for (let i = 0; i < 4; i++){ const u = t.replace(SUF, ""); if (u === t || u.length < 3) break; t = u; }
   return t;
 }
+/* Equivalencias de empresas (config ALIAS_EMPRESAS): una por línea, "Nombre que se muestra = variante = variante".
+   Se aplican al leer las planillas, así gráficos, tablas, contratos y países usan un solo nombre. */
+function parseAlias(texto){
+  return String(texto || "").split(/\n|;/).map(l => l.split("=").map(s => s.trim()).filter(Boolean)).filter(g => g.length >= 2)
+    .map(g => ({ canon: g[0], claves: new Set(g.map(normEmpresa).filter(Boolean)) }));
+}
+function aliasDe(cfg){
+  const t = (cfg && cfg.ALIAS_EMPRESAS) || "";
+  if (!t) return null;
+  if (aliasDe.texto !== t){ aliasDe.texto = t; aliasDe.grupos = parseAlias(t); }
+  return aliasDe.grupos;
+}
+function canonEmpresa(nombre, grupos){
+  if (!grupos || !grupos.length || !nombre) return nombre;
+  const k = normEmpresa(nombre);
+  const g = k && grupos.find(x => x.claves.has(k));
+  return g ? g.canon : nombre;
+}
 function mismaEmpresa(a, b){
   const x = normEmpresa(a), y = normEmpresa(b);
   if (!x || !y) return false;
@@ -4991,6 +5059,40 @@ function renderProductChart(a, yA){
   });
 }
 
+/* Detalle mensual por producto como ranking visual: barra de participación, evolución de 12 meses
+   y, al tocar un producto, sus valores mes por mes. La tabla completa sigue disponible. */
+function renderProductViz(prods, porMes, tot, f, mesTot, yA){
+  const el = document.getElementById("prodViz"); if (!el) return;
+  if (!prods.length){ el.innerHTML = '<p class="empty">Sin productos en el período.</p>'; return; }
+  const N = 8, todos = !!UI.prodTodos, lista = todos ? prods : prods.slice(0, N);
+  const total = prods.reduce((s, p) => s + (tot[p] || 0), 0) || 1, max = Math.max(1, ...prods.map(p => tot[p] || 0));
+  const mxMes = Math.max(1, ...mesTot);
+  const meses = `<div class="pvmes" aria-hidden="true">${mesTot.map((v, m) =>
+    `<div title="${MESES[m]}: ${v ? f(v) : "sin cargas"}"><i style="height:${v ? Math.max(6, v / mxMes * 100) : 0}%"></i><span>${MESES[m]}</span></div>`).join("")}</div>`;
+  const filas = lista.map((p, i) => {
+    const arr = porMes[p] || Array(12).fill(0), mx = Math.max(1, ...arr), pico = arr.indexOf(Math.max(...arr));
+    const share = (tot[p] || 0) / total * 100;
+    const spark = arr.map((v, m) => `<i class="pvm${m === pico && v > 0 ? " pk" : ""}" style="height:${v > 0 ? Math.max(10, v / mx * 100) : 0}%" title="${MESES[m]}: ${v ? f(v) : "sin cargas"}"></i>`).join("");
+    const det = arr.map((v, m) => `<span class="pvc${v ? "" : " nul"}"><b>${MESES[m]}</b>${v ? f(v) : "—"}</span>`).join("");
+    return `<div class="pvr" style="--w:${((tot[p] || 0) / max * 100).toFixed(1)}%;--pvc:var(--pvp${i % 5})">
+      <button type="button" class="pvh" aria-expanded="false" title="Ver mes por mes">
+        <span class="pvrk">${i + 1}</span>
+        <span class="pvn"><b>${esc(p)}</b><span class="pvbar"><i></i></span></span>
+        <span class="pvspark" aria-hidden="true">${spark}</span>
+        <span class="pvv"><b>${f(tot[p] || 0)}</b><small>${share.toFixed(1).replace(".", ",")}%</small></span>
+      </button>
+      <div class="pvd" hidden>${det}</div></div>`;
+  }).join("");
+  el.innerHTML = `<div class="pvtop"><span class="pvsum"><b>${fmt0(prods.length)}</b> productos · <b>${f(total)}</b> en ${yA}</span></div>${meses}${filas}` +
+    (prods.length > N ? `<button type="button" class="pvmore">${todos ? "Ver solo los 8 principales" : `Ver los ${fmt0(prods.length)} productos`}</button>` : "");
+  el.querySelectorAll(".pvh").forEach(b => b.onclick = () => {
+    const d = b.nextElementSibling, abre = d.hidden;
+    d.hidden = !abre; b.setAttribute("aria-expanded", String(abre));
+  });
+  const mas = el.querySelector(".pvmore");
+  if (mas) mas.onclick = () => { UI.prodTodos = !UI.prodTodos; saveUI(); renderProductViz(prods, porMes, tot, f, mesTot, yA); };
+}
+
 function renderProductTable(a, yA){
   document.getElementById("lblTableYear").textContent = yA;
   const usd = UI.prodMetric === "usd";
@@ -5008,6 +5110,15 @@ function renderProductTable(a, yA){
   }
   html += `<tr class="total"><td>Total</td>` + (usd ? a.usd : a.tns).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td>${f(usd ? a.totUsd : a.totTns)}</td></tr></table>`;
   document.getElementById("prodTable").innerHTML = html;
+  // forma de ver: visual (por defecto) o tabla completa
+  const vista = UI.prodVista === "tabla" ? "tabla" : "visual";
+  document.getElementById("prodCard").classList.toggle("pv", vista === "visual");
+  document.querySelectorAll("#prodVista button").forEach(b => {
+    const on = b.dataset.pv === vista;
+    b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI.prodVista = b.dataset.pv; saveUI(); renderProductTable(a, yA); try { decorarExportables(); } catch(e){} };
+  });
+  renderProductViz(prods, porMes, tot, f, usd ? a.usd : a.tns, yA);
 }
 
 function renderProductCompare(a, b, yA, yB){
@@ -5588,6 +5699,7 @@ function fillConfigForm(){
   document.getElementById("cfgComMode").value = c.COMISION.mode;
   document.getElementById("cfgDecimal").value = c.DECIMAL || "auto";
   document.getElementById("cfgExcluir").value = c.EXCLUDE_EXPORTERS || "";
+  document.getElementById("cfgAlias").value = c.ALIAS_EMPRESAS || "";
   document.getElementById("cfgFocusExporter").value = c.FOCUS_EXPORTER || "";
   document.getElementById("cfgContractsSheet").value = c.CONTRACTS_SHEET || "";
   document.getElementById("cfgContractsGid").value = c.CONTRACTS_GID || "";
@@ -5680,6 +5792,7 @@ document.getElementById("cfgSave").onclick = async () => {
     DATE_FORMAT: document.getElementById("cfgDateFormat").value,
     DECIMAL: document.getElementById("cfgDecimal").value,
     EXCLUDE_EXPORTERS: txt("cfgExcluir"),
+    ALIAS_EMPRESAS: document.getElementById("cfgAlias").value.trim(),
     FOCUS_EXPORTER: txt("cfgFocusExporter"),
     CONTRACTS_SHEET: txt("cfgContractsSheet"),
     CONTRACTS_GID: txt("cfgContractsGid").replace(/\D/g, ""),
