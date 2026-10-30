@@ -4,3 +4,8 @@ Thumbs.db
 *.log
 docs/privado/
 *.zip
+
+# Artifact: datos privados y salida generada (nunca al repo público)
+datos-artifact/
+artifact/
+prototipos/

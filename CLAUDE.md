@@ -106,3 +106,13 @@ Código muerto conocido (no se llama, se puede borrar): `renderTrend`, `renderPr
 ## Último estado (30/10/2026)
 
 Lo último que se trabajó fue la database de clientes para exportación vs mercado local. El usuario reportó que 59 importadores "no figuraban" aunque están en Database_old con ese nombre → se cambió a leer primero el export por gid (filtro activo en la pestaña es la causa más probable) y se agregó diagnóstico. **Falta confirmar con él que ya cruza bien.** Si no, pedirle el número de "filas leídas" que muestra el aviso y comparar contra las filas reales de Database_old.
+
+## Versión Artifact (claude.ai)
+
+Hay una copia del dashboard publicada como Artifact (privado). `index.html` sigue siendo la **única fuente**: el Artifact se deriva de él.
+
+- Un Artifact **no puede leer Google Sheets** (bloquea `fetch` a otros sitios). Sus datos son una **copia** publicada junto a la página (`data/manifest.json` + archivos). La página busca cada archivo por la misma clave que genera `tools/bajar-datos.js`.
+- `node tools/bajar-datos.js datos-artifact/config.json` baja las planillas (pide las mismas direcciones que el dashboard). `config.json` = lo que el dashboard guarda en `localStorage["dashboardConfigV2"]` (sale del 🔗 Link para compañeros). Todo `datos-artifact/` está en `.gitignore`: tiene nombres de clientes y Sheet IDs.
+- `node tools/armar-artifact.js` genera `artifact/index.html` (+ `artifact/data/`). Solo cambia lo que un Artifact no permite: de dónde salen los datos, descargas (Imagen/PDF por la capacidad `downloads`), textos ("copia de datos del …") y oculta ⚙️ Configurar.
+- `node tools/probar-artifact.js` lo sirve en local (http://localhost:8767/) dentro de un esqueleto parecido al del Artifact.
+- Para actualizar los datos: volver a correr `bajar-datos` + `armar-artifact` y republicar con `files` (`data/manifest.json` y los `data/fNN.txt`).
