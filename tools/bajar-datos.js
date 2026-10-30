@@ -20,6 +20,7 @@ if (!cfgPath){ console.error("Uso: node tools/bajar-datos.js config.json [salida
 const CONFIG = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
 const OUT = path.resolve(outArg || path.join(path.dirname(cfgPath), "datos"));
 const enc = encodeURIComponent;
+const MUNDO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json";
 
 /* Misma clave que usa la página del Artifact */
 function claveFuente(url){
@@ -64,6 +65,13 @@ function urlsDe(key, c){
     out.push(["clientes", `${base}/gviz/tq?tqx=out:csv&headers=0&sheet=${enc(hoja)}`]);
     if (g) out.push(["clientes (gid)", `${base}/gviz/tq?tqx=out:csv&headers=0&gid=${g[1]}`]);
   }
+  if (c.SUPPLIERS_URL){   // fetchProveedores
+    const raw = String(c.SUPPLIERS_URL).trim();
+    const m = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/), id = m ? m[1] : raw;
+    const g = raw.match(/[#&?]gid=(\d+)/), base = `https://docs.google.com/spreadsheets/d/${id}`;
+    if (g) out.push(["proveedores (completo)", `${base}/export?format=csv&gid=${g[1]}`]);
+    out.push(["proveedores", `${base}/gviz/tq?tqx=out:csv&headers=0&sheet=${enc((c.SUPPLIERS_SHEET || "Database suppliers").trim())}`]);
+  }
   return out;
 }
 
@@ -93,6 +101,13 @@ function urlsDe(key, c){
       resumen.push(`${key.padEnd(10)} ${que.padEnd(26)} ${estado}`);
     }
   }
+  // mapa del mundo para el globo del panel comercial (el Artifact no puede pedirlo a la CDN de datos)
+  try {
+    const res = await fetch(MUNDO_URL);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    fs.writeFileSync(path.join(OUT, "world-110m.json"), Buffer.from(await res.arrayBuffer()));
+    resumen.push(`${"mapa".padEnd(10)} ${"world-110m".padEnd(26)} ok`);
+  } catch (e){ resumen.push(`${"mapa".padEnd(10)} ${"world-110m".padEnd(26)} error: ${e.message}`); }
   const manifest = { generatedAt: new Date().toISOString(), files, config: CONFIG };
   fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest));
   console.log(resumen.join("\n"));

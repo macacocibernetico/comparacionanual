@@ -140,5 +140,43 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   global.location = { href: 'http://localhost/', hash: '' };
 }
 
+// panel comercial: países, regiones, embudo y salud de la cartera
+{
+  const fs = require('fs'), path = require('path');
+  const h = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const code = [...h.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m => m[1]).filter(s => s.trim()).at(-1);
+  const c = new Function(code + ';return {UI,CLI_DB,OPEN,paisInfo,normRegion,calcEmbudo,calcCartera,PAISES};')();
+  t('países: variantes de la planilla al mismo país', ['SPAIN', 'España', 'ESPANA'].every(x => c.paisInfo(x).id === '724') &&
+    c.paisInfo('UK').es === 'Reino Unido' && c.paisInfo('MALASYA').id === '458' && c.paisInfo('REPUBLICA DOMINICANA').id === '214');
+  t('países: Malta y Singapur llevan coordenadas (el mapa no los dibuja)', !!c.paisInfo('MALTA').coord && !!c.paisInfo('SINGAPURE').coord);
+  t('países: uno desconocido queda con su nombre y sin id', c.paisInfo('Narnia').id === null && c.paisInfo('Narnia').es === 'Narnia' && c.paisInfo('') === null);
+  t('regiones: EUROPE y EUROPA son la misma', c.normRegion('EUROPE') === 'Europa' && c.normRegion('europa') === 'Europa' && c.normRegion('') === 'Sin región');
+  const db = [
+    { n: 'Alfa SA', team: 'F', region: 'EUROPE', contactado: true, rta: true, encuentro: true },
+    { n: 'Beta', team: 'M - F', region: 'EUROPA', contactado: true, rta: false, encuentro: false },
+    { n: 'Gama', team: '', region: 'ASIA', contactado: false, rta: false, encuentro: false },
+  ];
+  const E = c.calcEmbudo(db, [{ importador: 'ALFA S.A.', toneladas: 50 }, { importador: '(sin dato)', toneladas: 9 }]);
+  t('embudo: etapas', E.total.base === 3 && E.total.cont === 2 && E.total.rta === 1 && E.total.enc === 1 && E.total.compro === 1);
+  const F = E.porVendedor.find(x => x.g === 'F'), M = E.porVendedor.find(x => x.g === 'M');
+  t('embudo: "M - F" suma en M y en F', F.base === 2 && M.base === 1 && F.compro === 1 && F.tns === 50 && E.porVendedor.some(x => x.g === 'Sin asignar'));
+  t('embudo: regiones normalizadas', E.porRegion.find(x => x.g === 'Europa').base === 2);
+  const eu = E.porRegion.find(x => x.g === 'Europa');
+  t('embudo: cada región trae sus empresas con su etapa', eu.filas.length === 2 && eu.filas.find(x => x.n === 'Alfa SA').etapa === 'contrato' && eu.filas.find(x => x.n === 'Beta').etapa === 'cont' && E.porRegion.find(x => x.g === 'Asia').filas[0].etapa === 'sin');
+  t('embudo: agrupa también por país', E.porPais.length >= 1 && E.porPais.every(x => x.filas.length === x.base));
+  c.UI.biz = 'brokerage'; c.CLI_DB.brokerage = [{ n: 'Cliente Uno', pais: 'SPAIN', team: 'A', region: 'EUROPE' }];
+  c.OPEN.brokerage = { filas: [{ contrato: 'C9' }] };
+  const hoy = new Date(2026, 9, 30), f = (y, mo, d) => ({ y, mo, d });
+  const cs = [
+    ...[[2025, 3, 10], [2025, 5, 10], [2025, 7, 10], [2025, 9, 10], [2025, 11, 10]].map(([y, mo, d], i) => ({ importador: 'Cliente Uno', fecha: f(y, mo, d), toneladas: 10, contrato: 'U' + i })),
+    { importador: 'Cliente Dos', fecha: f(2026, 9, 1), toneladas: 20, contrato: 'C9', saldo: 5 },
+    { importador: 'Cliente Tres', fecha: f(2023, 2, 1), toneladas: 30, contrato: 'T1' },
+  ];
+  const cli = c.calcCartera(cs, 2026, hoy), uno = cli.find(x => x.n === 'Cliente Uno'), dos = cli.find(x => x.n === 'Cliente Dos'), tres = cli.find(x => x.n === 'Cliente Tres');
+  t('cartera: activo, nuevo y país desde la database', uno.activo && uno.pais === 'España' && uno.team === 'A' && dos.nuevo && !uno.nuevo);
+  t('cartera: en riesgo si pasa mucho más que su frecuencia', uno.riesgo && uno.frec === 61 && !dos.riesgo);
+  t('cartera: contratos abiertos y días sin comprar', dos.abiertos === 1 && dos.saldo === 5 && !tres.activo && tres.dias > 900);
+}
+
 console.log(`\n${ok} ok · ${bad} fallas`);
 process.exit(bad ? 1 : 0);

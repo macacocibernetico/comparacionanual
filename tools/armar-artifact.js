@@ -142,6 +142,9 @@ reemplazar(`  mk("chEtd", "etdCount", { dots: true });`, `  mk("chEtd", "etdCoun
 reemplazar(`const SECCIONES_CON_DATOS = ["cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard"];`,
            `const SECCIONES_CON_DATOS = ["zOverview", "cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard"];`);
 reemplazar(`{ id: "kpis", label: "Resumen" }`, `{ id: "zOverview", label: "Resumen" }`);
+/* 6 · el mapa del globo va en la copia de datos (bajar-datos.js lo baja como data/world-110m.json) */
+reemplazar('function urlMundo(){ return "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json"; }',
+           'function urlMundo(){ return ARTIFACT.base + "data/world-110m.json"; }');
 reemplazar('<title>Dashboard de Negocios</title>', '<title>Dashboard Exportaciones Latinut</title>');
 
 /* esqueleto: el Artifact agrega <!DOCTYPE>, <html>, <head> y <body> al publicar */

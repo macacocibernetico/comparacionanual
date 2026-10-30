@@ -95,6 +95,8 @@ Código muerto conocido (no se llama, se puede borrar): `renderTrend`, `renderPr
 - `normEmpresa` saca sufijos legales encadenados (GmbH & Co. KG, S.A., Ltd, SpA…).
 - **Compartir config**: botón 🔗 "Link para compañeros" en ⚙️ Configurar (`linkCompartir`) genera `URL#cfg=<base64url JSON>`; al abrir, `importarDesdeLink` la guarda en localStorage y limpia el # de la barra. Nunca va al repo.
 - Al importar un link: si ya había otra config, pide `confirm()` y guarda copia en `dashboardConfigV2_backup`.
+- **Panel comercial** (`#comCard`, solo Brokerage, `renderComercial`): globo d3 (d3 + topojson desde cdnjs, mapa world-atlas; en el Artifact el mapa va en `data/world-110m.json`), salud de la cartera por **fecha de contrato** de ALL CONTRATOS (abiertos = los que están en Contratos Abiertos), embudo desde Database_old (`CLI_DB`: región, Team M, producto, Contactado, Cont con RTA, Encuentro) y proveedores desde Database suppliers (`SUPPLIERS_URL`, `PROV_DB`). Nunca leer columnas de contacto (mails, teléfonos, direcciones, VAT). Países: tabla `PAISES` (variantes → id ISO numérico).
+- Header: con los datos bien leídos, `#statusLine` queda oculto (`estadoDatos`) y el detalle va al tooltip de ↻ Actualizar; el interruptor de exportadores excluidos está en el panel de Productos.
 - Textos de la planilla en `renderMercado` se escapan con `esc()`. **Pendiente**: aplicar `esc()` en el resto de tablas (`renderPartners`, contratos, etc.).
 
 ## Documentación de la migración

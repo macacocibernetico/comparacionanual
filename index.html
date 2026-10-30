@@ -755,6 +755,12 @@
     #contextBar{grid-column:1;margin-bottom:10px}
     #statusLine{grid-column:2;justify-self:end;align-self:center;margin-bottom:10px;text-align:right}
   }
+  /* Header limpio: el resumen de la carga se oculta cuando todo anduvo bien (sigue en el tooltip de ↻ Actualizar) */
+  #statusLine.quiet{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+  .context:empty{display:none}
+  #btnReload.busy > span{display:inline-block;animation:girar 1s linear infinite}
+  @keyframes girar{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){ #btnReload.busy > span{animation:none} }
 
   /* Detalle mensual por producto en formato visual */
   :root{--pvp0:#2f56f5;--pvp1:#1f9d45;--pvp2:#e0367f;--pvp3:#e3860f;--pvp4:#7a5af5}
@@ -820,6 +826,95 @@
   .kpi .value small.cur{margin-right:.18em}
   .kpi .value small.unit{margin-left:.06em}
   @media(max-width:720px){ .kpis .kpi .value{font-size:1.12rem;letter-spacing:-.02em} }
+  /* Panel comercial (Brokerage) */
+  #comVista{flex-wrap:wrap}
+  @media(max-width:720px){ #comVista{display:grid;grid-template-columns:1fr 1fr;width:100%} #comVista button{white-space:normal;line-height:1.25} }
+  .comgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start}
+  @media(max-width:900px){ .comgrid{grid-template-columns:minmax(0,1fr)} }
+  .globo{position:relative;max-width:560px;margin:0 auto;touch-action:none}
+  .globo svg{display:block;cursor:grab;user-select:none}
+  .globo svg.arrastrando{cursor:grabbing}
+  .gsph{fill:var(--panel2);stroke:var(--border2);stroke-width:1}
+  .ggrat{fill:none;stroke:var(--grid);stroke-width:.6}
+  .gpais{stroke:var(--panel);stroke-width:.5;transition:opacity .15s}
+  .gpais.con{cursor:pointer}
+  .gpais.con:hover,.gpto:hover{opacity:.78}
+  .gpais.sel{stroke:var(--text);stroke-width:1.4}
+  .gpto{stroke:var(--panel);stroke-width:1;cursor:pointer}
+  .gtip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--text);color:var(--panel);
+    font-size:.76rem;line-height:1.45;padding:7px 10px;border-radius:10px;max-width:240px;z-index:3;box-shadow:0 6px 18px rgba(15,23,42,.18)}
+  .comleyenda{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:center;margin:10px 0 4px;font-size:.76rem;color:var(--muted)}
+  .gleg{display:inline-flex;align-items:center;gap:6px}
+  .gleg i{width:12px;height:12px;border-radius:4px;display:inline-block}
+  .gl1{background:color-mix(in srgb,var(--accent) 25%,var(--panel3))} .gl2{background:var(--accent)} .gl3{background:color-mix(in srgb,var(--pvp3) 60%,var(--panel3))}
+  .comlado{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .crank{display:flex;flex-direction:column;gap:4px}
+  .crk{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;gap:4px 10px;width:100%;text-align:left;
+    background:none;border:1px solid transparent;border-radius:12px;padding:8px 10px;cursor:pointer;color:var(--text);font:inherit}
+  .crk:hover{background:var(--panel2);transform:none}
+  .crk.on{background:var(--accent-soft);border-color:transparent}
+  .crkn{font-weight:500;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crkv{text-align:right;font-size:.8rem;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;line-height:1.25}
+  .crkv small{color:var(--faint);font-size:.7rem}
+  .crkb{grid-column:1/-1;height:5px;border-radius:99px;background:var(--panel2);overflow:hidden}
+  .crkb i{display:block;height:100%;border-radius:99px;background:var(--accent)}
+  .comdet h4,.comh4{margin:0 0 8px;font-size:.92rem;font-weight:600}
+  .comsub{color:var(--faint);font-size:.8rem;line-height:1.55;margin:8px 0}
+  .comaviso{background:var(--panel2);border-radius:12px;padding:10px 14px;font-size:.82rem;color:var(--muted);margin:0 0 14px}
+  .pipestats.comk{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+  .pstat.alerta .pval{color:var(--red)}
+  .funnel{display:flex;flex-direction:column;gap:8px;margin:4px 0 6px}
+  .fun{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) 92px;gap:12px;align-items:center}
+  .funl{font-size:.86rem;color:var(--muted)}
+  .funb{height:26px;background:var(--panel2);border-radius:9px;overflow:hidden}
+  .funb i{display:block;height:100%;border-radius:9px;background:var(--pvc,var(--accent));min-width:3px}
+  .funv{text-align:right;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;line-height:1.2}
+  .funv small{color:var(--faint);font-size:.72rem}
+  @media(max-width:600px){ .fun{grid-template-columns:minmax(0,1fr) 70px} .funb{grid-column:1/-1;grid-row:2} }
+  .vermas2{display:block;margin:8px auto 0;background:none;border:none;color:var(--accent);font-weight:600;font-size:.84rem;padding:8px 14px;border-radius:99px;cursor:pointer}
+  .vermas2:hover{background:var(--accent-soft);transform:none}
+  .comhint{color:var(--faint);font-size:.84rem;background:var(--panel2);border-radius:12px;padding:10px 14px;margin:0}
+  .comdet{background:var(--panel2);border-radius:16px;padding:14px 16px}
+  .comdeth{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .comdeth h4{margin:0}
+  .comcerrar{width:28px;height:28px;padding:0;border-radius:99px;font-size:1.1rem;line-height:1;background:var(--panel);color:var(--muted);border:none;cursor:pointer}
+  .comdet .tablewrap{max-height:260px;overflow:auto}
+  .prosp{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+  .prosp span{background:var(--panel2);border-radius:99px;padding:4px 11px;font-size:.78rem;color:var(--muted)}
+  .prosp .mas{background:none;color:var(--faint)}
+  .comdet .prosp span{background:var(--panel)}
+  .crankh{display:flex;justify-content:space-between;font-size:.72rem;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;padding:0 10px;margin-top:4px}
+  .crki{display:inline-block;min-width:22px;color:var(--faint);font-size:.74rem;font-variant-numeric:tabular-nums}
+  .crk:focus-visible,.egt:focus-visible,.pstat.link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button.pstat.link{text-align:left;border:none;font:inherit;color:inherit;width:100%}
+  .pstat.link .vermas{white-space:nowrap}
+  .pstat.link:hover .vermas{color:#fff}
+  .embhead{margin-top:22px}
+  .etleyenda{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.74rem;color:var(--muted);margin:4px 0 10px}
+  .etleyenda span{display:inline-flex;align-items:center;gap:6px}
+  .etleyenda i{width:11px;height:11px;border-radius:4px;display:inline-block}
+  .egrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+  .egt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;text-align:left;background:var(--panel2);border:2px solid transparent;border-radius:16px;padding:12px 14px;cursor:pointer;color:var(--text);font:inherit}
+  .egt:hover{background:var(--panel3);transform:none}
+  .egt.on{border-color:var(--accent);background:var(--accent-soft)}
+  .egn{font-weight:600;font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .egv{text-align:right;display:flex;flex-direction:column;line-height:1.15}
+  .egv b{font-size:1.05rem;font-variant-numeric:tabular-nums}
+  .egv small{font-size:.66rem;color:var(--faint)}
+  .egs{grid-column:1/-1;font-size:.74rem;color:var(--faint)}
+  .etbar{grid-column:1/-1;display:flex;height:8px;border-radius:99px;overflow:hidden;gap:2px;margin-top:4px;background:var(--panel3)}
+  .etbar i{display:block;min-width:3px}
+  .edet{margin-top:16px;background:var(--panel2);border-radius:18px;padding:16px 18px}
+  .edet .tablewrap{background:var(--panel);border-radius:12px;max-height:520px;overflow:auto}
+  .edhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:10px}
+  .edhead h4{margin:0;font-size:1.05rem}
+  #embBusca{min-width:200px;max-width:260px;border-radius:99px;padding:8px 14px;border:1px solid var(--border2);background:var(--panel);color:var(--text);font:inherit;font-size:.85rem}
+  .etchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .etchips .chip b{margin-left:4px;opacity:.7}
+  .etpill{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+  .etpill i{width:9px;height:9px;border-radius:99px;display:inline-block}
+  @media(max-width:720px){ .egrid{grid-template-columns:1fr 1fr} .egs{display:none} #embBusca{max-width:none;width:100%} .edhead>div{flex:1 1 100%} }
+  .comdet2{margin:10px 0 0} .comdet2 summary{cursor:pointer;color:var(--accent);font-size:.85rem;font-weight:500;padding:6px 0}
 </style>
 </head>
 <body>
@@ -893,6 +988,7 @@
       <button id="fltInvert" type="button" title="Invierte la selección: útil para 'todo menos X'">⇄ Invertir selección</button>
     </div>
     <div class="checklist" id="prodChecks" role="group" aria-label="Lista de productos"></div>
+    <div class="checkactions" id="exclRow" style="margin:12px 0 0;display:none"></div>
   </div>
 
   <div class="panel" id="colorPanel" style="display:none">
@@ -1106,6 +1202,25 @@
       <div class="tablewrap" id="mktFreq"></div>
       </div>
     </div>
+    <div class="card wide" id="comCard" style="display:none">
+      <h2 class="clickhead">Panel comercial <span id="lblCom" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Dónde están los clientes, quién dejó de comprar, cómo convierte la base y de quién depende el volumen.</p>
+      <div class="cardbody">
+      <div class="consbar">
+        <div class="seg" id="comVista" role="group" aria-label="Sección del panel comercial">
+          <button type="button" data-cv="mapa">🌎 Globo de clientes</button>
+          <button type="button" data-cv="cartera">Salud de la cartera</button>
+          <button type="button" data-cv="embudo">Embudo y vendedores</button>
+          <button type="button" data-cv="prov">Proveedores y precios</button>
+        </div>
+        <div class="seg" id="comPeriodo" role="group" aria-label="Período">
+          <button type="button" data-cp="anio">Año elegido</button>
+          <button type="button" data-cp="hist">Histórico</button>
+        </div>
+      </div>
+      <div id="comBody"></div>
+      </div>
+    </div>
     <div class="card wide" id="partnerCard" style="display:none">
       <h2 class="clickhead">Exportadores e importadores<span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Toneladas por empresa según <b>ETD</b>. El año en curso llega hasta el mes actual. Tocá una fila para ver sus cargas.</p>
@@ -1289,6 +1404,10 @@
       <input id="cfgClientsUrl" placeholder="https://docs.google.com/spreadsheets/d/…/edit">
       <label for="cfgClientsSheet">Pestaña de la database de clientes</label>
       <input id="cfgClientsSheet" placeholder="Database_old">
+      <label for="cfgSuppliersUrl">Planilla “database proveedores” <span style="color:var(--faint);font-weight:400">— opcional; link de Sheets con #gid de la pestaña (para el panel comercial)</span></label>
+      <input id="cfgSuppliersUrl" placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=…">
+      <label for="cfgSuppliersSheet">Pestaña de la database de proveedores</label>
+      <input id="cfgSuppliersSheet" placeholder="Database suppliers">
       <label for="cfgOpenSheet">Pestaña de contratos abiertos <span style="color:var(--faint);font-weight:400">— la de la programación mes a mes</span></label>
       <input id="cfgOpenSheet" placeholder="Contratos Abiertos">
       <label for="cfgDecimal">Separador decimal de la planilla</label>
@@ -1378,7 +1497,9 @@ const SHEET_DEFAULTS = {
   CONTRACTS_GID: "",
   OPEN_SHEET: "Contratos Abiertos",
   CLIENTS_URL: "",
-  CLIENTS_SHEET: "Database_old",                   // pestaña de la database de clientes                                 // planilla "database clientes" (Country por cliente)                // pestaña con la programación mes a mes
+  CLIENTS_SHEET: "Database_old",                   // pestaña de la database de clientes
+  SUPPLIERS_URL: "",                               // planilla "database proveedores" (panel comercial)
+  SUPPLIERS_SHEET: "Database suppliers",
   USD_COL: "TOTAL FINAL",                          // encabezado de la columna de facturación
   COMISION: { mode: "suma", col: "Monto LT" },     // "suma" o "porTon" (comisión × Tns)
   /* Encabezados de las columnas que usa el dashboard. Editables por negocio
@@ -2076,15 +2197,22 @@ async function fetchClientes(cfg){
     }
   }
   if (h < 0) throw new Error("La database de clientes no tiene una columna Country / País");
-  const mapa = new Map(), alias = aliasDe(cfg);
+  const mapa = new Map(), alias = aliasDe(cfg), filasDb = [];
+  // para el panel comercial: región, vendedor, producto y etapas del contacto (nunca datos de contacto)
+  const hdr = rows[h], cel = (r, i) => i < 0 ? "" : String((r || [])[i] ?? "").trim();
+  const D = { region: colDe(hdr, "Region", "Región"), team: colDe(hdr, "Team M", "Team", "Vendedor"), prod: colDe(hdr, "Product", "Producto"),
+    cont: colDe(hdr, "Contactado"), rta: colDe(hdr, "Cont con RTA", "Respondio", "Respondió"), enc: colDe(hdr, "Encuentro presenciales", "Encuentro", "Reunion", "Reunión") };
   for (const r of rows.slice(h + 1)){
     const n = canonEmpresa(String((r || [])[iNom] ?? "").trim(), alias), p = String((r || [])[iPais] ?? "").trim();
     if (!n) continue;
+    filasDb.push({ n, pais: p, region: cel(r, D.region), team: cel(r, D.team), prod: cel(r, D.prod),
+      contactado: siNo(cel(r, D.cont)), rta: siNo(cel(r, D.rta)), encuentro: !!cel(r, D.enc) && !/^(false|no|-)$/i.test(cel(r, D.enc)) });
     const k = normEmpresa(n) || n.toLowerCase();
     const prev = mapa.get(k);
     if (!prev || (!prev.pais && p)) mapa.set(k, { n, pais: p });   // si está repetido, gana la fila con Country
   }
   mapa.filas = rows.length - h - 1;
+  mapa.filasDb = filasDb;
   mapa.colNombre = String(rows[h][iNom] ?? "");
   return mapa;
 }
@@ -2218,11 +2346,13 @@ async function loadData(){
     banner.className = "banner";
     banner.innerHTML = "<span>⚠️</span><span><b>Estás viendo datos de ejemplo de AXT.</b> Los demás negocios quedan vacíos hasta que conectes su planilla. Para ver tus números reales, tocá <b>⚙️ Configurar</b> arriba a la derecha y pegá el enlace de tu planilla de Google Sheets.</span>";
     status.innerHTML = "🧪 Datos de ejemplo — todavía no hay planillas conectadas";
+    estadoDatos(false, false);
     return;
   }
   status.innerHTML = paintedFromCache
     ? '<span style="opacity:.75">↻ Actualizando en segundo plano…</span>'
     : "⏳ Leyendo planillas de Google Sheets…";
+  estadoDatos(paintedFromCache, true);
   const errors = [], srcInfo = {};
   await Promise.all(configured.map(async b => {
     try {
@@ -2238,12 +2368,17 @@ async function loadData(){
           const mapa = await fetchClientes(CONFIG[b.key]);
           const n = aplicarPaises(DATA[b.key], mapa);
           CLI_INFO[b.key] = { ok: true, clientes: mapa.size, filas: mapa.filas, col: mapa.colNombre, cargas: n, total: DATA[b.key].length };
+          CLI_DB[b.key] = mapa.filasDb || [];
         }
         catch(e){
           CLI_INFO[b.key] = { ok: false, err: e.message };
           errors.push(`<b>${b.name} · database de clientes:</b> ${esc(errorCriollo(e))}`);
         }
       } else CLI_INFO[b.key] = null;
+      if (CONFIG[b.key].SUPPLIERS_URL){
+        try { PROV_DB[b.key] = await fetchProveedores(CONFIG[b.key]) || []; }
+        catch(e){ PROV_DB[b.key] = []; errors.push(`<b>${b.name} · database de proveedores:</b> ${esc(errorCriollo(e))}`); }
+      }
     }
     catch(e){ errors.push(`<b>${b.name}:</b> ${esc(errorCriollo(e))}`); }
   }));
@@ -2263,6 +2398,20 @@ async function loadData(){
       return `<b style="color:var(--muted)">${b.name}</b> ${fmt0(DATA[b.key].length)} cargas · ${yrs[0]}–${yrs[yrs.length - 1]}`;
     });
   status.innerHTML = `✅ ${parts.join(' <span class="dotsep">|</span> ')} <span class="dotsep">|</span> actualizado ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+  estadoDatos(true);
+}
+
+/* Con los datos bien leídos el resumen de la carga no se muestra (queda para lectores de pantalla
+   y en el tooltip de ↻ Actualizar); se ve solo mientras lee por primera vez, con datos de ejemplo o con error. */
+function estadoDatos(listo, leyendo = !listo){
+  const st = document.getElementById("statusLine"), bt = document.getElementById("btnReload");
+  if (!st) return;
+  st.classList.toggle("quiet", !!listo);
+  if (bt){
+    bt.classList.toggle("busy", !!leyendo);
+    bt.title = listo && !leyendo ?st.textContent.replace(/^[✅⚡]\s*/, "").replace(/\s*\|\s*/g, "\n") + "\n\nTocá para volver a leer las planillas."
+                     : "Volver a leer las planillas de Google Sheets";
+  }
 }
 
 /* Clave para las tortas del Total: los negocios con sub-vistas se abren en sus partes */
@@ -3536,6 +3685,636 @@ function diasEntre(fechas){
 const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fechaTxt = f => f ? `${String(f.d || 1).padStart(2, "0")}/${String(f.mo).padStart(2, "0")}/${f.y}` : "—";
 const fechaNum = f => f ? f.y * 10000 + f.mo * 100 + (f.d || 1) : 0;
+
+/* ===================================================================
+   Panel comercial (Brokerage): globo de clientes, salud de la cartera,
+   embudo y vendedores, proveedores y precios.
+   Fuentes: cargas (por ETD), ALL CONTRATOS (= Contratos Cerrados + Abiertos, con la fecha de
+   cada contrato), Contratos Abiertos (qué contratos siguen abiertos), Database_old (clientes)
+   y Database suppliers (proveedores). De las databases no se leen datos de contacto.
+   =================================================================== */
+const CLI_DB = {};    // bizKey -> filas de la database de clientes
+const PROV_DB = {};   // bizKey -> filas de la database de proveedores
+const D3_URL = "https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js";
+const TOPO_URL = "https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js";
+function urlMundo(){ return "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json"; }
+
+/* Países: [id del mapa (ISO numérico), nombre, variantes como aparecen en las planillas, [lon, lat] si el mapa no lo dibuja] */
+const PAISES = [
+  ["032", "Argentina", ["ARG"]], ["076", "Brasil", ["BRAZIL"]], ["600", "Paraguay"], ["858", "Uruguay"], ["152", "Chile"],
+  ["068", "Bolivia"], ["604", "Perú", ["PERU"]], ["218", "Ecuador"], ["170", "Colombia"], ["862", "Venezuela"],
+  ["484", "México", ["MEXICO"]], ["188", "Costa Rica"], ["591", "Panamá", ["PANAMA"]], ["320", "Guatemala"], ["222", "El Salvador"],
+  ["340", "Honduras"], ["558", "Nicaragua"], ["192", "Cuba"], ["214", "República Dominicana", ["REPUBLICA DOMINICANA", "DOMINICAN REPUBLIC", "DOMINICANA"]],
+  ["630", "Puerto Rico"], ["388", "Jamaica"], ["124", "Canadá", ["CANADA"]], ["840", "Estados Unidos", ["USA", "US", "EEUU", "EE UU", "UNITED STATES", "UNITED STATES OF AMERICA"]],
+  ["724", "España", ["SPAIN", "ESPANA"]], ["620", "Portugal"], ["250", "Francia", ["FRANCE"]], ["380", "Italia", ["ITALY"]],
+  ["276", "Alemania", ["GERMANY"]], ["528", "Países Bajos", ["NETHERLANDS", "THE NETHERLANDS", "HOLANDA", "HOLLAND", "PAISES BAJOS"]],
+  ["056", "Bélgica", ["BELGIUM", "BELGICA"]], ["442", "Luxemburgo", ["LUXEMBOURG", "LUXEMBURG"]], ["826", "Reino Unido", ["UK", "UNITED KINGDOM", "ENGLAND", "INGLATERRA", "GREAT BRITAIN"]],
+  ["372", "Irlanda", ["IRELAND"]], ["756", "Suiza", ["SWITZERLAND"]], ["040", "Austria"], ["208", "Dinamarca", ["DENMARK"]],
+  ["752", "Suecia", ["SWEDEN"]], ["578", "Noruega", ["NORWAY"]], ["246", "Finlandia", ["FINLAND"]], ["352", "Islandia", ["ICELAND"]],
+  ["616", "Polonia", ["POLAND"]], ["203", "Chequia", ["CZECHIA", "CZECH REPUBLIC", "CHECH REPUBLIC", "REPUBLICA CHECA"]], ["703", "Eslovaquia", ["SLOVAKIA"]],
+  ["348", "Hungría", ["HUNGARY", "HUNGRIA"]], ["705", "Eslovenia", ["SLOVENIA"]], ["191", "Croacia", ["CROATIA"]],
+  ["070", "Bosnia y Herzegovina", ["BOSNIA", "BOSNIA AND HERZEGOVINA"]], ["688", "Serbia"], ["499", "Montenegro"], ["008", "Albania"],
+  ["807", "Macedonia del Norte", ["MACEDONIA", "NORTH MACEDONIA"]], ["300", "Grecia", ["GREECE"]], ["100", "Bulgaria"], ["642", "Rumania", ["ROMANIA"]],
+  ["498", "Moldavia", ["MOLDOVA"]], ["804", "Ucrania", ["UKRAINE"]], ["112", "Bielorrusia", ["BELARUS"]], ["643", "Rusia", ["RUSSIA", "RUSSIAN FEDERATION"]],
+  ["440", "Lituania", ["LITHUANIA"]], ["428", "Letonia", ["LATVIA"]], ["233", "Estonia"], ["196", "Chipre", ["CYPRUS"]],
+  ["470", "Malta", [], [14.4, 35.9]], ["792", "Turquía", ["TURKEY", "TURKIYE", "TURQUIA"]], ["268", "Georgia"], ["051", "Armenia"],
+  ["031", "Azerbaiyán", ["AZERBAIJAN", "AZERBAIYAN"]], ["398", "Kazajistán", ["KAZAKHSTAN", "KAZAJSTAN"]], ["860", "Uzbekistán", ["UZBEKISTAN"]],
+  ["795", "Turkmenistán", ["TURKMENISTAN"]], ["417", "Kirguistán", ["KYRGYZSTAN"]], ["762", "Tayikistán", ["TAJIKISTAN"]],
+  ["422", "Líbano", ["LEBANON", "LIBANO"]], ["760", "Siria", ["SYRIA"]], ["400", "Jordania", ["JORDAN"]], ["376", "Israel"],
+  ["368", "Irak", ["IRAQ"]], ["364", "Irán", ["IRAN"]], ["682", "Arabia Saudita", ["SAUDI ARABIA", "ARABIA SAUDI"]],
+  ["784", "Emiratos Árabes Unidos", ["UAE", "UNITED ARAB EMIRATES", "EMIRATOS ARABES", "EMIRATOS ARABES UNIDOS", "EAU", "DUBAI"]],
+  ["634", "Qatar"], ["414", "Kuwait"], ["512", "Omán", ["OMAN"]], ["048", "Baréin", ["BAHRAIN", "BAHREIN"], [50.55, 26.07]], ["887", "Yemen"],
+  ["818", "Egipto", ["EGYPT"]], ["434", "Libia", ["LIBYA"]], ["788", "Túnez", ["TUNISIA", "TUNEZ"]], ["012", "Argelia", ["ALGERIA"]],
+  ["504", "Marruecos", ["MOROCCO"]], ["686", "Senegal"], ["384", "Costa de Marfil", ["IVORY COAST", "COTE D IVOIRE", "COTE DIVOIRE"]],
+  ["288", "Ghana"], ["566", "Nigeria"], ["231", "Etiopía", ["ETHIOPIA"]], ["404", "Kenia", ["KENYA"]], ["834", "Tanzania"],
+  ["800", "Uganda"], ["024", "Angola"], ["508", "Mozambique"], ["710", "Sudáfrica", ["SOUTH AFRICA", "SUDAFRICA"]],
+  ["356", "India"], ["586", "Pakistán", ["PAKISTAN"]], ["050", "Bangladés", ["BANGLADESH"]], ["144", "Sri Lanka"], ["524", "Nepal"],
+  ["156", "China"], ["158", "Taiwán", ["TAIWAN"]], ["392", "Japón", ["JAPAN", "JAPON"]], ["410", "Corea del Sur", ["SOUTH KOREA", "KOREA", "COREA"]],
+  ["104", "Myanmar", ["BIRMANIA"]], ["764", "Tailandia", ["THAILAND"]], ["704", "Vietnam", ["VIET NAM"]], ["116", "Camboya", ["CAMBODIA"]],
+  ["418", "Laos"], ["458", "Malasia", ["MALAYSIA", "MALASYA"]], ["702", "Singapur", ["SINGAPORE", "SINGAPURE"], [103.82, 1.35]],
+  ["360", "Indonesia"], ["608", "Filipinas", ["PHILIPPINES", "PHILIPINES"]], ["036", "Australia"],
+  ["554", "Nueva Zelanda", ["NEW ZEALAND", "NEW ZELAND"]],
+];
+const normU = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z]+/g, " ").trim();
+function paisInfo(nombre){
+  if (!paisInfo.idx){
+    paisInfo.idx = new Map();
+    for (const [id, es, alias = [], coord] of PAISES)
+      for (const v of [es, ...alias]) paisInfo.idx.set(normU(v), { id, es, coord });
+  }
+  const k = normU(nombre);
+  if (!k) return null;
+  return paisInfo.idx.get(k) || { id: null, es: String(nombre).trim() };
+}
+const REGIONES = { EUROPE: "Europa", EUROPA: "Europa", LATAM: "Latinoamérica", "LATIN AMERICA": "Latinoamérica", ASIA: "Asia",
+  AFRICA: "África", OCEANIA: "Oceanía", AMERICA: "Norteamérica", USA: "Norteamérica", "NORTH AMERICA": "Norteamérica", "MIDDLE EAST": "Medio Oriente" };
+const normRegion = s => REGIONES[normU(s)] || (normU(s) ? String(s).trim() : "Sin región");
+const siNo = v => /^(true|si|sí|yes|x|1|verdadero|ok)$/i.test(String(v || "").trim());
+/* Columna de una fila de encabezados por nombre (igual o que empiece así) */
+function colDe(hdr, ...nombres){
+  for (const n of nombres){
+    const t = normHeader(n);
+    const i = (hdr || []).findIndex(c => { const h = normHeader(c); return h === t || h.startsWith(t); });
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+/* Database de proveedores: empresa, país, qué productos ofrece, BRC y estado */
+async function fetchProveedores(cfg){
+  const raw = (cfg.SUPPLIERS_URL || "").trim();
+  if (!raw) return null;
+  const m = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9\-_]+)/), id = m ? m[1] : raw;
+  const g = raw.match(/[#&?]gid=(\d+)/), base = `https://docs.google.com/spreadsheets/d/${id}`;
+  const hoja = (cfg.SUPPLIERS_SHEET || "Database suppliers").trim();
+  const urls = [...(g ? [`${base}/export?format=csv&gid=${g[1]}`] : []), `${base}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(hoja)}`];
+  const esNombre = c => /^(company|empresa|proveedor|supplier)$/i.test(String(c || "").trim());
+  let rows = null, err = null;
+  for (const u of urls){
+    try {
+      const rr = parseCSV(await fetchCsvText(u));
+      if (rr && rr.slice(0, 10).some(r => (r || []).some(esNombre))){ rows = rr; break; }
+      err = new Error(`La pestaña “${hoja}” no tiene una columna Company`);
+    } catch(e){ err = e; }
+  }
+  if (!rows) throw err || new Error("No pude leer la database de proveedores");
+  const h = rows.findIndex(r => (r || []).some(esNombre)), hdr = rows[h], alias = aliasDe(cfg);
+  const C = { n: colDe(hdr, "Company", "Empresa", "Proveedor", "Supplier"), pais: colDe(hdr, "Country", "País", "Pais"),
+    brc: colDe(hdr, "BRC"), estado: colDe(hdr, "Estado") };
+  const CAPS = [["Industria", "Mani Industria"], ["Crudo", "Mani Crudo"], ["Blancheado", "Mani Blancheado"], ["Aceite", "Aceite"],
+    ["Expeller", "Expeller"], ["Tostado", "Mani tostado"], ["Elaborado", "Elaborado"]].map(([k, col]) => [k, colDe(hdr, col)]).filter(([, i]) => i >= 0);
+  const cel = (r, i) => i < 0 ? "" : String((r || [])[i] ?? "").trim();
+  return rows.slice(h + 1).map(r => ({
+    n: canonEmpresa(cel(r, C.n), alias), pais: cel(r, C.pais),
+    caps: CAPS.filter(([, i]) => siNo(cel(r, i))).map(([k]) => k),
+    brc: siNo(cel(r, C.brc)), estado: cel(r, C.estado).toUpperCase(),
+  })).filter(x => x.n);
+}
+
+/* ---------- ayudas ---------- */
+const DIA = 864e5;
+const fechaD = f => new Date(f.y, f.mo - 1, f.d || 1);
+const fFecha = d => d ? d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+const pctTxt = (v, t) => t ? (v / t * 100).toFixed(1).replace(".", ",") + "%" : "—";
+const pl = (n, s, p = s + "s") => `${fmt0(n)} ${n === 1 ? s : p}`;
+/* Tabla que muestra las primeras filas y un botón para ver todas (el estado queda en COM.abiertas) */
+function tablaCorta(id, cab, filas, opts = {}){
+  const max = opts.max || 12, todas = COM.abiertas.has(id) || filas.length <= max + 3;
+  return `<div class="tablewrap" id="${id}">${tablaHtml(cab, todas ? filas : filas.slice(0, max), opts)}</div>` +
+    (filas.length > max + 3 ? `<button type="button" class="vermas2" data-tc="${id}" aria-controls="${id}">${todas ? "Ver menos" : `Ver ${pl(filas.length, "fila")}`}</button>` : "");
+}
+function wireTablasCortas(el, redibujar){
+  el.querySelectorAll("button[data-tc]").forEach(b => b.onclick = () => {
+    const id = b.dataset.tc; COM.abiertas.has(id) ? COM.abiertas.delete(id) : COM.abiertas.add(id); redibujar();
+  });
+}
+function tablaHtml(cab, filas, opts = {}){
+  if (!filas.length) return `<p class="empty">${opts.vacio || "Sin datos para mostrar."}</p>`;
+  return `<table><tr>${cab.map(c => `<th>${c}</th>`).join("")}</tr>${filas.map(f => `<tr>${f.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+}
+function infoClienteDb(nombre){
+  const db = CLI_DB[UI.biz] || [];
+  if (infoClienteDb.db !== db){ infoClienteDb.db = db; infoClienteDb.cache = new Map(); }
+  const c = infoClienteDb.cache;
+  if (c.has(nombre)) return c.get(nombre);
+  const k = normEmpresa(nombre);
+  const hit = (k && db.find(x => normEmpresa(x.n) === k)) || db.find(x => mismaEmpresa(x.n, nombre)) || null;
+  c.set(nombre, hit);
+  return hit;
+}
+/* Contratos de la vista (sub-vista Maní / Aceite + Expeller y exportadores excluidos) */
+function contratosVista(todas){
+  const sv = todas ? null : subActual(), lista = excluidosDe(UI.biz);
+  return (CONTRACTS[UI.biz] || []).filter(c => c.fecha && (!sv || !sv.test || sv.test({ product: c.producto })) &&
+    (UI.verExcluidos || !lista.some(n => mismaEmpresa(c.exportador, n))));
+}
+
+/* ---------- salud de la cartera (por contratos) ---------- */
+function calcCartera(contratos, yA, hoy = new Date()){
+  const abiertos = new Set((((OPEN[UI.biz] || {}).filas) || []).map(f => String(f.contrato).trim()));
+  const por = new Map();
+  for (const c of contratos){
+    if (!c.importador || c.importador === "(sin dato)") continue;
+    const k = normEmpresa(c.importador) || c.importador;
+    const x = por.get(k) || { n: c.importador, fechas: [], tns: 0, tns12: 0, contratos: 0, abiertos: 0, saldo: 0 };
+    const d = fechaD(c.fecha);
+    x.fechas.push(d); x.tns += c.toneladas || 0; x.contratos++;
+    if ((hoy - d) / DIA <= 365) x.tns12 += c.toneladas || 0;
+    if (abiertos.has(String(c.contrato).trim())){ x.abiertos++; x.saldo += c.saldo || 0; }
+    por.set(k, x);
+  }
+  return [...por.values()].map(x => {
+    x.fechas.sort((a, b) => a - b);
+    x.primero = x.fechas[0]; x.ultimo = x.fechas[x.fechas.length - 1];
+    x.dias = Math.max(0, Math.round((hoy - x.ultimo) / DIA));
+    const gaps = x.fechas.slice(1).map((d, i) => (d - x.fechas[i]) / DIA).filter(g => g > 0).sort((a, b) => a - b);
+    x.frec = gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]) : null;      // mediana de días entre contratos
+    x.activo = x.dias <= 365;
+    x.nuevo = x.primero.getFullYear() === yA;
+    x.riesgo = x.activo && x.contratos >= 3 && !!x.frec && x.dias > Math.max(60, 1.5 * x.frec);
+    x.previo = x.fechas.some(d => { const a = (hoy - d) / DIA; return a > 365 && a <= 730; });   // compró entre 12 y 24 meses atrás
+    const db = infoClienteDb(x.n);
+    x.pais = db && db.pais ? (paisInfo(db.pais) || {}).es || db.pais : "";
+    x.team = db ? db.team : ""; x.region = db ? normRegion(db.region) : "";
+    return x;
+  });
+}
+
+/* ---------- globo ---------- */
+const COM = { rot: [15, -25, 0], sel: null, abiertas: new Set(), paisesTodos: false,
+  eg: "region", eSel: null, eEtapa: "todas", eBusca: "", eTodas: false, eGruposTodos: false };
+async function cargarMundo(){
+  if (cargarMundo.geo) return cargarMundo.geo;
+  await cargarScript(D3_URL);
+  await cargarScript(TOPO_URL);
+  const res = await fetch(urlMundo());
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const topo = await res.json();
+  cargarMundo.geo = topojson.feature(topo, topo.objects.countries).features;
+  return cargarMundo.geo;
+}
+function dibujarGlobo(cont, valores, puntos, opts){
+  const d3 = window.d3, geo = cargarMundo.geo;
+  if (!d3 || !geo) return;
+  const w = Math.max(280, cont.clientWidth || 600), h = Math.min(w, 520);
+  cont.querySelectorAll("svg").forEach(s => s.remove());
+  const tip = cont.querySelector(".gtip");
+  const svg = d3.select(cont).insert("svg", ".gtip").attr("viewBox", `0 0 ${w} ${h}`).attr("width", "100%")
+    .attr("role", "img").attr("aria-label", opts.aria);
+  const proj = d3.geoOrthographic().fitExtent([[6, 6], [w - 6, h - 6]], { type: "Sphere" }).rotate(COM.rot).clipAngle(90);
+  const path = d3.geoPath(proj);
+  const max = Math.max(1, ...[...valores.values()].map(v => v.v));
+  const cBase = cssVar("--panel3"), cAcc = cssVar("--accent"), cPros = cssVar("--pvp3") || "#e3860f";
+  const escala = v => Math.sqrt(v / max);
+  const color = d => !d ? cssVar("--panel2") : d.tipo === "prospecto" ? d3.interpolateRgb(cBase, cPros)(.6)
+    : d3.interpolateRgb(cBase, cAcc)(.22 + .78 * escala(d.v));
+  svg.append("path").datum({ type: "Sphere" }).attr("class", "gsph").attr("d", path);
+  svg.append("path").datum(d3.geoGraticule10()).attr("class", "ggrat").attr("d", path);
+  const mostrar = (ev, txt) => {
+    if (!tip) return;
+    const b = cont.getBoundingClientRect();
+    tip.innerHTML = txt; tip.style.left = (ev.clientX - b.left + 12) + "px"; tip.style.top = (ev.clientY - b.top + 12) + "px"; tip.style.opacity = 1;
+  };
+  const ocultar = () => { if (tip) tip.style.opacity = 0; };
+  svg.append("g").selectAll("path").data(geo).join("path")
+    .attr("class", f => "gpais" + (valores.has(String(f.id)) ? " con" : "") + (COM.sel === String(f.id) ? " sel" : ""))
+    .attr("d", path).attr("fill", f => color(valores.get(String(f.id))))
+    .on("mousemove", (ev, f) => { const d = valores.get(String(f.id)); mostrar(ev, d ? d.label : esc((paisInfo(f.properties.name) || {}).es || f.properties.name)); })
+    .on("mouseleave", ocultar)
+    .on("click", (ev, f) => { if (valores.has(String(f.id))) opts.onSel(String(f.id)); });
+  const pts = svg.append("g").selectAll("circle").data(puntos).join("circle").attr("class", "gpto")
+    .attr("r", d => 3 + 5 * escala(d.v)).attr("fill", d => color(d))
+    .on("mousemove", (ev, d) => mostrar(ev, d.label)).on("mouseleave", ocultar).on("click", (ev, d) => opts.onSel(d.id));
+  const ubicar = () => pts.each(function(d){
+    const vis = d3.geoDistance(d.coord, [-COM.rot[0], -COM.rot[1]]) < Math.PI / 2, p = proj(d.coord);
+    d3.select(this).attr("cx", p[0]).attr("cy", p[1]).style("display", vis ? null : "none");
+  });
+  ubicar();
+  const redibujar = () => { proj.rotate(COM.rot); svg.selectAll("path").attr("d", path); ubicar(); };
+  svg.call(d3.drag().on("start", () => svg.classed("arrastrando", true)).on("end", () => svg.classed("arrastrando", false))
+    .on("drag", ev => { COM.rot = [COM.rot[0] + ev.dx * .35, Math.max(-75, Math.min(75, COM.rot[1] - ev.dy * .35)), 0]; redibujar(); }));
+  return {
+    girarA(coord){
+      const destino = [-coord[0], -coord[1], 0], desde = COM.rot.slice();
+      const reducir = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reducir){ COM.rot = destino; redibujar(); return; }
+      const ip = d3.interpolate(desde, destino);
+      d3.transition().duration(750).tween("rot", () => t => { COM.rot = ip(t); redibujar(); });
+    },
+  };
+}
+
+/* ---------- panel ---------- */
+function renderComercial(recs, yA){
+  const card = document.getElementById("comCard");
+  const bz = BUSINESSES.find(x => x.key === UI.biz);
+  if (!card || !bz || bz.partnerViews !== true){ if (card) card.style.display = "none"; return; }
+  card.style.display = "";
+  const vista = ["mapa", "cartera", "embudo", "prov"].includes(UI.comVista) ? UI.comVista : "mapa";
+  const hist = UI.comPeriodo === "hist";
+  const wire = (sel, attr, key, val) => document.querySelectorAll(sel).forEach(b => {
+    const on = b.dataset[attr] === val;
+    b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI[key] = b.dataset[attr]; saveUI(); renderComercial(recs, yA); try { decorarExportables(); } catch(e){} };
+  });
+  wire("#comVista button", "cv", "comVista", vista);
+  wire("#comPeriodo button", "cp", "comPeriodo", hist ? "hist" : "anio");
+  document.getElementById("comPeriodo").style.display = vista === "cartera" || vista === "embudo" ? "none" : "";
+  document.getElementById("lblCom").textContent = vista === "cartera" || vista === "embudo" ? "por contratos" : (hist ? "histórico" : String(yA));
+  const R = recs.filter(r => hist || r.year === yA);
+  const el = document.getElementById("comBody");
+  if (charts.comChart){ charts.comChart.destroy(); delete charts.comChart; }
+  const aviso = !(CLI_DB[UI.biz] || []).length
+    ? `<p class="comaviso">${(CONFIG[UI.biz] || {}).CLIENTS_URL ? "⏳ Leyendo la database de clientes…" : "Conectá la database de clientes en ⚙️ Configurar para ver países, vendedores y el embudo."}</p>` : "";
+  if (vista === "mapa") return renderComMapa(el, R, recs, aviso, hist, yA);
+  if (vista === "cartera") return renderComCartera(el, yA, aviso);
+  if (vista === "embudo") return renderComEmbudo(el, aviso);
+  return renderComProv(el, R, recs, hist, yA);
+}
+
+function renderComMapa(el, R, recs, aviso, hist, yA){
+  const metrica = ["usd", "com", "cli"].includes(UI.comMetrica) ? UI.comMetrica : "tns";
+  const modo = UI.comModo === "base" ? "base" : "compra";
+  const fm = metrica === "tns" ? v => fmt1(v) + " t" : metrica === "cli" ? v => fmt0(v) + (v === 1 ? " cliente" : " clientes") : fmtUsd;
+  // compras por país (según el país del cliente en la database)
+  const porPais = new Map(), sinPais = { tns: 0, cargas: 0 };
+  for (const r of R){
+    const p = paisInfo(r.pais);
+    if (!p){ sinPais.tns += r.tns || 0; sinPais.cargas++; continue; }
+    const k = p.id || "x:" + p.es;
+    const x = porPais.get(k) || { id: p.id, es: p.es, coord: p.coord, tns: 0, usd: 0, com: 0, cargas: 0, cli: new Map() };
+    x.tns += r.tns || 0; x.usd += r.usd || 0; x.com += r.comision || 0; x.cargas++;
+    const c = x.cli.get(r.importer) || { n: r.importer, tns: 0, usd: 0, cargas: 0 };
+    c.tns += r.tns || 0; c.usd += r.usd || 0; c.cargas++; x.cli.set(r.importer, c);
+    porPais.set(k, x);
+  }
+  const valorDe = x => metrica === "cli" ? x.cli.size : x[metrica];
+  // la base: clientes de la database por país y si alguna vez compraron
+  const compradores = new Set(recs.map(r => normEmpresa(r.importer)).filter(Boolean));
+  const base = new Map();
+  for (const c of CLI_DB[UI.biz] || []){
+    const p = paisInfo(c.pais); if (!p) continue;
+    const k = p.id || "x:" + p.es;
+    const x = base.get(k) || { id: p.id, es: p.es, coord: p.coord, total: 0, compran: 0, prospectos: [] };
+    const compro = compradores.has(normEmpresa(c.n)) || [...compradores].some(n => n && mismaEmpresa(n, c.n));
+    x.total++; if (compro) x.compran++; else x.prospectos.push(c.n);
+    base.set(k, x);
+  }
+  const valores = new Map(), puntos = [];
+  const agregar = (x, d) => { if (x.id) valores.set(x.id, d); if (x.coord) puntos.push({ ...d, id: x.id, coord: x.coord }); };
+  if (modo === "compra"){
+    for (const x of porPais.values())
+      agregar(x, { v: valorDe(x), tipo: "compra", label: `<b>${esc(x.es)}</b><br>${fm(valorDe(x))} · ${pl(x.cli.size, "cliente")} · ${pl(x.cargas, "carga")}` });
+  } else {
+    for (const x of base.values())
+      agregar(x, { v: x.compran || x.total, tipo: x.compran ? "compra" : "prospecto",
+        label: `<b>${esc(x.es)}</b><br>${fmt0(x.total)} en la base · ${fmt0(x.compran)} compraron · ${pl(x.total - x.compran, "prospecto")}` });
+  }
+  const rank = modo === "compra"
+    ? [...porPais.values()].sort((a, b) => valorDe(b) - valorDe(a)).map(x => ({ k: x.id || "x:" + x.es, es: x.es, v: valorDe(x), txt: fm(valorDe(x)), sub: pl(x.cli.size, "cliente") }))
+    : [...base.values()].sort((a, b) => b.total - a.total).map(x => ({ k: x.id || "x:" + x.es, es: x.es, v: x.total, txt: `${fmt0(x.total)} en la base`, sub: `${fmt0(x.compran)} compraron` }));
+  const maxR = Math.max(1, ...rank.map(x => x.v)), totR = rank.reduce((s, x) => s + x.v, 0);
+  if (COM.sel && !rank.some(x => x.k === COM.sel)) COM.sel = null;
+  const sel = COM.sel;
+  const verRank = COM.paisesTodos || rank.length <= 10 ? rank : rank.slice(0, 8);
+  const det = sel ? (() => {
+    const c = porPais.get(sel), b = base.get(sel);
+    const nombre = (c || b || {}).es || "";
+    const clientes = c ? [...c.cli.values()].sort((a, z) => z.tns - a.tns) : [];
+    const pros = b ? b.prospectos : [];
+    return `<div class="comdet"><div class="comdeth"><h4>${esc(nombre)}</h4><button type="button" class="comcerrar" aria-label="Cerrar el detalle de ${esc(nombre)}">×</button></div>` +
+      (clientes.length ? `<div class="tablewrap">${tablaHtml(["Cliente", "Toneladas", "Facturación", "Cargas"], clientes.map(x => [esc(x.n), fmt1(x.tns) + " t", fmtUsd(x.usd), fmt0(x.cargas)]))}</div>` : `<p class="empty">Sin compras en el período.</p>`) +
+      (pros.length ? `<p class="comsub"><b>${pl(pros.length, "empresa")}</b> de la base sin compras:</p><div class="prosp">${pros.slice(0, 24).map(n => `<span>${esc(n)}</span>`).join("")}${pros.length > 24 ? `<span class="mas">y ${fmt0(pros.length - 24)} más</span>` : ""}</div>` : "") + `</div>`;
+  })() : `<p class="comhint">Tocá un país en el globo o en la lista para ver sus clientes.</p>`;
+  el.innerHTML = aviso + `<div class="consbar">
+      <div class="seg" id="comModo" role="group" aria-label="Qué mostrar"><button type="button" data-cm="compra">Compradores</button><button type="button" data-cm="base">Base vs compradores</button></div>
+      ${modo === "compra" ? `<div class="seg" id="comMetrica" role="group" aria-label="Métrica del mapa"><button type="button" data-cx="tns">Toneladas</button><button type="button" data-cx="usd">Facturación</button><button type="button" data-cx="com">Comisión</button><button type="button" data-cx="cli">Clientes</button></div>` : ""}
+    </div>
+    <div class="comgrid">
+      <div><div class="globo" id="comGlobo"><p class="comsub">Cargando el mapa…</p><div class="gtip" aria-hidden="true"></div></div>
+        <div class="comleyenda">${modo === "compra" ? `<span class="gleg"><i class="gl1"></i>menos</span><span class="gleg"><i class="gl2"></i>más ${metrica === "cli" ? "clientes" : metrica === "tns" ? "toneladas" : "US$"}</span>` : `<span class="gleg"><i class="gl2"></i>con clientes que compran</span><span class="gleg"><i class="gl3"></i>solo prospectos</span>`}
+          <span class="comsub">Arrastrá para girar el globo.</span></div>
+        ${sinPais.cargas && modo === "compra" ? `<p class="comsub" style="text-align:center">${pl(sinPais.cargas, "carga")} (${fmt1(sinPais.tns)} t) de clientes sin país en la database no aparecen en el mapa.</p>` : ""}
+      </div>
+      <div class="comlado">
+        ${det}
+        <div class="crankh"><span>${pl(rank.length, "país", "países")}</span>${modo === "compra" && metrica !== "cli" ? `<span>% del total</span>` : ""}</div>
+        <div class="crank" role="list">${verRank.map((x, i) => `<button type="button" role="listitem" class="crk${x.k === sel ? " on" : ""}" data-k="${esc(x.k)}" aria-pressed="${x.k === sel}">
+          <span class="crkn"><span class="crki">${rank.indexOf(x) + 1}</span>${esc(x.es)}</span><span class="crkv"><b>${x.txt}</b><small>${x.sub}${modo === "compra" && metrica !== "cli" ? ` · ${pctTxt(x.v, totR)}` : ""}</small></span>
+          <span class="crkb"><i style="width:${(x.v / maxR * 100).toFixed(1)}%"></i></span></button>`).join("") || `<p class="empty">Sin datos de países.</p>`}</div>
+        ${rank.length > verRank.length || COM.paisesTodos && rank.length > 10 ? `<button type="button" class="vermas2" id="comPaisesTodos">${COM.paisesTodos ? "Ver menos" : `Ver los ${pl(rank.length, "país", "países")}`}</button>` : ""}
+      </div>
+    </div>`;
+  const wire = (sel2, attr, key, val) => el.querySelectorAll(sel2 + " button").forEach(b => {
+    const on = b.dataset[attr] === val; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI[key] = b.dataset[attr]; saveUI(); renderComMapa(el, R, recs, aviso, hist, yA); };
+  });
+  wire("#comModo", "cm", "comModo", modo);
+  wire("#comMetrica", "cx", "comMetrica", metrica);
+  // al elegir un país se redibuja el panel y el globo nuevo gira hasta ese país
+  const seleccionar = k => {
+    COM.sel = k;
+    const p = k && PAISES.find(x => x[0] === k), f = k && cargarMundo.geo && cargarMundo.geo.find(x => String(x.id) === k);
+    COM.girar = f && window.d3 ? d3.geoCentroid(f) : p && p[3] ? p[3] : null;
+    renderComMapa(el, R, recs, aviso, hist, yA);
+  };
+  el.querySelectorAll(".crk").forEach(b => b.onclick = () => seleccionar(b.dataset.k === COM.sel ? null : b.dataset.k));
+  const cerrar = el.querySelector(".comcerrar");
+  if (cerrar) cerrar.onclick = () => seleccionar(null);
+  const todos = el.querySelector("#comPaisesTodos");
+  if (todos) todos.onclick = () => { COM.paisesTodos = !COM.paisesTodos; renderComMapa(el, R, recs, aviso, hist, yA); };
+  const cont = el.querySelector("#comGlobo");
+  cargarMundo().then(() => {
+    if (!cont.isConnected) return;
+    const p = cont.querySelector("p"); if (p) p.remove();
+    const globo = dibujarGlobo(cont, valores, puntos, {
+      aria: `Globo con ${modo === "compra" ? "los países de los clientes que compraron" : "los países de la base de clientes"}`,
+      onSel: seleccionar,
+    });
+    if (globo && COM.girar){ globo.girarA(COM.girar); COM.girar = null; }
+  }).catch(e => { cont.innerHTML = `<p class="empty">No pude cargar el mapa (${esc(errorCriollo(e))}). La lista de países sigue disponible.</p>`; });
+}
+
+function renderComCartera(el, yA, aviso){
+  const meses = [6, 12, 18, 24].includes(+UI.comMeses) ? +UI.comMeses : 12;
+  const contratos = contratosVista();
+  if (!contratos.length){ el.innerHTML = aviso + `<p class="empty">No hay contratos en ALL CONTRATOS para esta vista.</p>`; return; }
+  const cli = calcCartera(contratos, yA);
+  const activos = cli.filter(x => x.activo), nuevos = cli.filter(x => x.nuevo), riesgo = cli.filter(x => x.riesgo).sort((a, b) => b.tns12 - a.tns12);
+  const perdidos = cli.filter(x => x.dias > meses * 30.44).sort((a, b) => a.dias - b.dias);
+  const previos = cli.filter(x => x.previo), volvieron = previos.filter(x => x.activo);
+  const t12 = activos.reduce((s, x) => s + x.tns12, 0);
+  const top = activos.slice().sort((a, b) => b.tns12 - a.tns12);
+  const top5 = top.slice(0, 5).reduce((s, x) => s + x.tns12, 0);
+  // las cajas con lista llevan a su tabla
+  const caja = (t, v, h, cls = "", ir = "") => ir
+    ? `<button type="button" class="pstat link ${cls}" data-ir="${ir}"><span class="plabel">${t}</span><div class="pval">${v}</div><div class="phint">${h} <span class="vermas">Ver lista ↓</span></div></button>`
+    : `<div class="pstat ${cls}"><span class="plabel">${t}</span><div class="pval">${v}</div><div class="phint">${h}</div></div>`;
+  // clientes por año: nuevos y recurrentes
+  const años = [...new Set(contratos.map(c => c.fecha.y))].sort();
+  const porAño = años.map(y => {
+    const set = new Set(contratos.filter(c => c.fecha.y === y && c.importador !== "(sin dato)").map(c => normEmpresa(c.importador) || c.importador));
+    const nu = cli.filter(x => x.primero.getFullYear() === y && set.has(normEmpresa(x.n) || x.n)).length;
+    return { y, nuevos: nu, recurrentes: set.size - nu };
+  });
+  const fila = x => [esc(x.n), esc(x.pais || "—"), esc(x.team || "—"), fFecha(x.ultimo)];
+  el.innerHTML = aviso + `<div class="pipestats comk">
+      ${caja("Clientes activos", fmt0(activos.length), "con contrato en los últimos 12 meses")}
+      ${caja(`Nuevos en ${yA}`, fmt0(nuevos.length), "primer contrato este año", "", nuevos.length ? "comHNuevos" : "")}
+      ${caja("En riesgo", fmt0(riesgo.length), "pasaron más días que su frecuencia habitual", riesgo.length ? "alerta" : "", riesgo.length ? "comHRiesgo" : "")}
+      ${caja(`Sin comprar hace +${meses} meses`, fmt0(perdidos.length), `de ${fmt0(cli.length)} clientes con contratos`, "", "comHPerdidos")}
+      ${caja("Retención", previos.length ? pctTxt(volvieron.length, previos.length) : "—", `${fmt0(volvieron.length)} de ${fmt0(previos.length)} que compraron hace 12–24 meses volvieron`)}
+      ${caja("Concentración", t12 ? pctTxt(top5, t12) : "—", `de las toneladas de 12 meses en los 5 principales${top[0] ? ` · el primero ${pctTxt(top[0].tns12, t12)}` : ""}`)}
+    </div>
+    <h3 class="subh">Clientes con contrato por año</h3>
+    <div class="chartbox" style="height:240px;margin-bottom:18px"><canvas id="comChart" role="img" aria-label="Clientes con contrato por año, nuevos y recurrentes"></canvas></div>
+    <h3 class="subh" id="comHRiesgo">En riesgo · llevan más tiempo sin contratar que de costumbre</h3>
+    ${tablaCorta("comTRiesgo", ["Cliente", "País", "Vendedor", "Último contrato", "Días sin contratar", "Frecuencia habitual", "Contratos", "t últimos 12 meses"],
+      riesgo.map(x => [...fila(x), `<b>${fmt0(x.dias)}</b>`, `cada ${fmt0(x.frec)} días`, fmt0(x.contratos), fmt1(x.tns12)]), { vacio: "Ningún cliente activo está atrasado respecto de su frecuencia habitual." })}
+    <div class="consbar" style="margin-top:22px" id="comHPerdidos"><h3 class="subh" style="margin:0">No compran hace más de</h3>
+      <div class="seg" id="comMeses" role="group" aria-label="Meses sin comprar">${[6, 12, 18, 24].map(m => `<button type="button" data-cm2="${m}">${m} meses</button>`).join("")}</div></div>
+    ${tablaCorta("comTPerdidos", ["Cliente", "País", "Vendedor", "Último contrato", "Hace", "Contratos", "Toneladas históricas", "Abiertos"],
+      perdidos.map(x => [...fila(x), `${fmt0(Math.round(x.dias / 30.44))} meses`, fmt0(x.contratos), fmt1(x.tns), x.abiertos ? `${fmt0(x.abiertos)} (${fmt1(x.saldo)} t)` : "—"]), { vacio: `Todos los clientes compraron en los últimos ${meses} meses.` })}
+    <h3 class="subh" style="margin-top:22px" id="comHNuevos">Nuevos en ${yA}</h3>
+    ${tablaCorta("comTNuevos", ["Cliente", "País", "Vendedor", "Primer contrato", "Contratos", "Toneladas"],
+      nuevos.sort((a, b) => b.tns - a.tns).map(x => [esc(x.n), esc(x.pais || "—"), esc(x.team || "—"), fFecha(x.primero), fmt0(x.contratos), fmt1(x.tns)]), { vacio: `Ningún cliente nuevo en ${yA}.` })}
+    <p class="comsub">Se cuenta por la <b>fecha del contrato</b> (ALL CONTRATOS = Contratos Cerrados + Abiertos). "Abiertos" = contratos que siguen en la pestaña Contratos Abiertos. País y vendedor salen de la database de clientes.</p>`;
+  el.querySelectorAll("#comMeses button").forEach(b => {
+    const on = +b.dataset.cm2 === meses; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI.comMeses = +b.dataset.cm2; saveUI(); renderComCartera(el, yA, aviso); try { decorarExportables(); } catch(e){} };
+  });
+  el.querySelectorAll("[data-ir]").forEach(b => b.onclick = () => {
+    const d = document.getElementById(b.dataset.ir); if (d && d.scrollIntoView) d.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  wireTablasCortas(el, () => { renderComCartera(el, yA, aviso); try { decorarExportables(); } catch(e){} });
+  charts.comChart = new Chart(document.getElementById("comChart"), {
+    type: "bar",
+    data: { labels: porAño.map(x => String(x.y)), datasets: [
+      { label: "Recurrentes", data: porAño.map(x => x.recurrentes), backgroundColor: cssVar("--accent"), stack: "c", borderRadius: 6 },
+      { label: "Nuevos", data: porAño.map(x => x.nuevos), backgroundColor: cssVar("--pvp1") || "#1f9d45", stack: "c", borderRadius: 6 },
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: paintedFromCache ? 0 : 400 },
+      plugins: { legend: { labels: { color: cssVar("--muted"), boxWidth: 12 } } },
+      scales: { x: { stacked: true, grid: { display: false }, ticks: { color: cssVar("--tick") } },
+                y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick"), precision: 0 }, grid: { color: cssVar("--grid") } } } },
+  });
+}
+
+/* Embudo: database de clientes → contactados → respondieron → con encuentro → con contrato */
+const ETAPAS = [
+  ["contrato", "Con contrato", "var(--pvp1)"], ["reunion", "Con reunión", "var(--accent)"], ["rta", "Respondió", "color-mix(in srgb,var(--accent) 55%,var(--panel3))"],
+  ["cont", "Contactada", "color-mix(in srgb,var(--accent) 25%,var(--panel3))"], ["sin", "Sin contactar", "var(--panel3)"],
+];
+const etapaDe = f => f.compro ? "contrato" : f.encuentro ? "reunion" : f.rta ? "rta" : f.contactado ? "cont" : "sin";
+const vendedoresDe = f => { const t = String(f.team || "").split(/\s*[-–\/,&]\s*|\s+y\s+/i).map(s => s.trim().toUpperCase()).filter(Boolean); return t.length ? t : ["Sin asignar"]; };
+const AGRUPAR = {
+  region: { t: "Región", clave: f => [normRegion(f.region)] },
+  vendedor: { t: "Vendedor", clave: vendedoresDe },
+  pais: { t: "País", clave: f => [(paisInfo(f.pais) || {}).es || "Sin país"] },
+};
+function calcEmbudo(db, contratos){
+  const conContrato = new Map();
+  for (const c of contratos){
+    if (!c.importador || c.importador === "(sin dato)") continue;
+    const k = normEmpresa(c.importador) || c.importador;
+    const x = conContrato.get(k) || { n: c.importador, tns: 0, ult: 0 };
+    x.tns += c.toneladas || 0; x.ult = Math.max(x.ult, c.fechaOrd || 0); conContrato.set(k, x);
+  }
+  const compras = [...conContrato.values()];
+  const filas = db.map(c => {
+    const k = normEmpresa(c.n);
+    const hit = (k && conContrato.get(k)) || compras.find(x => mismaEmpresa(x.n, c.n));
+    const f = { ...c, compro: !!hit, tns: hit ? hit.tns : 0, ult: hit ? hit.ult : 0 };
+    f.etapa = etapaDe(f);
+    return f;
+  });
+  const grupo = clave => {
+    const m = new Map();
+    for (const f of filas) for (const g of clave(f)){
+      const x = m.get(g) || { g, base: 0, cont: 0, rta: 0, enc: 0, compro: 0, tns: 0, etapas: {}, filas: [] };
+      x.base++; if (f.contactado) x.cont++; if (f.rta) x.rta++; if (f.encuentro) x.enc++; if (f.compro){ x.compro++; x.tns += f.tns; }
+      x.etapas[f.etapa] = (x.etapas[f.etapa] || 0) + 1; x.filas.push(f);
+      m.set(g, x);
+    }
+    return [...m.values()].sort((a, b) => b.base - a.base);
+  };
+  return {
+    filas,
+    total: { base: filas.length, cont: filas.filter(f => f.contactado).length, rta: filas.filter(f => f.rta).length,
+      enc: filas.filter(f => f.encuentro).length, compro: filas.filter(f => f.compro).length },
+    porVendedor: grupo(AGRUPAR.vendedor.clave),
+    porRegion: grupo(AGRUPAR.region.clave),
+    porPais: grupo(AGRUPAR.pais.clave),
+  };
+}
+const barraEtapas = (et, base) => `<span class="etbar" aria-hidden="true">${ETAPAS.map(([k, , c]) => et[k] ? `<i style="flex:${et[k]};background:${c}"></i>` : "").join("")}</span>`;
+
+function renderComEmbudo(el, aviso){
+  const db = CLI_DB[UI.biz] || [];
+  if (!db.length){ el.innerHTML = aviso || `<p class="empty">Sin database de clientes.</p>`; return; }
+  const E = calcEmbudo(db, contratosVista(true)), T = E.total;
+  const etapas = [["En la base", T.base], ["Contactados", T.cont], ["Respondieron", T.rta], ["Con encuentro o reunión", T.enc], ["Con contrato", T.compro]];
+  const eg = AGRUPAR[COM.eg] ? COM.eg : "region";
+  const grupos = eg === "region" ? E.porRegion : eg === "vendedor" ? E.porVendedor : E.porPais;
+  if (COM.eSel && !grupos.some(x => x.g === COM.eSel)) COM.eSel = null;
+  if (!COM.eSel && grupos[0]) COM.eSel = grupos[0].g;
+  const verGrupos = COM.eGruposTodos || grupos.length <= 14 ? grupos : grupos.slice(0, 12);
+  el.innerHTML = aviso + `<div class="funnel">${etapas.map(([t, n], i) => `<div class="fun"><span class="funl">${t}</span>
+      <span class="funb"><i style="width:${(n / Math.max(1, T.base) * 100).toFixed(1)}%;--pvc:var(--pvp${i % 5})"></i></span>
+      <span class="funv"><b>${fmt0(n)}</b><small>${i ? `${pctTxt(n, etapas[i - 1][1])} de la etapa anterior` : "empresas"}</small></span></div>`).join("")}</div>
+    <p class="comsub">Cada etapa cuenta empresas de la database (Database_old). "Con contrato" = aparece como importador en ALL CONTRATOS, en cualquier fecha.</p>
+    <div class="consbar embhead"><h3 class="subh" style="margin:0">Explorar la base</h3>
+      <div class="seg" id="embAgr" role="group" aria-label="Agrupar por">${Object.entries(AGRUPAR).map(([k, a]) => `<button type="button" data-eg="${k}">Por ${a.t.toLowerCase()}</button>`).join("")}</div></div>
+    <div class="etleyenda" aria-hidden="true">${ETAPAS.map(([, t, c]) => `<span><i style="background:${c}"></i>${t}</span>`).join("")}</div>
+    <div class="egrid" role="list">${verGrupos.map(x => `<button type="button" role="listitem" class="egt${x.g === COM.eSel ? " on" : ""}" data-g="${esc(x.g)}" aria-pressed="${x.g === COM.eSel}">
+        <span class="egn">${esc(x.g)}</span>
+        <span class="egv"><b>${pctTxt(x.compro, x.base)}</b><small>con contrato</small></span>
+        <span class="egs">${pl(x.base, "empresa")} · ${fmt0(x.compro)} compran</span>
+        ${barraEtapas(x.etapas, x.base)}</button>`).join("")}</div>
+    ${grupos.length > verGrupos.length || COM.eGruposTodos && grupos.length > 14 ? `<button type="button" class="vermas2" id="embGruposTodos">${COM.eGruposTodos ? "Ver menos" : `Ver los ${fmt0(grupos.length)}`}</button>` : ""}
+    <div class="edet" id="embDet"></div>`;
+  el.querySelectorAll("#embAgr button").forEach(b => {
+    const on = b.dataset.eg === eg; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { COM.eg = b.dataset.eg; COM.eSel = null; COM.eEtapa = "todas"; COM.eBusca = ""; COM.eTodas = false; COM.eGruposTodos = false; renderComEmbudo(el, aviso); };
+  });
+  el.querySelectorAll(".egt").forEach(b => b.onclick = () => {
+    COM.eSel = b.dataset.g; COM.eEtapa = "todas"; COM.eBusca = ""; COM.eTodas = false;
+    renderComEmbudo(el, aviso);
+    const d = document.getElementById("embDet"); if (d && d.scrollIntoView) d.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  const gt = document.getElementById("embGruposTodos");
+  if (gt) gt.onclick = () => { COM.eGruposTodos = !COM.eGruposTodos; renderComEmbudo(el, aviso); };
+  renderEmbudoDetalle(grupos.find(x => x.g === COM.eSel), eg);
+}
+
+/* Las empresas de la región / vendedor / país elegido, filtrables por etapa y por nombre */
+function renderEmbudoDetalle(G, eg){
+  const d = document.getElementById("embDet");
+  if (!d) return;
+  if (!G){ d.innerHTML = ""; return; }
+  const cuenta = k => k === "todas" ? G.filas.length : G.etapas[k] || 0;
+  d.innerHTML = `<div class="edhead"><div><h4>${esc(G.g)}</h4>
+      <p class="comsub" style="margin:2px 0 0">${pl(G.base, "empresa")} · ${fmt0(G.cont)} contactadas · ${fmt0(G.rta)} respondieron · <b>${fmt0(G.compro)} con contrato</b>${G.tns ? ` (${fmt1(G.tns)} t)` : ""}</p></div>
+      <input type="search" id="embBusca" placeholder="Buscar empresa…" aria-label="Buscar empresa en ${esc(G.g)}" value="${esc(COM.eBusca)}"></div>
+    <div class="chips etchips" role="group" aria-label="Filtrar por etapa">${[["todas", "Todas"], ...ETAPAS.map(([k, t]) => [k, t])].filter(([k]) => cuenta(k)).map(([k, t]) =>
+      `<button type="button" class="chip${COM.eEtapa === k ? " active" : ""}" data-et="${k}" aria-pressed="${COM.eEtapa === k}">${t} <b>${fmt0(cuenta(k))}</b></button>`).join("")}</div>
+    <div id="embLista"></div>`;
+  const lista = () => {
+    const q = normU(COM.eBusca), orden = Object.fromEntries(ETAPAS.map(([k], i) => [k, i]));
+    const fs = G.filas.filter(f => (COM.eEtapa === "todas" || f.etapa === COM.eEtapa) && (!q || normU(f.n).includes(q)))
+      .sort((a, b) => (orden[a.etapa] - orden[b.etapa]) || (b.tns - a.tns) || a.n.localeCompare(b.n));
+    const ver = COM.eTodas ? fs : fs.slice(0, 25);
+    const et = Object.fromEntries(ETAPAS.map(([k, t, c]) => [k, [t, c]]));
+    const cab = ["Empresa", ...(eg === "pais" ? [] : ["País"]), ...(eg === "vendedor" ? [] : ["Vendedor"]), "Etapa", "t contratadas"];
+    document.getElementById("embLista").innerHTML = (fs.length ? `<div class="tablewrap">${tablaHtml(cab, ver.map(f => [esc(f.n),
+        ...(eg === "pais" ? [] : [esc((paisInfo(f.pais) || {}).es || "—")]), ...(eg === "vendedor" ? [] : [esc(f.team || "—")]),
+        `<span class="etpill"><i style="background:${et[f.etapa][1]}"></i>${et[f.etapa][0]}</span>`, f.tns ? fmt1(f.tns) : "—"]))}</div>`
+      : `<p class="empty">Ninguna empresa coincide${COM.eBusca ? ` con “${esc(COM.eBusca)}”` : ""}.</p>`) +
+      (fs.length > 25 ? `<button type="button" class="vermas2" id="embTodas">${COM.eTodas ? "Ver menos" : `Ver las ${fmt0(fs.length)} empresas`}</button>` : "");
+    const b = document.getElementById("embTodas");
+    if (b) b.onclick = () => { COM.eTodas = !COM.eTodas; lista(); };
+  };
+  d.querySelectorAll("[data-et]").forEach(b => b.onclick = () => { COM.eEtapa = b.dataset.et; COM.eTodas = false; renderEmbudoDetalle(G, eg); });
+  const inp = document.getElementById("embBusca");
+  inp.oninput = () => { COM.eBusca = inp.value; COM.eTodas = false; lista(); };
+  lista();
+}
+
+function renderComProv(el, R, recs, hist, yA){
+  const db = PROV_DB[UI.biz] || [];
+  const infoProv = n => db.find(x => normEmpresa(x.n) === normEmpresa(n)) || db.find(x => mismaEmpresa(x.n, n)) || null;
+  // proveedores (exportadores) con cargas en el período
+  const m = new Map();
+  for (const r of R){
+    const k = normEmpresa(r.exporter) || r.exporter || "(sin dato)";
+    const x = m.get(k) || { n: r.exporter || "(sin dato)", tns: 0, usd: 0, cargas: 0, ult: null };
+    x.tns += r.tns || 0; x.usd += r.usd || 0; x.cargas++;
+    if (r.etd){ const d = fechaD(r.etd); if (!x.ult || d > x.ult) x.ult = d; }
+    m.set(k, x);
+  }
+  const prov = [...m.values()].sort((a, b) => b.tns - a.tns), totT = prov.reduce((s, x) => s + x.tns, 0);
+  const top3 = prov.slice(0, 3).reduce((s, x) => s + x.tns, 0);
+  const hace24 = new Date(Date.now() - 730 * DIA);
+  const recientes = new Set(recs.filter(r => r.etd && fechaD(r.etd) >= hace24).map(r => normEmpresa(r.exporter)));
+  const sinOps = db.filter(x => x.estado !== "INACTIVO" && !recientes.has(normEmpresa(x.n)) && ![...recientes].some(n => n && mismaEmpresa(n, x.n)));
+  // precios por país y por producto, contra el año anterior (mismos meses)
+  const mesMax = Math.max(0, ...recs.filter(r => r.year === yA).map(r => r.month));
+  const prev = recs.filter(r => r.year === yA - 1 && r.month <= (yA === new Date().getFullYear() ? mesMax : 12));
+  const precios = (lista, clave) => {
+    const g = new Map();
+    for (const r of lista){ const k = clave(r); if (!k) continue; const x = g.get(k) || { k, tns: 0, usd: 0 }; x.tns += r.tns || 0; x.usd += r.usd || 0; g.set(k, x); }
+    return g;
+  };
+  const kPais = r => { const p = paisInfo(r.pais); return p ? p.es : null; };
+  const filasPrecio = clave => {
+    const a = precios(R, clave), b = precios(prev, clave);
+    return [...a.values()].filter(x => x.tns > 0).sort((x, y) => y.tns - x.tns).slice(0, 12).map(x => {
+      const px = x.usd / x.tns, o = b.get(x.k), pb = o && o.tns ? o.usd / o.tns : null;
+      const d = !hist && pb ? (px - pb) / pb * 100 : null;
+      return [esc(x.k), fmt1(x.tns) + " t", fmtUsd(px) + " /t",
+        hist ? "—" : d == null ? "—" : `<span class="delta ${d >= 0 ? "up" : "down"}">${d >= 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(1).replace(".", ",")}%</span>`];
+    });
+  };
+  // venta cruzada: todo Brokerage (maní y aceite + expeller)
+  const todos = quitarExcluidas(DATA[UI.biz] || [], UI.biz), cx = new Map();
+  for (const r of todos){
+    const k = normEmpresa(r.importer) || r.importer; if (!k) continue;
+    const x = cx.get(k) || { n: r.importer, mani: 0, oil: 0 };
+    if (isOilOrExpeller(r.product)) x.oil += r.tns || 0; else x.mani += r.tns || 0;
+    cx.set(k, x);
+  }
+  const soloMani = [...cx.values()].filter(x => x.mani > 0 && !x.oil).sort((a, b) => b.mani - a.mani);
+  const soloOil = [...cx.values()].filter(x => x.oil > 0 && !x.mani).sort((a, b) => b.oil - a.oil);
+  const interesados = (CLI_DB[UI.biz] || []).filter(c => /oil|aceite|expeller/i.test(c.prod || "")).filter(c => {
+    const hit = cx.get(normEmpresa(c.n)) || [...cx.values()].find(x => mismaEmpresa(x.n, c.n)); return !hit || !hit.oil; });
+  const caja = (t, v, h) => `<div class="pstat"><span class="plabel">${t}</span><div class="pval">${v}</div><div class="phint">${h}</div></div>`;
+  const chips = arr => arr.length ? arr.map(c => `<span class="tag exp">${esc(c)}</span>`).join(" ") : "—";
+  el.innerHTML = `<div class="pipestats comk">
+      ${caja("Proveedores con cargas", fmt0(prov.length), hist ? "en todo el historial" : `en ${yA}`)}
+      ${caja("Dependencia del principal", prov[0] ? pctTxt(prov[0].tns, totT) : "—", prov[0] ? `de las toneladas · ${esc(prov[0].n)}` : "")}
+      ${caja("Los 3 principales", pctTxt(top3, totT), "de las toneladas")}
+      ${db.length ? caja("En la base sin operaciones", fmt0(sinOps.length), "proveedores no inactivos sin cargas en 24 meses") : caja("Database de proveedores", "—", "conectala en ⚙️ Configurar")}
+    </div>
+    <h3 class="subh">Proveedores</h3>
+    ${tablaCorta("comTProv", ["Proveedor", "País", "Cargas", "Toneladas", "% t", "Facturación", "Última carga", "BRC", "Ofrece"],
+      prov.map(x => { const i = infoProv(x.n);
+        return [esc(x.n), i ? esc((paisInfo(i.pais) || {}).es || i.pais || "—") : "—", fmt0(x.cargas), fmt1(x.tns), `${pctTxt(x.tns, totT)}${shareBar(x.tns, totT, "var(--pvp0)")}`,
+          fmtUsd(x.usd), fFecha(x.ult), i ? (i.brc ? "✓" : "—") : "—", i ? chips(i.caps) : `<span class="comsub">no está en la base</span>`]; }), { max: 10 })}
+    ${sinOps.length ? `<details class="comdet2"><summary>${fmt0(sinOps.length)} proveedores de la base sin cargas en los últimos 24 meses</summary>
+      <div class="tablewrap">${tablaHtml(["Proveedor", "País", "Estado", "BRC", "Ofrece"], sinOps.map(x => [esc(x.n), esc((paisInfo(x.pais) || {}).es || x.pais || "—"), esc(x.estado || "—"), x.brc ? "✓" : "—", chips(x.caps)]))}</div></details>` : ""}
+    <div class="grid" style="margin:18px 0 0">
+      <div><h3 class="subh">Precio promedio por país de destino</h3><div class="tablewrap">${tablaHtml(["País", "Toneladas", "US$/t", `vs ${yA - 1}`], filasPrecio(kPais), { vacio: "Sin países: conectá la database de clientes." })}</div></div>
+      <div><h3 class="subh">Precio promedio por producto</h3><div class="tablewrap">${tablaHtml(["Producto", "Toneladas", "US$/t", `vs ${yA - 1}`], filasPrecio(r => r.product))}</div></div>
+    </div>
+    <h3 class="subh" style="margin-top:20px">Venta cruzada · todo Brokerage, histórico</h3>
+    <div class="grid" style="margin:0">
+      <div><h4 class="comh4">Compran maní, nunca aceite ni expeller (${fmt0(soloMani.length)})</h4><div class="tablewrap">${tablaHtml(["Cliente", "t de maní"], soloMani.slice(0, 10).map(x => [esc(x.n), fmt1(x.mani)]))}</div></div>
+      <div><h4 class="comh4">Compran aceite o expeller, nunca maní (${fmt0(soloOil.length)})</h4><div class="tablewrap">${tablaHtml(["Cliente", "t de aceite + expeller"], soloOil.slice(0, 10).map(x => [esc(x.n), fmt1(x.oil)]))}</div></div>
+    </div>
+    ${interesados.length ? `<p class="comsub"><b>${pl(interesados.length, "empresa")}</b> de la base marcan interés en aceite o expeller y nunca lo compraron:</p><div class="prosp">${interesados.slice(0, 24).map(c => `<span>${esc(c.n)}</span>`).join("")}${interesados.length > 24 ? `<span class="mas">y ${fmt0(interesados.length - 24)} más</span>` : ""}</div>` : ""}
+    <p class="comsub">Precio = facturación ÷ toneladas de las cargas por ETD. ${hist ? "" : `La comparación usa los mismos meses de ${yA - 1}.`} El país es el del cliente en la database.</p>`;
+  wireTablasCortas(el, () => renderComProv(el, R, recs, hist, yA));
+}
 
 function renderMercado(recs, yA){
   const card = document.getElementById("mktCard");
@@ -5142,7 +5921,7 @@ function renderProductCompare(a, b, yA, yB){
 }
 
 /* Secciones que se pueden plegar para despejar la pantalla */
-const PLEGABLES = ["cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard", "compareCard", "mktCard", "oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
+const PLEGABLES = ["cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard", "compareCard", "mktCard", "comCard", "oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
 function aplicarPlegado(){
   const cerradas = new Set(UI.cerradas || []);
   for (const id of PLEGABLES){
@@ -5184,7 +5963,7 @@ function renderSecNav(){
   items.push({ id: "rollCard", label: "Tendencia 12m" });
   if (UI.biz === TOTAL_KEY) items.push({ id: "bizCard", label: "Por negocio" });
   if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
-  if (bz && bz.partnerViews) items.push({ id: "mktCard", label: "Exportación vs local", destacado: true }, { id: "partnerCard", label: "Exportadores / importadores" });
+  if (bz && bz.partnerViews) items.push({ id: "mktCard", label: "Exportación vs local", destacado: true }, { id: "comCard", label: "Panel comercial", destacado: true }, { id: "partnerCard", label: "Exportadores / importadores" });
   if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" }, { id: "pipeCard", label: "Programación" });
   const visibles = items.filter(it => {
     const el = document.getElementById(it.id);
@@ -5231,16 +6010,23 @@ function renderContext(s){
   const bizName = UI.biz === TOTAL_KEY ? "Todos los negocios" : (s.biz ? s.biz.name : UI.biz);
   const tags = [];
   // el negocio y los años ya se ven marcados en la barra de filtros: acá solo lo que no está a la vista
-  tags.push(`<span class="ctag" title="${esc(bizName)}"><b>${fmt0(s.nRecs)}</b> cargas en la vista</span>`);
+  // la cantidad de cargas y las exclusiones vigentes no se muestran: solo los ajustes que el usuario activó
   if (s.ytd) tags.push(`<span class="ctag act" title="Como ${new Date().getFullYear()} está en curso, cada año suma solo de enero a ${MESES[s.cutoff - 1].toLowerCase()}, para que la comparación sea justa.">📅 Comparación a misma fecha (hasta ${MESES[s.cutoff - 1]})</span>`);
   const listaEx = UI.biz === TOTAL_KEY
     ? [...new Set(Object.keys(DATA).flatMap(k => excluidosDe(k)))]
     : excluidosDe(UI.biz);
-  if (listaEx.length){
+  if (listaEx.length && UI.verExcluidos)
+    tags.push(`<span class="ctag act">👁 Incluyendo ${esc(listaEx.join(", "))}<button type="button" data-clear="excl" title="Volver a excluirlas" aria-label="Volver a excluirlas">×</button></span>`);
+  // el interruptor de exclusiones vive en el panel de productos
+  const ex = document.getElementById("exclRow");
+  if (ex){
     const nEx = nExcluidas();
-    tags.push(UI.verExcluidos
-      ? `<span class="ctag act">👁 Incluyendo ${listaEx.join(", ")}<button type="button" data-clear="excl" title="Volver a excluirlas" aria-label="Volver a excluirlas">×</button></span>`
-      : `<span class="ctag">Sin ${listaEx.join(", ")}${nEx ? ` · ${fmt0(nEx)} carga(s) fuera` : ""}<button type="button" data-clear="excl" title="Ver también estas exportaciones" aria-label="Incluir las exportaciones excluidas">👁</button></span>`);
+    ex.style.display = listaEx.length ? "" : "none";
+    ex.innerHTML = listaEx.length ? `<button type="button" id="btnExcl" aria-pressed="${UI.verExcluidos}">${UI.verExcluidos
+      ? `Volver a excluir ${esc(listaEx.join(", "))}`
+      : `👁 Incluir también ${esc(listaEx.join(", "))}${nEx ? ` (${fmt0(nEx)} carga${nEx === 1 ? "" : "s"})` : ""}`}</button>` : "";
+    const b = document.getElementById("btnExcl");
+    if (b) b.onclick = () => { UI.verExcluidos = !UI.verExcluidos; saveUI(); renderSubTabs(); renderControls(); render(); };
   }
   if (UI.filter.mode !== "todos")
     tags.push(`<span class="ctag act">🎛 ${filterLabel().replace("🎛 Productos: ", "Productos: ")}<button type="button" data-clear="filter" title="Quitar el filtro de productos" aria-label="Quitar el filtro de productos">×</button></span>`);
@@ -5276,7 +6062,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "mktCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
+    ["consSection", "gruposCard", "mktCard", "comCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -5308,7 +6094,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "mktCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
+    ["consSection", "gruposCard", "mktCard", "comCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -5404,6 +6190,7 @@ function render(){
   renderConsolidacion(recs, yA, MM);
   renderGrupos(recs, yA, MM);
   renderMercado(recs, yA);
+  renderComercial(recs, yA);
   renderPartners(recs);
   renderOilExp(recs, yA);
   renderFocusExporter(recs);
@@ -5706,6 +6493,8 @@ function fillConfigForm(){
   document.getElementById("cfgOpenSheet").value = c.OPEN_SHEET || "";
   document.getElementById("cfgClientsUrl").value = c.CLIENTS_URL || "";
   document.getElementById("cfgClientsSheet").value = c.CLIENTS_SHEET || "Database_old";
+  document.getElementById("cfgSuppliersUrl").value = c.SUPPLIERS_URL || "";
+  document.getElementById("cfgSuppliersSheet").value = c.SUPPLIERS_SHEET || "Database suppliers";
   document.getElementById("cfgColEtd").value = c.COLS.etd;
   document.getElementById("cfgColTns").value = c.COLS.tns;
   document.getElementById("cfgColProduct").value = c.COLS.product;
@@ -5799,6 +6588,8 @@ document.getElementById("cfgSave").onclick = async () => {
     OPEN_SHEET: txt("cfgOpenSheet"),
     CLIENTS_URL: txt("cfgClientsUrl"),
     CLIENTS_SHEET: txt("cfgClientsSheet") || "Database_old",
+    SUPPLIERS_URL: txt("cfgSuppliersUrl"),
+    SUPPLIERS_SHEET: txt("cfgSuppliersSheet") || "Database suppliers",
     USD_COL: txt("cfgColUsd") || D.USD_COL,
     COMISION: { mode: document.getElementById("cfgComMode").value, col: txt("cfgColCom") || D.COMISION.col },
     COLS: {
@@ -5966,7 +6757,7 @@ async function init(opts){
   const force = opts && opts.force;
   if (CFG_IMPORTADA && !(opts && opts.force)){
     const st = document.getElementById("statusLine");
-    if (st) setTimeout(() => { st.innerHTML = "✅ Configuración cargada desde el link compartido. " + st.innerHTML; }, 50);
+    if (st) setTimeout(() => { st.innerHTML = "✅ Configuración cargada desde el link compartido. " + st.innerHTML; try { aviso("Configuración cargada desde el link compartido."); } catch(e){} }, 50);
   }
   paintedFromCache = false;
   const cached = force ? null : readCache();
@@ -5976,6 +6767,7 @@ async function init(opts){
     const n = Object.values(DATA).reduce((s, r) => s + r.length, 0);
     document.getElementById("statusLine").innerHTML =
       `⚡ ${fmt0(n)} cargas desde la última lectura (${cacheAgeText(cached.ts)}) · <span style="opacity:.75">actualizando…</span>`;
+    estadoDatos(true, true);
     paint();
     // cede el hilo para que el navegador pinte antes de salir a la red
     await new Promise(r => (typeof requestAnimationFrame === "function"
