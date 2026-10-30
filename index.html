@@ -837,12 +837,13 @@
   .globo{position:relative;max-width:560px;margin:0 auto;touch-action:none}
   .globo svg{display:block;cursor:grab;user-select:none}
   .globo svg.arrastrando{cursor:grabbing}
-  .gsph{fill:var(--panel2);stroke:var(--border2);stroke-width:1}
-  .ggrat{fill:none;stroke:var(--grid);stroke-width:.6}
-  .gpais{stroke:var(--panel);stroke-width:.5;transition:opacity .15s}
+  .gsph{fill:color-mix(in srgb,var(--accent) 7%,var(--panel2));stroke:color-mix(in srgb,var(--text) 30%,transparent);stroke-width:1.2}
+  .ggrat{fill:none;stroke:color-mix(in srgb,var(--text) 9%,transparent);stroke-width:.5}
+  .gpais{stroke:color-mix(in srgb,var(--text) 55%,transparent);stroke-width:.7;stroke-linejoin:round;transition:opacity .15s}
+  .gfront{fill:none;stroke:color-mix(in srgb,var(--text) 62%,transparent);stroke-width:.8;stroke-linejoin:round;stroke-linecap:round;pointer-events:none}
   .gpais.con{cursor:pointer}
   .gpais.con:hover,.gpto:hover{opacity:.78}
-  .gpais.sel{stroke:var(--text);stroke-width:1.4}
+  .gpais.sel{stroke:var(--text);stroke-width:2}
   .gpto{stroke:var(--panel);stroke-width:1;cursor:pointer}
   .gtip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--text);color:var(--panel);
     font-size:.76rem;line-height:1.45;padding:7px 10px;border-radius:10px;max-width:240px;z-index:3;box-shadow:0 6px 18px rgba(15,23,42,.18)}
@@ -3880,6 +3881,7 @@ async function cargarMundo(){
   if (!res.ok) throw new Error("HTTP " + res.status);
   const topo = await res.json();
   cargarMundo.geo = topojson.feature(topo, topo.objects.countries).features;
+  cargarMundo.fronteras = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);   // líneas compartidas entre países
   return cargarMundo.geo;
 }
 function dibujarGlobo(cont, valores, puntos, opts){
@@ -3895,7 +3897,7 @@ function dibujarGlobo(cont, valores, puntos, opts){
   const max = Math.max(1, ...[...valores.values()].map(v => v.v));
   const cBase = cssVar("--panel3"), cAcc = cssVar("--accent"), cPros = cssVar("--pvp3") || "#e3860f";
   const escala = v => Math.sqrt(v / max);
-  const color = d => !d ? cssVar("--panel2") : d.tipo === "prospecto" ? d3.interpolateRgb(cBase, cPros)(.6)
+  const color = d => !d ? cssVar("--panel3") : d.tipo === "prospecto" ? d3.interpolateRgb(cBase, cPros)(.6)
     : d3.interpolateRgb(cBase, cAcc)(.22 + .78 * escala(d.v));
   svg.append("path").datum({ type: "Sphere" }).attr("class", "gsph").attr("d", path);
   svg.append("path").datum(d3.geoGraticule10()).attr("class", "ggrat").attr("d", path);
@@ -3911,6 +3913,8 @@ function dibujarGlobo(cont, valores, puntos, opts){
     .on("mousemove", (ev, f) => { const d = valores.get(String(f.id)); mostrar(ev, d ? d.label : esc((paisInfo(f.properties.name) || {}).es || f.properties.name)); })
     .on("mouseleave", ocultar)
     .on("click", (ev, f) => { if (valores.has(String(f.id))) opts.onSel(String(f.id)); });
+  // fronteras: una sola línea por frontera, encima de los colores
+  if (cargarMundo.fronteras) svg.append("path").datum(cargarMundo.fronteras).attr("class", "gfront").attr("d", path);
   const pts = svg.append("g").selectAll("circle").data(puntos).join("circle").attr("class", "gpto")
     .attr("r", d => 3 + 5 * escala(d.v)).attr("fill", d => color(d))
     .on("mousemove", (ev, d) => mostrar(ev, d.label)).on("mouseleave", ocultar).on("click", (ev, d) => opts.onSel(d.id));
