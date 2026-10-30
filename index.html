@@ -845,6 +845,8 @@
   .gpais.con:hover,.gpto:hover{opacity:.78}
   .gpais.sel{stroke:var(--text);stroke-width:2}
   .gpto{stroke:var(--panel);stroke-width:1;cursor:pointer}
+  .malvt{font:700 8.5px/1 inherit;font-family:inherit;fill:#fff;stroke:#0b5fa5;stroke-width:2.6px;paint-order:stroke;stroke-linejoin:round;letter-spacing:.02em}
+  .malv{pointer-events:none}
   .gtip{position:absolute;pointer-events:none;opacity:0;transition:opacity .12s;background:var(--text);color:var(--panel);
     font-size:.76rem;line-height:1.45;padding:7px 10px;border-radius:10px;max-width:240px;z-index:3;box-shadow:0 6px 18px rgba(15,23,42,.18)}
   .comleyenda{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:center;margin:10px 0 4px;font-size:.76rem;color:var(--muted)}
@@ -3711,7 +3713,7 @@ function urlMundo(){ return "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/coun
 
 /* Países: [id del mapa (ISO numérico), nombre, variantes como aparecen en las planillas, [lon, lat] si el mapa no lo dibuja] */
 const PAISES = [
-  ["032", "Argentina", ["ARG"]], ["076", "Brasil", ["BRAZIL"]], ["600", "Paraguay"], ["858", "Uruguay"], ["152", "Chile"],
+  ["032", "Argentina", ["ARG", "FALKLAND ISLANDS", "FALKLAND", "FALKLANDS", "ISLAS MALVINAS", "LAS MALVINAS", "MALVINAS"]], ["076", "Brasil", ["BRAZIL"]], ["600", "Paraguay"], ["858", "Uruguay"], ["152", "Chile"],
   ["068", "Bolivia"], ["604", "Perú", ["PERU"]], ["218", "Ecuador"], ["170", "Colombia"], ["862", "Venezuela"],
   ["484", "México", ["MEXICO"]], ["188", "Costa Rica"], ["591", "Panamá", ["PANAMA"]], ["320", "Guatemala"], ["222", "El Salvador"],
   ["340", "Honduras"], ["558", "Nicaragua"], ["192", "Cuba"], ["214", "República Dominicana", ["REPUBLICA DOMINICANA", "DOMINICAN REPUBLIC", "DOMINICANA"]],
@@ -3907,23 +3909,39 @@ function dibujarGlobo(cont, valores, puntos, opts){
     tip.innerHTML = txt; tip.style.left = (ev.clientX - b.left + 12) + "px"; tip.style.top = (ev.clientY - b.top + 12) + "px"; tip.style.opacity = 1;
   };
   const ocultar = () => { if (tip) tip.style.opacity = 0; };
+  // las Islas Malvinas (238 en el mapa) cuentan como Argentina (032)
+  const idDe = f => String(f.id) === "238" ? "032" : String(f.id);
   svg.append("g").selectAll("path").data(geo).join("path")
-    .attr("class", f => "gpais" + (valores.has(String(f.id)) ? " con" : "") + (COM.sel === String(f.id) ? " sel" : ""))
-    .attr("d", path).attr("fill", f => color(valores.get(String(f.id))))
-    .on("mousemove", (ev, f) => { const d = valores.get(String(f.id)); mostrar(ev, d ? d.label : esc((paisInfo(f.properties.name) || {}).es || f.properties.name)); })
+    .attr("class", f => "gpais" + (valores.has(idDe(f)) ? " con" : "") + (COM.sel === idDe(f) ? " sel" : ""))
+    .attr("d", path).attr("fill", f => color(valores.get(idDe(f))))
+    .on("mousemove", (ev, f) => {
+      if (String(f.id) === "238"){ mostrar(ev, "<b>Islas Malvinas</b><br>LAS MALVINAS SON ARGENTINAS"); return; }
+      const d = valores.get(idDe(f)); mostrar(ev, d ? d.label : esc((paisInfo(f.properties.name) || {}).es || f.properties.name));
+    })
     .on("mouseleave", ocultar)
-    .on("click", (ev, f) => { if (valores.has(String(f.id))) opts.onSel(String(f.id)); });
+    .on("click", (ev, f) => { if (valores.has(idDe(f))) opts.onSel(idDe(f)); });
   // fronteras: una sola línea por frontera, encima de los colores
   if (cargarMundo.fronteras) svg.append("path").datum(cargarMundo.fronteras).attr("class", "gfront").attr("d", path);
   const pts = svg.append("g").selectAll("circle").data(puntos).join("circle").attr("class", "gpto")
     .attr("r", d => 3 + 5 * escala(d.v)).attr("fill", d => color(d))
     .on("mousemove", (ev, d) => mostrar(ev, d.label)).on("mouseleave", ocultar).on("click", (ev, d) => opts.onSel(d.id));
-  const ubicar = () => pts.each(function(d){
-    const vis = d3.geoDistance(d.coord, [-COM.rot[0], -COM.rot[1]]) < Math.PI / 2, p = proj(d.coord);
-    d3.select(this).attr("cx", p[0]).attr("cy", p[1]).style("display", vis ? null : "none");
-  });
+  // cartel en el mar, al este de las islas: texto + bandera de Inglaterra (cruz de San Jorge) + cuchillo
+  const MALV = [-59.5, -51.75];
+  const malv = svg.append("g").attr("class", "malv").attr("aria-hidden", "true");
+  malv.append("text").attr("class", "malvt").attr("y", -6).html(`<tspan x="0">LAS MALVINAS</tspan><tspan x="0" dy="12">SON ARGENTINAS</tspan>`);
+  malv.append("g").attr("transform", "translate(0,18)").html(
+    `<rect width="19" height="12" rx="1.5" fill="#fff" stroke="#64748b" stroke-width=".6"/><rect x="8" width="3" height="12" fill="#d11f2e"/><rect y="4.5" width="19" height="3" fill="#d11f2e"/>` +
+    `<g transform="translate(26,6) rotate(-35)"><path d="M-8 -1.6 L6 -1.6 Q9 -1.6 9.6 0 Q9 1.6 6 1.6 L-8 1.6 Z" fill="#e2e8f0" stroke="#0f172a" stroke-width=".6"/><rect x="-15" y="-2.2" width="7" height="4.4" rx="1.4" fill="#7c2d12" stroke="#0f172a" stroke-width=".5"/></g>`);
+  const ubicar = () => {
+    pts.each(function(d){
+      const vis = d3.geoDistance(d.coord, [-COM.rot[0], -COM.rot[1]]) < Math.PI / 2, p = proj(d.coord);
+      d3.select(this).attr("cx", p[0]).attr("cy", p[1]).style("display", vis ? null : "none");
+    });
+    const visM = d3.geoDistance(MALV, [-COM.rot[0], -COM.rot[1]]) < Math.PI / 2 - .05, pm = proj(MALV);
+    malv.style("display", visM ? null : "none").attr("transform", `translate(${pm[0] + 9},${pm[1] + 2})`);
+  };
   ubicar();
-  const redibujar = () => { proj.rotate(COM.rot); svg.selectAll("path").attr("d", path); ubicar(); };
+  const redibujar = () => { proj.rotate(COM.rot); svg.selectAll(".gsph,.ggrat,.gpais,.gfront").attr("d", path); ubicar(); };
   svg.call(d3.drag().on("start", () => svg.classed("arrastrando", true)).on("end", () => svg.classed("arrastrando", false))
     .on("drag", ev => { COM.rot = [COM.rot[0] + ev.dx * .35, Math.max(-75, Math.min(75, COM.rot[1] - ev.dy * .35)), 0]; redibujar(); }));
   return {
