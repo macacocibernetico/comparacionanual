@@ -7,43 +7,47 @@
 <link rel="preconnect" href="https://docs.google.com" crossorigin>
 <link rel="dns-prefetch" href="https://docs.google.com">
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   /* ============ Paleta clara (por defecto) ============ */
   :root{
-    --bg:#f5f5f7; --panel:#ffffff; --panel2:#f5f5f7; --panel3:#ebebed;
-    --border:rgba(0,0,0,.09); --border2:rgba(0,0,0,.14);
-    --text:#1d1d1f; --muted:#5a5a5f; --faint:#6e6e73;
-    --accent:#0071e3; --accent-soft:rgba(0,113,227,.1);
+    --bg:#eef0f3; --panel:#ffffff; --panel2:#f3f4f6; --panel3:#e5e7eb;
+    --border:rgba(15,23,42,.06); --border2:rgba(15,23,42,.13);
+    --text:#111827; --muted:#374151; --faint:#4b5563;
+    --accent:#2f56f5; --accent-soft:rgba(47,86,245,.1);
     --green:#1e7a35; --red:#d70015; --amber:#b25000;
     --tint-amber-bg:#fff8e6; --tint-amber-bd:#f0d9a0; --tint-amber-tx:#8a5a00;
     --tint-red-bg:#fff0f0; --tint-red-bd:#f5c6c6; --tint-red-tx:#a01019;
     --tint-blue-bg:#eef5ff; --tint-blue-bd:#c3d9f5; --tint-blue-tx:#0058b0;
-    --shadow:0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
-    --shadow-lg:0 12px 48px rgba(0,0,0,.16);
-    --grid:rgba(0,0,0,.07); --tick:#8e8e93;
-    --r:14px; --r-sm:10px;
+    --shadow:0 1px 2px rgba(15,23,42,.04), 0 12px 32px rgba(15,23,42,.06);
+    --shadow-lg:0 24px 64px rgba(15,23,42,.18);
+    --grid:rgba(15,23,42,.06); --tick:#4b5563;
+    --r:22px; --r-sm:12px;
+    --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
     --ease:cubic-bezier(.32,.72,0,1);
   }
   /* ============ Paleta oscura ============ */
   html[data-theme="dark"]{
-    --bg:#000000; --panel:#1c1c1e; --panel2:#2c2c2e; --panel3:#3a3a3c;
-    --border:rgba(255,255,255,.12); --border2:rgba(255,255,255,.2);
-    --text:#f5f5f7; --muted:#98989d; --faint:#8e8e93;
-    --accent:#0a84ff; --accent-soft:rgba(10,132,255,.18);
+    --bg:#0b0b0d; --panel:#17181b; --panel2:#222327; --panel3:#2d2e33;
+    --border:rgba(255,255,255,.08); --border2:rgba(255,255,255,.16);
+    --text:#f3f4f6; --muted:#d1d5db; --faint:#a1a1aa;
+    --accent:#6b8bff; --accent-soft:rgba(107,139,255,.16);
     --green:#30d158; --red:#ff453a; --amber:#ff9f0a;
     --tint-amber-bg:#2a2010; --tint-amber-bd:#5c4718; --tint-amber-tx:#ffd88a;
     --tint-red-bg:#2a1414; --tint-red-bd:#5c2020; --tint-red-tx:#ff9d94;
     --tint-blue-bg:#101f33; --tint-blue-bd:#1e3d63; --tint-blue-tx:#8ec5ff;
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.35);
-    --shadow-lg:0 12px 48px rgba(0,0,0,.6);
-    --grid:rgba(255,255,255,.09); --tick:#98989d;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.35);
+    --shadow-lg:0 24px 64px rgba(0,0,0,.6);
+    --grid:rgba(255,255,255,.07); --tick:#a1a1aa;
   }
 
   *{box-sizing:border-box;margin:0;padding:0}
   body{
     background:var(--bg);color:var(--text);
-    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Inter","Segoe UI",system-ui,sans-serif;
+    font-family:var(--font);
     padding:28px 28px 56px;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
     letter-spacing:-.01em;transition:background .35s var(--ease),color .35s var(--ease);
   }
@@ -540,6 +544,117 @@
   .swatch{display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:var(--r-sm);padding:8px 13px;transition:background .25s var(--ease)}
   .swatch span{font-size:.85rem;font-weight:500}
   .swatch input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--border);border-radius:7px;background:none;cursor:pointer}
+
+  /* =====================================================================
+     Rediseño visual (oct-2026): fondo gris suave, tarjetas blancas de radio
+     amplio con sombra difusa, números grandes en peso regular, navegación en
+     píldora y texturas rayadas. Solo estilos: no cambia ningún dato ni evento.
+     ===================================================================== */
+  body{letter-spacing:-.005em;padding:26px 28px 56px;font-feature-settings:"ss01"}
+  @media(max-width:600px){body{padding:16px 16px 40px}}
+
+  /* Encabezado */
+  .topbar{margin-bottom:20px;gap:16px}
+  .topbar h1{font-size:clamp(2.1rem,4.6vw,3.4rem);font-weight:400;letter-spacing:-.045em;line-height:1}
+  .topbar .tagline{color:var(--faint);font-size:.9rem;align-self:flex-end;margin-bottom:6px}
+  .iconbtn{width:44px;height:44px;background:var(--panel);border:1px solid var(--border2);color:var(--muted);box-shadow:none}
+  .iconbtn:hover{background:var(--panel2);color:var(--text)}
+
+  /* Barra de controles: tarjeta blanca, grupos con rótulos claros */
+  .toolbar{border:none;border-radius:var(--r);padding:18px 20px;gap:22px 28px;margin-bottom:16px}
+  .group > .glabel{color:var(--faint);font-size:.74rem;font-weight:500;letter-spacing:0}
+
+  /* Negocios: píldora con el activo en negro */
+  .tabs{background:var(--panel2);border-radius:999px;padding:4px;gap:2px}
+  .tab{border-radius:999px;padding:9px 16px;font-size:.9rem;color:var(--muted)}
+  .tab:hover{color:var(--text);background:var(--panel3)}
+  .tab.active,html[data-theme="dark"] .tab.active{background:var(--text);color:var(--panel);box-shadow:0 6px 16px rgba(15,23,42,.22)}
+
+  /* Segmentados, años y botones */
+  .seg{border-radius:12px;padding:4px}
+  .seg button{border-radius:9px;padding:7px 14px;color:var(--muted)}
+  .seg button.active,html[data-theme="dark"] .seg button.active{background:var(--panel);color:var(--text);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+  html[data-theme="dark"] .seg button.active{background:var(--panel3)}
+  .pill{padding:7px 15px;color:var(--muted);background:var(--panel2)}
+  .pill.active{background:var(--text);color:var(--panel)}
+  .pill.cmp{background:var(--panel);border-color:var(--border2)}
+  .pill.ghost{color:var(--muted)}
+  .pillhint{color:var(--faint);font-size:.76rem}
+  select,button{border-radius:12px}
+  .ctlab{color:var(--faint)}
+
+  /* Chips de contexto y "Ir a" */
+  .sub{color:var(--faint);font-size:.84rem}
+  .ctag,.secnav a{background:var(--panel);border-color:transparent;box-shadow:0 1px 2px rgba(15,23,42,.05);color:var(--muted);padding:6px 14px}
+  .secnav a .num{background:var(--panel2);color:var(--text)}
+  .secnav .navlabel{color:var(--faint)}
+  .banner{border-radius:16px}
+
+  /* KPIs: número grande en peso regular, variación en chip */
+  .kpis{gap:16px;grid-template-columns:repeat(3,minmax(0,1fr))}
+  @media(min-width:1560px){.kpis{grid-template-columns:repeat(6,minmax(0,1fr))}}
+  @media(max-width:720px){
+    .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px} .kpis .kpi{padding:16px 14px} .kpis .kpi .value{font-size:1.3rem;letter-spacing:-.035em}
+    .tabs{border-radius:20px}
+    .topbar h1{font-size:2rem}
+  }
+  .kpi .value{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .value small{font-size:.5em;letter-spacing:0;color:var(--muted);font-weight:500}
+  .kpi .value small.cur{margin-right:.15em;vertical-align:.55em}
+  .kpi{border:none;border-radius:var(--r);padding:20px 22px 18px}
+  .kpi .label{color:var(--muted);font-size:.84rem;font-weight:500}
+  .kpi .value{font-size:clamp(1.9rem,2.5vw,2.55rem);font-weight:400;letter-spacing:-.045em;color:var(--text);margin:8px 0 10px;line-height:1.05}
+  .kpi .delta{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:.78rem;font-weight:600;background:var(--panel2)}
+  .kpi .delta.up{background:rgba(30,122,53,.1)}
+  .kpi .delta.down{background:rgba(215,0,21,.08)}
+  .kpi .extra{color:var(--faint);font-size:.78rem;margin-top:8px;line-height:1.5}
+  html[data-theme="dark"] .kpi .delta.up{background:rgba(48,209,88,.14)}
+  html[data-theme="dark"] .kpi .delta.down{background:rgba(255,69,58,.09)}
+
+  /* Tarjetas */
+  .grid{gap:18px;margin-bottom:18px}
+  .card{border:none;border-radius:var(--r);padding:22px 24px 24px}
+  .card h2{font-size:1.15rem;font-weight:500;letter-spacing:-.02em}
+  .card .csub{color:var(--faint);font-size:.82rem;margin:5px 0 16px}
+  .card h2.clickhead:hover{color:var(--text)}
+  .card h2.clickhead:hover .caret{color:var(--accent)}
+  .card h2 .caret{width:30px;height:30px;border-radius:50%;border:1px solid var(--border2);display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+  .meta{color:var(--text);background:var(--panel2)}
+  html[data-theme="dark"] .clickable{color:#b4c3ff}
+  .cardtools{top:18px;right:62px}
+  .cardtools button,.tblcopy{background:var(--panel);border:1px solid var(--border2);color:var(--muted);border-radius:999px;padding:5px 11px}
+  .chartbox{height:290px}
+  .trendcell{background:var(--panel2);border-radius:16px;padding:12px 12px 6px}
+  .trendcell .tlabel{color:var(--muted)}
+
+  /* Tablas: encabezados legibles, filas aireadas */
+  th{color:var(--muted);font-weight:500;font-size:.78rem}
+  th,td{padding:10px 12px;border-bottom-color:var(--border)}
+  tr.total td,tr.total td:first-child{background:var(--panel2);border-top-color:var(--border2)}
+
+  /* Barras de participación rayadas (como "Online Payments") */
+  .hbar{display:block;height:8px;border-radius:999px;background:var(--panel2);box-shadow:inset 0 0 0 1px var(--border);overflow:hidden;margin-top:6px;min-width:70px}
+  .hbar.lg{height:14px;margin:10px 0 8px;background:var(--panel)}
+  .hbar i{display:block;height:100%;border-radius:999px;min-width:4px;
+    background:repeating-linear-gradient(-55deg,var(--c) 0 3px,color-mix(in srgb,var(--c) 40%,transparent) 3px 6px)}
+  td.sharecell{min-width:96px}
+
+  /* Resúmenes y cajas internas */
+  .pstat{border-radius:16px;padding:16px 18px}
+  .pstat .plabel,.pstat .phint{color:var(--faint)}
+  .pstat .pval{font-weight:400;font-size:1.6rem;letter-spacing:-.035em}
+  .oxcard{border-radius:16px}
+  .oxrow span:first-child{color:var(--muted)}
+
+  /* Paneles, modales y menú inferior */
+  .panel{border:none;border-radius:var(--r)}
+  .panel .phint{color:var(--faint)}
+  .modal{border:none;border-radius:24px}
+  .modal .hint,.modal label{color:var(--muted)}
+  .chip{color:var(--muted)}
+  .chip.active{background:var(--text);color:var(--panel)}
+  footer{color:var(--faint)}
+  .empty{color:var(--faint)}
 </style>
 </head>
 <body>
@@ -1638,6 +1753,15 @@ const fmt1 = n => (Math.round(n * 100) / 100).toLocaleString("es-AR", {maximumFr
 const fmt3 = n => n.toLocaleString("es-AR", {maximumFractionDigits: 3});
 const fmtUsd = n => "US$ " + Math.round(n).toLocaleString("es-AR", {maximumFractionDigits: 0});
 const fmtDate = d => d ? `${d.d ?? "?"}/${d.mo}/${d.y}` : "—";
+/* Número grande de un KPI: "US$" y la unidad van más chicos (el texto es el mismo) */
+const bigNum = s => String(s)
+  .replace(/^(US\$ |~)/, '<small class="cur">$1</small>')
+  .replace(/( \/t| t)$/, '<small class="unit">$1</small>');
+/* Barra de participación rayada (solo visual, sin texto: el número sigue al lado) */
+const shareBar = (v, t, color, cls = "") => {
+  const w = t > 0 ? Math.max(0, Math.min(100, v / t * 100)) : 0;
+  return `<span class="hbar ${cls}" aria-hidden="true"><i style="--c:${color || "var(--accent)"};width:${w.toFixed(1)}%"></i></span>`;
+};
 
 const PALETTE = ["#0071e3","#ff9500","#34c759","#af52de","#ff2d55","#5ac8fa","#ffcc00","#ff6482","#30b0c7","#a2845e","#64d2ff","#bf5af2"];
 const CHART_COLORS = { chTns: "#0071e3", chUsd: "#34c759", chCom: "#ff9500", chEtd: "#af52de" };
@@ -2061,13 +2185,13 @@ function renderKpis(a, b, aN, aC, yA, SP, aParts){
   const extras = `
     <div class="kpi solo">
       <div class="label">Precio promedio · ${yA}</div>
-      <div class="value">${unit(pxT(a))}</div>
+      <div class="value">${bigNum(unit(pxT(a)))}</div>
       ${b ? d2(pxT(a), pxT(b)) : ""}
       <div class="extra">facturación ÷ toneladas</div>
     </div>
     <div class="kpi solo">
       <div class="label">Comisión por tonelada · ${yA}</div>
-      <div class="value">${unit(cxT(a))}</div>
+      <div class="value">${bigNum(unit(cxT(a)))}</div>
       <div class="extra"><b style="color:var(--text);font-weight:600">${pctF(a).toFixed(2).replace(".", ",")}%</b> de la facturación${b ? ` · año comp.: ${pctF(b).toFixed(2).replace(".", ",")}%` : ""}</div>
       ${b ? d2(cxT(a), cxT(b)) : ""}
     </div>`;
@@ -2086,37 +2210,128 @@ function renderKpis(a, b, aN, aC, yA, SP, aParts){
     return `
     <div class="kpi ${(!b || UI.split) ? "solo" : ""}">
       <div class="label">${label} · ${yA}</div>
-      <div class="value">${f(a[key])}</div>
+      <div class="value">${bigNum(f(a[key]))}</div>
       ${lines.join("")}
     </div>`;
   }).join("") + extras;
 }
 
 /* series: [{ label, data, color, stack?, year, group? }] */
+/* ---------- Texturas de los gráficos (solo visual: los datos y el click no cambian) ---------- */
+function hexA(hex, a){
+  const h = String(hex || "").replace("#", "").slice(0, 6);
+  if (!/^[0-9a-f]{6}$/i.test(h)) return hex;
+  const n = parseInt(h, 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+}
+/* Barras rayadas en diagonal para los años comparados */
+function hatchPattern(color){
+  const s = 8, dpr = Math.max(1, window.devicePixelRatio || 1);
+  const c = document.createElement("canvas");
+  if (!c.getContext) return color;
+  c.width = c.height = s * dpr;
+  const x = c.getContext("2d"); if (!x || !x.scale || !x.createPattern) return color;
+  x.scale(dpr, dpr);
+  x.fillStyle = hexA(color, .14); x.fillRect(0, 0, s, s);
+  x.strokeStyle = hexA(color, .9); x.lineWidth = 1.6; x.beginPath();
+  x.moveTo(-2, s + 2); x.lineTo(s + 2, -2); x.moveTo(-2, 2); x.lineTo(2, -2); x.moveTo(s - 2, s + 2); x.lineTo(s + 2, s - 2);
+  x.stroke();
+  const p = x.createPattern(c, "repeat");
+  if (p && p.setTransform && typeof DOMMatrix === "function") p.setTransform(new DOMMatrix().scale(1 / dpr));
+  return p || color;
+}
+/* Degradé vertical para el año base (más intenso arriba) */
+const barGradient = color => ctx => {
+  const ch = ctx.chart, ar = ch.chartArea;
+  if (!ar || !ch.ctx.createLinearGradient) return color;
+  const g = ch.ctx.createLinearGradient(0, ar.bottom, 0, ar.top);
+  g.addColorStop(0, hexA(color, .55)); g.addColorStop(1, color);
+  return g;
+};
+/* Marca chica arriba de cada barra del año base, como en el embudo de referencia */
+const capPlugin = {
+  id: "capMarker",
+  afterDatasetsDraw(chart){
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, i) => {
+      if (!ds._cap) return;
+      const meta = chart.getDatasetMeta(i); if (meta.hidden) return;
+      ctx.save(); ctx.fillStyle = hexA(ds._color, .45);
+      meta.data.forEach((bar, j) => {
+        if (!ds.data[j]) return;
+        const w = Math.min(18, bar.width * .5);
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(bar.x - w / 2, bar.y - 9, w, 4, 2) : ctx.rect(bar.x - w / 2, bar.y - 9, w, 4);
+        ctx.fill();
+      });
+      ctx.restore();
+    });
+  },
+};
+/* Matriz de puntos para conteos (un punto = una carga). Si no entran, se dibuja la barra común. */
+const dotsPlugin = {
+  id: "dotMatrix",
+  beforeDatasetsDraw(chart){
+    chart.$dotsOk = chart.data.datasets.every((ds, i) => {
+      const meta = chart.getDatasetMeta(i);
+      return meta.data.every((bar, j) => { const v = ds.data[j] || 0; return !v || (bar.base - bar.y) / v >= 5; });
+    });
+  },
+  // con puntos, la barra no se pinta (sigue existiendo para el tooltip y el click)
+  beforeDatasetDraw(chart){ return !chart.$dotsOk; },
+  afterDatasetsDraw(chart){
+    if (!chart.$dotsOk) return;
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, i) => {
+      const meta = chart.getDatasetMeta(i); if (meta.hidden) return;
+      ctx.save();
+      meta.data.forEach((bar, j) => {
+        const v = Math.round(ds.data[j] || 0); if (!v) return;
+        const step = (bar.base - bar.y) / v;
+        const d = Math.max(3, Math.min(11, bar.width * .7, step - 2));
+        ctx.fillStyle = i === 0 ? ds._color : hexA(ds._color, .45);
+        for (let k = 0; k < v; k++){
+          ctx.beginPath(); ctx.arc(bar.x, bar.base - step * k - step / 2, d / 2, 0, Math.PI * 2); ctx.fill();
+        }
+      });
+      ctx.restore();
+    });
+  },
+};
+
 function makeChart(id, series, opts = {}){
   if (charts[id]) charts[id].destroy();
   const stacked = series.some(s => s.stack);
+  const baseYear = series.length ? series[0].year : null;
   charts[id] = new Chart(document.getElementById(id), {
     type: "bar",
+    plugins: opts.dots ? [dotsPlugin] : [capPlugin],
     data: {
       labels: MESES,
-      datasets: series.map(s => ({
-        label: s.label, data: s.data, backgroundColor: s.color, borderRadius: 6, borderSkipped: false, maxBarThickness: 46,
-        ...(s.stack ? { stack: s.stack } : {}),
-      })),
+      datasets: series.map(s => {
+        const esBase = s.year === baseYear;
+        const fill = esBase ? barGradient(s.color) : hatchPattern(s.color);
+        return {
+          label: s.label, data: s.data, backgroundColor: fill, _fill: fill, _color: String(s.color).slice(0, 7), _cap: esBase && !stacked,
+          borderColor: esBase ? "transparent" : hexA(s.color, .6), borderWidth: esBase ? 0 : 1,
+          borderRadius: 8, borderSkipped: false, maxBarThickness: 46,
+          ...(s.stack ? { stack: s.stack } : {}),
+        };
+      }),
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: opts.dots ? 4 : 12 } },
       animation: { duration: paintedFromCache ? 0 : 550, easing: "easeOutQuart" },
       onClick: (e, els) => {
         if (!els || !els.length) return;
         const s = series[els[0].datasetIndex];
         openDetail(els[0].index, s.year, s.group);
       },
-      plugins: { legend: { display: series.length > 1, labels: { color: cssVar("--muted"), boxWidth: 12 } } },
+      plugins: { legend: { display: series.length > 1, labels: { color: cssVar("--muted"), boxWidth: 14, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } } },
       scales: {
-        x: { stacked, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") } },
-        y: { stacked, ticks: { color: cssVar("--tick"), callback: v => opts.usd ? "$" + fmt0(v) : fmt0(v) }, grid: { color: cssVar("--grid") } },
+        x: { stacked, ticks: { color: cssVar("--tick") }, grid: { display: false }, border: { display: false } },
+        y: { stacked, beginAtZero: true, ticks: { color: cssVar("--tick"), maxTicksLimit: 6, callback: v => opts.usd ? "$" + fmt0(v) : fmt0(v) }, grid: { color: cssVar("--grid") }, border: { display: false } },
       },
     },
   });
@@ -3135,6 +3350,7 @@ function renderMercado(recs, yA){
   const tot = sum(R, v);
   const caja = (titulo, arr, color, cls) => `<div class="pstat ${cls || ""}"><span class="plabel"><i style="background:${color}"></i>${titulo}</span>
       <div class="pval">${fm(sum(arr, v))} <span style="font-size:.9rem;color:var(--faint)">${pc(sum(arr, v), tot)}</span></div>
+      ${shareBar(sum(arr, v), tot, color, "lg")}
       <div class="phint">${fmt0(arr.length)} cargas · ${fmt1(sum(arr, r => r.tns))} t · ${fmtUsd(sum(arr, r => r.usd))}</div></div>`;
   const ci = CLI_INFO[UI.biz];
   document.getElementById("mktStats").innerHTML = sinPais
@@ -3207,7 +3423,7 @@ function renderMercado(recs, yA){
     let h = `<table><tr><th>${campo === "exporter" ? "Exportador" : "Cliente"}</th><th>${met === "tns" ? "Toneladas" : met === "usd" ? "Facturación" : "Comisión"}</th><th>% del total</th><th>Cargas</th></tr>`;
     for (const x of filas){
       const tipo = conTipo && !sinPais ? (x.loc === x.cargas ? `<span class="tag loc">Local</span>` : x.loc ? `<span class="tag loc">Mixto</span>` : `<span class="tag exp">Export</span>`) : "";
-      h += `<tr><td>${esc(x.n)}${tipo}</td><td>${fm(x.val)}</td><td><b>${pc(x.val, tot)}</b></td><td>${fmt0(x.cargas)}</td></tr>`;
+      h += `<tr><td>${esc(x.n)}${tipo}</td><td>${fm(x.val)}</td><td class="sharecell"><b>${pc(x.val, tot)}</b>${shareBar(x.val, tot, campo === "exporter" ? "#2f56f5" : "#1f9d45")}</td><td>${fmt0(x.cargas)}</td></tr>`;
     }
     return h + `<tr class="total"><td>Total</td><td>${fm(tot)}</td><td>100%</td><td>${fmt0(R.length)}</td></tr></table>`;
   };
@@ -4566,9 +4782,9 @@ function renderBizChart(a, yA){
   let h = `<table><tr><th>Negocio</th><th>Toneladas</th><th>% tns</th><th>Facturación</th><th>% fact.</th><th>Comisión</th><th>% comisión</th><th>Precio prom. / t</th><th>Comisión / t</th></tr>`;
   for (const k of keys){
     h += `<tr><td><span style="color:${colorDe(k)}">■</span> ${names[k] || k}</td>
-      <td>${fmt1(tt(k))}</td><td>${pc(tt(k), sumT)}</td>
-      <td>${fmtUsd(tu(k))}</td><td>${pc(tu(k), sumU)}</td>
-      <td><b>${fmtUsd(tc(k))}</b></td><td><b>${pc(tc(k), sumC)}</b></td>
+      <td>${fmt1(tt(k))}</td><td class="sharecell">${pc(tt(k), sumT)}${shareBar(tt(k), sumT, colorDe(k))}</td>
+      <td>${fmtUsd(tu(k))}</td><td class="sharecell">${pc(tu(k), sumU)}${shareBar(tu(k), sumU, colorDe(k))}</td>
+      <td><b>${fmtUsd(tc(k))}</b></td><td class="sharecell"><b>${pc(tc(k), sumC)}</b>${shareBar(tc(k), sumC, colorDe(k))}</td>
       <td>${tt(k) ? fmtUsd(tu(k) / tt(k)) : "—"}</td>
       <td>${tt(k) ? fmtUsd(tc(k) / tt(k)) : "—"}</td></tr>`;
   }
@@ -4883,7 +5099,7 @@ function render(){
   mk("chTns", "tns");
   mk("chUsd", "usd", { usd: true });
   mk("chCom", "com", { usd: true });
-  mk("chEtd", "etdCount");
+  mk("chEtd", "etdCount", { dots: true });
   renderRolling(recs);
   renderBizChart(a, yA);
   renderProductTable(a, yA);
