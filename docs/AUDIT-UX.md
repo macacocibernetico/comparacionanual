@@ -167,4 +167,4 @@ Resueltos y verificados en el navegador y con `node tests/run.js` (22 ok): **01,
 - **03:** en mobile los 5 negocios se ven en dos filas (todos dentro de 375 px, antes "Σ Total" llegaba a 630 px).
 - **04:** en mobile el filtro de productos queda en la barra, fuera del ☰ (en escritorio vuelve a "Ajustes de vista").
 
-Pendientes: 09 a 14. Observado de paso: los pills de año en mobile siguen en carrusel y "Todos" queda cortado en el borde derecho.
+Pendientes: 09 a 14. (Los pills de año en mobile ya van en varias filas.)
