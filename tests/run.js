@@ -51,6 +51,32 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('frecuencia contratos', /Euro BV Export 2 .* 2 cada 60 días/.test(T('mktFreq')));
 }
 
+// audit UX/UI (30/10/2026): formato, estado vacío y accesibilidad
+{
+  const fs = require('fs'), path = require('path');
+  const h = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const code = [...h.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m => m[1]).filter(s => s.trim()).at(-1);
+  const m = new Function(code + ';return {UI,CONFIG,DATA,render,renderProductCompare,demoData};')();
+  const g = id => document.getElementById(id);
+  const TARJ = ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard', 'bizCard', 'compareCard'];
+
+  // Δ % con coma decimal, igual que el resto de la tabla
+  m.renderProductCompare({ prodTotals: { A: 554.16, B: 100 } }, { prodTotals: { A: 348.62, B: 100 } }, 2026, 2025);
+  t('Δ % con coma decimal', /\+59,0%/.test(g('prodCompare').innerHTML) && !/\d\.\d%/.test(g('prodCompare').innerHTML));
+
+  // negocio sin planilla: sin tarjetas vacías y con mensaje; con datos vuelven
+  m.UI.biz = 'brokerage'; m.DATA = {}; m.CONFIG.brokerage.SHEET_ID = ''; m.render();
+  t('sin planilla: tarjetas ocultas', TARJ.every(id => g(id).style.display === 'none'));
+  t('sin planilla: mensaje visible', /todavía no tiene planilla/.test(g('kpis').innerHTML));
+  m.UI.biz = 'axt'; m.DATA = { axt: m.demoData() }; m.CONFIG.axt.SHEET_ID = ''; m.render();
+  t('con datos: tarjetas vuelven', ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard'].every(id => g(id).style.display === ''));
+
+  // accesibilidad del HTML estático
+  t('3 modales con role=dialog y nombre', (h.match(/class="modal[^"]*" role="dialog" aria-modal="true" aria-labelledby="\w+"/g) || []).length === 3);
+  t('hay <main> y el skip-link apunta a él', /<main id="main"/.test(h) && /href="#main" class="skip-link"/.test(h) && /<\/main>/.test(h));
+  t('pill Todos con aria-pressed', /data-y="all" aria-pressed=/.test(h));
+}
+
 // link para compartir la configuración
 {
   const fs = require('fs'), path = require('path');
