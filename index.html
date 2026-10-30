@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard Anual — Negocios</title>
+<title>Dashboard de Negocios</title>
 <link rel="preconnect" href="https://docs.google.com" crossorigin>
 <link rel="dns-prefetch" href="https://docs.google.com">
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
@@ -751,6 +751,14 @@
     #statusLine{grid-column:2;justify-self:end;align-self:center;margin-bottom:10px;text-align:right}
   }
 
+  /* Aviso breve (en lugar de los avisos del navegador) y botón Reintentar del error de carga */
+  .toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);z-index:300;
+    background:var(--text);color:var(--panel);padding:11px 16px;border-radius:14px;font-size:.85rem;max-width:calc(100vw - 32px);
+    opacity:0;pointer-events:none;transition:opacity .2s var(--ease),transform .2s var(--ease);box-shadow:var(--shadow-lg)}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .banner .retry{margin-top:8px;background:var(--panel);color:var(--tint-red-tx);border:1px solid var(--tint-red-bd);border-radius:9999px;padding:6px 14px;font-weight:600;font-size:.8rem}
+  .banner .retry:hover{background:var(--tint-red-bg)}
+
   /* Mobile: los años en varias filas (en carrusel, "Todos" quedaba cortado sin ninguna pista) */
   @media(max-width:720px){
     .yearpills{flex-wrap:wrap;overflow:visible;gap:8px}
@@ -818,15 +826,15 @@
         <button id="btnSplit" type="button" aria-pressed="false"
                 title="Separar cada barra en NOP y Convencional (solo AXT)">🌿 NOP vs Conv</button>
         <button id="btnColors" type="button" aria-expanded="false" aria-controls="colorPanel"
-                title="Cambiar el color de cada año">🎨 Colores</button>
+                title="Cambiar el color de cada año"><span aria-hidden="true">🎨</span> Colores</button>
       </div>
     </div>
 
     <div class="group right" id="grpData">
       <span class="glabel">Datos</span>
       <div class="grow">
-        <button id="btnReload" type="button" title="Volver a leer las planillas de Google Sheets">↻ Actualizar</button>
-        <button id="btnConfig" type="button" title="Conectar planillas y asignar columnas">⚙️ Configurar</button>
+        <button id="btnReload" type="button" title="Volver a leer las planillas de Google Sheets"><span aria-hidden="true">↻</span> Actualizar</button>
+        <button id="btnConfig" type="button" title="Conectar planillas y asignar columnas"><span aria-hidden="true">⚙️</span> Configurar</button>
       </div>
     </div>
   </div>
@@ -922,7 +930,7 @@
         </div>
         <button type="button" id="btnFocusPdf" title="Exportar a PDF">⤓ Exportar a PDF</button>
       </div>
-      <div class="chartbox tall"><canvas id="chFocus" aria-label="Aceite y expeller por mes" role="img"></canvas></div>
+      <div class="chartbox tall"><canvas id="chFocus" aria-label="Aceite y expeller del exportador destacado, por mes" role="img"></canvas></div>
       <div class="tablewrap" id="focusTable" style="margin-top:18px"></div>
       <div class="tablewrap" id="focusYears" style="margin-top:18px"></div>
     </div>
@@ -2123,6 +2131,24 @@ function cacheAgeText(ts){
   return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`;
 }
 
+/* Errores técnicos → qué pasó y qué hacer, en palabras simples */
+function errorCriollo(e){
+  const m = String((e && e.message) || e || "");
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(m))
+    return "No me pude conectar con Google Sheets. Revisá la conexión a internet y tocá Reintentar.";
+  if (/HTTP 404/.test(m)) return "No encuentro la planilla. Revisá el enlace en ⚙️ Configurar.";
+  if (/HTTP 40[13]/.test(m)) return "La planilla no es pública. Compartila como “Cualquier persona con el enlace: Lector”.";
+  if (/HTTP 5\d\d/.test(m)) return "Google Sheets no respondió. Esperá un momento y tocá Reintentar.";
+  return m;
+}
+/* Aviso breve abajo de la pantalla (reemplaza los avisos del navegador, que cortan todo) */
+function aviso(msg){
+  let t = document.getElementById("toast");
+  if (!t){ t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(aviso.tm); aviso.tm = setTimeout(() => t.classList.remove("on"), 4200);
+}
+
 async function loadData(){
   const status = document.getElementById("statusLine");
   const banner = document.getElementById("banner");
@@ -2160,16 +2186,19 @@ async function loadData(){
         }
         catch(e){
           CLI_INFO[b.key] = { ok: false, err: e.message };
-          errors.push(`<b>${b.name} · database de clientes:</b> ${e.message}`);
+          errors.push(`<b>${b.name} · database de clientes:</b> ${esc(errorCriollo(e))}`);
         }
       } else CLI_INFO[b.key] = null;
     }
-    catch(e){ errors.push(`<b>${b.name}:</b> ${e.message}`); }
+    catch(e){ errors.push(`<b>${b.name}:</b> ${esc(errorCriollo(e))}`); }
   }));
   if (errors.length){
     banner.style.display = "block";
     banner.className = "banner err";
-    banner.innerHTML = "<span>❌</span><span><b>No se pudo cargar una planilla.</b><br>" + errors.join("<br>") + "</span>";
+    banner.innerHTML = "<span>❌</span><span><b>No se pudo cargar una planilla.</b><br>" + errors.join("<br>") +
+      `<br><button type="button" class="retry" id="btnRetry">↻ Reintentar</button></span>`;
+    const rt = document.getElementById("btnRetry");
+    if (rt) rt.onclick = e => { e.stopPropagation(); init({ force: true }); };
   }
   writeCache(DATA, srcInfo, CONTRACTS, OPEN);
   const parts = configured
@@ -2961,16 +2990,16 @@ function renderConsolidacion(recs, year, maxMonth){
   document.getElementById("portChartBox").style.display = "";
   let h = "<table><tr><th>Producto</th>" + MI.map(m => `<th>${MESES[m]}</th>`).join("") + "<th>Total</th></tr>";
   for (const p of prods)
-    h += `<tr><td>${p}</td>` + MI.map(m => { const v = V.products[p][m]; return `<td>${v ? fmtV(v) : ""}</td>`; }).join("") +
+    h += `<tr><td>${esc(p)}</td>` + MI.map(m => { const v = V.products[p][m]; return `<td>${v ? fmtV(v) : ""}</td>`; }).join("") +
          `<td><b>${fmtV(V.prodTotals[p])}</b></td></tr>`;
   h += `<tr class="total"><td>Total</td>` + MI.map(m => { const v = V.months[m]; return `<td>${v ? fmtV(v) : ""}</td>`; }).join("") +
        `<td>${fmtV(V.total)}</td></tr></table>`;
   consEl.innerHTML = h;
 
   // tabla producto × destino
-  let ph = "<table><tr><th>Producto</th>" + ports.map(x => `<th>${x}</th>`).join("") + "<th>Total</th></tr>";
+  let ph = "<table><tr><th>Producto</th>" + ports.map(x => `<th>${esc(x)}</th>`).join("") + "<th>Total</th></tr>";
   for (const p of prods){
-    ph += `<tr><td>${p}</td>` + ports.map(x => {
+    ph += `<tr><td>${esc(p)}</td>` + ports.map(x => {
       const v = (V.ports[p] || {})[x] || 0;
       return `<td>${v ? fmtV(v) : ""}</td>`;
     }).join("") + `<td><b>${fmtV(V.prodTotals[p])}</b></td></tr>`;
@@ -3186,7 +3215,7 @@ async function exportarCard(card, formato, btn){
     }
     btn.textContent = "✓"; btn.classList.add("ok");
   } catch (e){
-    console.error(e); alert("No pude exportar el cuadro: " + (e.message || e));
+    console.error(e); aviso("No pude exportar el cuadro: " + errorCriollo(e));
     btn.textContent = txt;
   } finally {
     setTimeout(() => { btn.textContent = txt; btn.classList.remove("ok"); btn.disabled = false; }, 1400);
@@ -3492,7 +3521,7 @@ function renderMercado(recs, yA){
       <div class="phint">${fmt0(arr.length)} cargas · ${fmt1(sum(arr, r => r.tns))} t · ${fmtUsd(sum(arr, r => r.usd))}</div></div>`;
   const ci = CLI_INFO[UI.biz];
   document.getElementById("mktStats").innerHTML = sinPais
-    ? `<p class="empty" style="grid-column:1/-1">${ci && !ci.ok ? `❌ No pude leer la database de clientes: ${ci.err}<br>` : ci && ci.ok ? `Leí ${fmt0(ci.clientes)} clientes de la database, pero ningún importador de las cargas coincidió con la columna Company.<br>` : (CONFIG[UI.biz] || {}).CLIENTS_URL ? "⏳ Leyendo la database de clientes… tocá ↻ Actualizar si no aparece.<br>" : ""}Todavía no sé el país de los clientes. Pegá el link de la planilla <b>database clientes</b> en ⚙️ Configurar → Brokerage → <b>Planilla “database clientes”</b>: los importadores con Country ARGENTINA cuentan como mercado local.</p>`
+    ? `<p class="empty" style="grid-column:1/-1">${ci && !ci.ok ? `❌ No pude leer la database de clientes: ${esc(errorCriollo(ci.err))}<br>` : ci && ci.ok ? `Leí ${fmt0(ci.clientes)} clientes de la database, pero ningún importador de las cargas coincidió con la columna Company.<br>` : (CONFIG[UI.biz] || {}).CLIENTS_URL ? "⏳ Leyendo la database de clientes… tocá ↻ Actualizar si no aparece.<br>" : ""}Todavía no sé el país de los clientes. Pegá el link de la planilla <b>database clientes</b> en ⚙️ Configurar → Brokerage → <b>Planilla “database clientes”</b>: los importadores con Country ARGENTINA cuentan como mercado local.</p>`
     : caja("Exportación", exp, "#0071e3") + caja("Mercado local (Argentina)", loc, "#34c759") +
       `<div class="pstat suma"><span class="plabel">Total</span><div class="pval">${fm(tot)}</div><div class="phint">${fmt0(R.length)} cargas</div></div>`;
 
@@ -3748,8 +3777,8 @@ function renderPartners(recs){
     `<th title="Participación dentro del año ${anoTxt}">% de ${anoTxt}</th>` +
     `<th title="Participación sobre el total de todos los años">% del histórico</th></tr>`;
   for (const r of A.rows){
-    h += `<tr class="rowlink" data-partner="${String(r.name).replace(/"/g, "&quot;")}" tabindex="0" role="button" title="Ver las cargas de ${r.name}">` +
-      `<td>${r.name} <span class="chev">›</span></td>` +
+    h += `<tr class="rowlink" data-partner="${String(r.name).replace(/"/g, "&quot;")}" tabindex="0" role="button" title="Ver las cargas de ${esc(r.name)}">` +
+      `<td>${esc(r.name)} <span class="chev">›</span></td>` +
       A.years.map(y => `<td>${r.porAno[y] ? fmt1(r.porAno[y]) : ""}</td>`).join("") +
       `<td><b>${fmt1(r.total)}</b></td>` +
       `<td>${(r.porAno[yA] || 0) ? pct(r.porAno[yA], totPorAno[yA]) : "—"}</td>` +
@@ -3815,7 +3844,7 @@ function openPartnerDetail(name){
     `Total histórico <b>${fmt1(g.total)} t</b> · ` + anos.map(y => `${y}: <b>${fmt1(g.porAno[y])} t</b>`).join(" · ");
   let h = `<table><tr><th>Ref.</th><th>Producto</th><th>Destino</th><th>ETD</th><th>Tns</th><th>Facturación</th></tr>`;
   for (const r of rs){
-    h += `<tr><td>${r.negocio || "—"}</td><td>${r.product}</td><td>${r.port || "—"}</td>
+    h += `<tr><td>${esc(r.negocio || "—")}</td><td>${esc(r.product)}</td><td>${esc(r.port || "—")}</td>
       <td>${fmtDate(r.etd)}</td><td>${fmt1(r.tns)}</td><td>${fmtUsd(r.usd)}</td></tr>`;
   }
   h += `<tr class="total"><td>Total</td><td></td><td></td><td></td><td>${fmt1(g.total)}</td>
@@ -4475,7 +4504,7 @@ function renderPipeline(recs){
     let h = `<table><tr><th>Cliente</th>` + labels.map(l => `<th>${l}</th>`).join("") + `<th>Total</th></tr>`;
     for (const [n, arr] of clis){
       const t = arr.reduce((a, v) => a + v, 0);
-      h += `<tr><td>${n}</td>` + arr.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td><b>${fmt1(t)}</b></td></tr>`;
+      h += `<tr><td>${esc(n)}</td>` + arr.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") + `<td><b>${fmt1(t)}</b></td></tr>`;
     }
     h += `<tr class="total"><td>Total</td>` + progPorMes.map(v => `<td>${v ? fmt1(v) : ""}</td>`).join("") +
          `<td>${fmt1(totalProg)}</td></tr></table>`;
@@ -4504,7 +4533,7 @@ function renderPipeline(recs){
       labels.map(l => `<th>${l}</th>`).join("") + `<th>Programado</th>${O.filas.some(f => f.toneladas) ? "<th>Contratado</th><th>Sin programar</th>" : ""}</tr>`;
     for (const f of ordenadas){
       const resto = f.toneladas ? f.toneladas - f.programado : null;
-      h += `<tr><td>${f.contrato}</td><td>${f.importador}</td><td>${f.producto || "—"}</td><td>${f.prompt || "—"}</td>` +
+      h += `<tr><td>${esc(f.contrato)}</td><td>${esc(f.importador)}</td><td>${esc(f.producto || "—")}</td><td>${esc(f.prompt || "—")}</td>` +
         idxVis.map(i2 => { const v = f.porMes[i2]; return `<td>${v ? fmt1(v) : ""}</td>`; }).join("") +
         `<td><b>${fmt1(f.programado)}</b></td>` +
         (O.filas.some(x => x.toneladas)
@@ -4698,8 +4727,8 @@ function renderContracts(){
       th("comision", "Comisión") + th("pagosUsa", "Pagos USA") + th("ent", "ENT") + th("saldo", "Saldo (t)") +
       th("periodo", "Per. embarque") + `</tr>`;
     for (const c of filas){
-      h += `<tr><td>${fmtDate(c.fecha)}</td><td>${c.contrato || "—"}</td><td>${c.exportador}</td><td>${c.importador}</td>
-        <td>${c.producto || "—"}</td><td>${c.tipo || "—"}</td><td>${fmt1(c.toneladas)}</td>
+      h += `<tr><td>${fmtDate(c.fecha)}</td><td>${esc(c.contrato || "—")}</td><td>${esc(c.exportador)}</td><td>${esc(c.importador)}</td>
+        <td>${esc(c.producto || "—")}</td><td>${esc(c.tipo || "—")}</td><td>${fmt1(c.toneladas)}</td>
         <td>${c.precio ? fmtUsd(c.precio) : "—"}</td><td>${fmtUsd(c.total)}</td>
         <td>${c.packaging || "—"}</td><td>${c.incoterm || "—"}</td><td>${c.pago || "—"}</td>
         <td>${c.comision ? fmtUsd(c.comision) : "—"}</td><td>${c.pagosUsa ? fmtUsd(c.pagosUsa) : "—"}</td>
@@ -4785,7 +4814,7 @@ function openGrupoDetail(key){
   for (const r of rs){
     const d = diasCobro(r);
     const n = r.usd - (r.flete || 0) - (r.comBroker || 0);
-    h += `<tr><td>${r.negocio || "—"}</td><td>${r.product}</td><td>${r.packing || "—"}</td><td>${r.port || "—"}</td>
+    h += `<tr><td>${esc(r.negocio || "—")}</td><td>${esc(r.product)}</td><td>${esc(r.packing || "—")}</td><td>${esc(r.port || "—")}</td>
       <td>${fmtDate(r.consolidacion)}</td><td>${fmtDate(r.cobro)}</td>
       <td>${d === null ? '<span style="color:var(--faint)">—</span>' : fmt0(d)}</td>
       <td>${fmt1(r.tns)}</td><td>${fmtUsd(r.usd)}</td>
@@ -4830,7 +4859,7 @@ function openDetail(monthIdx, year, group){
   let html = "<table><tr><th>Negocio</th><th>Producto</th><th>ETD</th><th>Tns</th><th>USD</th><th>Comisión</th></tr>";
   for (const r of recs){
     tot.tns += r.tns; tot.usd += r.usd; tot.com += r.comision;
-    html += `<tr><td>${r.negocio || "—"}</td><td>${r.product}</td><td>${fmtDate(r.etd)}</td>
+    html += `<tr><td>${esc(r.negocio || "—")}</td><td>${esc(r.product)}</td><td>${fmtDate(r.etd)}</td>
       <td>${fmt3(r.tns)}</td><td>${fmtUsd(r.usd)}</td><td>${fmtUsd(r.comision)}</td></tr>`;
   }
   html += `<tr class="total"><td>Total</td><td></td><td></td><td>${fmt3(tot.tns)}</td><td>${fmtUsd(tot.usd)}</td><td>${fmtUsd(tot.com)}</td></tr>
@@ -4968,7 +4997,7 @@ function renderProductTable(a, yA){
   const prods = Object.keys(a.prodTotals).sort((x, y) => (tot[y] || 0) - (tot[x] || 0));
   let html = `<table><tr><th>Producto${usd ? " (USD)" : " (t)"}</th>` + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
   for (const p of prods){
-    html += `<tr><td>${p}</td>` + (porMes[p] || []).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td><b>${f(tot[p] || 0)}</b></td></tr>`;
+    html += `<tr><td>${esc(p)}</td>` + (porMes[p] || []).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td><b>${f(tot[p] || 0)}</b></td></tr>`;
   }
   html += `<tr class="total"><td>Total</td>` + (usd ? a.usd : a.tns).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td>${f(usd ? a.totUsd : a.totTns)}</td></tr></table>`;
   document.getElementById("prodTable").innerHTML = html;
@@ -4986,7 +5015,7 @@ function renderProductCompare(a, b, yA, yB){
     const va = a.prodTotals[p] || 0, vb = b.prodTotals[p] || 0, d = va - vb;
     const pct = vb ? (d / vb * 100) : null;
     const cls = d >= 0 ? "up" : "down";
-    html += `<tr><td>${p}</td><td>${fmt1(va)}</td><td>${fmt1(vb)}</td>
+    html += `<tr><td>${esc(p)}</td><td>${fmt1(va)}</td><td>${fmt1(vb)}</td>
       <td class="delta ${cls}">${d >= 0 ? "+" : ""}${fmt1(d)}</td>
       <td class="delta ${cls}">${pct === null ? "nuevo" : (pct >= 0 ? "+" : "") + pct.toFixed(1).replace(".", ",") + "%"}</td></tr>`;
   }
@@ -5115,7 +5144,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
+    ["consSection", "gruposCard", "mktCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -5147,7 +5176,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
+    ["consSection", "gruposCard", "mktCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -5443,7 +5472,7 @@ function renderFilterPanel(){
   const box = document.getElementById("prodChecks");
   box.innerHTML = prods.map(p => `
     <label><input type="checkbox" value="${p.replace(/"/g, "&quot;")}" ${sel.includes(p) ? "checked" : ""}>
-    ${SP && SP.a.test(p) ? (SP.a.key === "nop" ? "🌿 " : "🥜 ") : ""}${p}</label>`).join("");
+    ${SP && SP.a.test(p) ? (SP.a.key === "nop" ? "🌿 " : "🥜 ") : ""}${esc(p)}</label>`).join("");
   box.querySelectorAll("input").forEach(inp => {
     inp.onchange = () => {
       const chosen = [...box.querySelectorAll("input:checked")].map(i => i.value);
@@ -5603,7 +5632,7 @@ document.getElementById("cfgShare").onclick = async () => {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e){}
   if (!Object.values(saved).some(c => c && c.SHEET_ID)){
-    alert("Primero guardá la configuración (Guardar y actualizar) y después generá el link.");
+    aviso("Primero guardá la configuración (Guardar y actualizar) y después generá el link.");
     return;
   }
   const link = linkCompartir();
@@ -5758,11 +5787,33 @@ document.getElementById("rollZoomBg").onclick = e => { if (e.target.id === "roll
 /* Cerrar modales con Escape */
 window.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
-  cerrarRollZoom();
-  document.getElementById("detailBg").classList.remove("open");
-  document.getElementById("modalBg").classList.remove("open");
-  closeSheet();
+  // cierra solo el de arriba: zoom → detalle → configuración → menú inferior
+  const abierto = id => { const el = document.getElementById(id); return el && el.classList.contains("open"); };
+  if (abierto("rollZoomBg")) cerrarRollZoom();
+  else if (abierto("detailBg")) document.getElementById("detailBg").classList.remove("open");
+  else if (abierto("modalBg")) document.getElementById("modalBg").classList.remove("open");
+  else closeSheet();
 });
+
+/* Foco de los diálogos: al abrir va adentro; al cerrar vuelve al botón que lo abrió */
+if (typeof MutationObserver === "function"){
+  ["rollZoomBg", "detailBg", "modalBg", "sheet"].forEach(id => {
+    const bg = document.getElementById(id); if (!bg) return;
+    let previo = null, estaba = bg.classList.contains("open");
+    new MutationObserver(() => {
+      const ahora = bg.classList.contains("open");
+      if (ahora === estaba) return;
+      estaba = ahora;
+      if (ahora){
+        previo = document.activeElement;
+        const destino = bg.querySelector(".actions .primary, .closebar button, input, select, button");
+        if (destino) setTimeout(() => destino.focus({ preventScroll: true }), 30);
+      } else if (previo && document.contains(previo) && previo.focus){
+        previo.focus({ preventScroll: true }); previo = null;
+      }
+    }).observe(bg, { attributes: true, attributeFilter: ["class"] });
+  });
+}
 
 let paintedFromCache = false;
 

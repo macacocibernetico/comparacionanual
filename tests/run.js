@@ -58,7 +58,7 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   const code = [...h.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m => m[1]).filter(s => s.trim()).at(-1);
   const m = new Function(code + ';return {UI,CONFIG,DATA,render,renderProductCompare,demoData};')();
   const g = id => document.getElementById(id);
-  const TARJ = ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard', 'bizCard', 'compareCard'];
+  const TARJ = ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard', 'bizCard', 'compareCard', 'mktCard'];
 
   // Δ % con coma decimal, igual que el resto de la tabla
   m.renderProductCompare({ prodTotals: { A: 554.16, B: 100 } }, { prodTotals: { A: 348.62, B: 100 } }, 2026, 2025);
@@ -75,6 +75,14 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('3 modales con role=dialog y nombre', (h.match(/class="modal[^"]*" role="dialog" aria-modal="true" aria-labelledby="\w+"/g) || []).length === 3);
   t('hay <main> y el skip-link apunta a él', /<main id="main"/.test(h) && /href="#main" class="skip-link"/.test(h) && /<\/main>/.test(h));
   t('pill Todos con aria-pressed', /data-y="all" aria-pressed=/.test(h));
+
+  // textos de la planilla escapados y errores en palabras simples
+  m.renderProductCompare({ prodTotals: { "Maní <b>X</b> & Co": 10 } }, { prodTotals: { "Maní <b>X</b> & Co": 5 } }, 2026, 2025);
+  t('producto con < y & se escapa', /Maní &lt;b&gt;X&lt;\/b&gt; &amp; Co/.test(g('prodCompare').innerHTML));
+  const ec = new Function(code + ';return errorCriollo;')();
+  t('error de red en criollo', /No me pude conectar/.test(ec(new Error("Failed to fetch"))));
+  t('error 404 en criollo', /No encuentro la planilla/.test(ec(new Error("HTTP 404"))));
+  t('sin alert() en el código', !/[^.\w]alert\(/.test(code));
 
   // mobile: negocios en dos filas (sin carrusel oculto) y filtro de productos fuera del ☰
   const mob = h.slice(h.indexOf('@media(max-width:720px)'));

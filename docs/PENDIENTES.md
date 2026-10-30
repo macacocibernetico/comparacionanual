@@ -1,27 +1,29 @@
 # Pendientes
 
 ## A confirmar con Agustín
-- [ ] Database de clientes: ¿cruza bien ahora? (antes 59 importadores "no encontrados" aunque estaban en Database_old). Necesita el link de la pestaña con `#gid=` en ⚙️ Configurar → Brokerage.
+- [x] Database de clientes: cruza bien (confirmado el 30/10/2026).
 - [ ] Último contrato de LUDGER WEHRY IMP EXP (20/8) aparece.
 - [ ] Link para compañeros: probado con un compañero real.
+- [ ] Rediseño visual (rama `rediseno-visual`): revisarlo con las planillas reales antes de mergear a `main`.
 
-## Revisión UX/UI (puntaje 64/100) — ya hecho
+## Revisión UX/UI — ya hecho
 - Contraste `--faint`/`--muted` en tema claro; botón primario en oscuro.
 - Sacados los badges "CLICK PARA VER CARGAS" → pista en la bajada.
 - `.meta` para años/conteos (antes parecían botones con `.clickable`).
-- 🖼/📄 de exportar siempre visibles.
 - `confirm()` + backup al importar config por link.
-- `esc()` en la sección Mercado.
+- Mobile: filtro de productos siempre a la vista; negocios y años en varias filas.
+- Errores de carga en palabras simples + botón **Reintentar**; los `alert()` pasaron a un aviso breve abajo.
+- Modales: `role="dialog"`, `aria-modal`, nombre; el foco entra al abrir y vuelve al botón al cerrar; Escape cierra solo el de arriba.
+- `esc()` en todos los textos que vienen de la planilla (productos, empresas, destinos, contratos, filtro).
+- `<title>` = `h1` ("Dashboard de Negocios"); emojis de los botones fijos en `aria-hidden`.
+- Si falla la carga, la sección Mercado ya no queda con datos viejos.
+- Rediseño visual completo (ver `docs/CHECKLIST-FUNCIONAL.md`).
 
-## Revisión UX/UI — pendiente (en orden sugerido)
-1. Sobrecarga: hacer plegables el grid mensual, "Detalle mensual por producto" y `#compareCard`; arrancar con la mayoría plegada; botón "Plegar todo / Desplegar todo" en la nav "Ir a".
-2. Mobile: `#btnFilter` (filtro de productos) siempre visible en la toolbar, no dentro de ☰; chip de filtro activo siempre visible.
-3. Quitar botones duplicados "⤓ Exportar a PDF" (`#btnPartnerPdf`, `#btnFocusPdf`, `#btnContractsPdf`) y dejar solo `.cardtools`.
-4. Errores en criollo + botón **Reintentar** (`init({force:true})`) en el banner; reemplazar `alert()`.
-5. Modales: `role="dialog"`, `aria-modal`, foco al abrir/cerrar; Escape cierra solo el de arriba.
-6. Mismo patrón de rótulos en todas las `.consbar` (como `.ctlab` de Programación).
-7. Escapar con `esc()` todos los textos que vienen de la planilla (`renderPartners`, contratos, NEWSAN, grupos…).
-8. Menores: unificar `<title>` y `h1`; emojis en `aria-hidden`; `.tab.soon` legible.
+## Revisión UX/UI — pendiente
+1. Sobrecarga: hacer plegables el grid mensual, "Detalle mensual por producto" y `#compareCard`; botón "Plegar todo / Desplegar todo" en "Ir a".
+2. Botones "⤓ Exportar a PDF" propios de Exportadores, NEWSAN y Contratos: **no son duplicados** (hacen un PDF con la tabla real, distinto del PDF-imagen del menú "···"). Si se quiere menos ruido, pasarlos adentro del menú "···" de su tarjeta.
+3. Mismo patrón de rótulos en todas las `.consbar` (como `.ctlab` de Programación).
+4. Emojis dentro de botones que arma el JS (🎛 Productos, 🌿/🥜 desglose): el texto lo genera `filterLabel()` y `currentSplit()`.
 
 ## Limpieza
 - Borrar código muerto: `renderTrend`, `renderProductChart` (sus canvas ya no existen).

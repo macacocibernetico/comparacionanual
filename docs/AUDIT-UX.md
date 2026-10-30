@@ -167,4 +167,6 @@ Resueltos y verificados en el navegador y con `node tests/run.js` (22 ok): **01,
 - **03:** en mobile los 5 negocios se ven en dos filas (todos dentro de 375 px, antes "Σ Total" llegaba a 630 px).
 - **04:** en mobile el filtro de productos queda en la barra, fuera del ☰ (en escritorio vuelve a "Ajustes de vista").
 
-Pendientes: 09 a 14. (Los pills de año en mobile ya van en varias filas.)
+- **10, 11, 12:** `<title>` igual al `h1`, etiqueta propia para el gráfico de NEWSAN, emojis de los botones fijos ocultos para lectores de pantalla.
+
+Pendientes: 09 (sin medir de nuevo), 13 y 14 (escala visual; en parte resuelto por el rediseño).
