@@ -914,6 +914,11 @@
   .etpill{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
   .etpill i{width:9px;height:9px;border-radius:99px;display:inline-block}
   @media(max-width:720px){ .egrid{grid-template-columns:1fr 1fr} .egs{display:none} #embBusca{max-width:none;width:100%} .edhead>div{flex:1 1 100%} }
+  .comprovsel{border-radius:99px;padding:8px 14px;border:1px solid var(--border2);background:var(--panel);color:var(--text);font:inherit;font-size:.85rem;max-width:230px;min-height:40px}
+  .comnota{display:flex;align-items:center;gap:10px;background:var(--accent-soft);color:var(--text);border-radius:12px;padding:8px 14px;font-size:.84rem;margin:0 0 14px}
+  .comnota button{background:none;border:none;color:var(--accent);font-weight:600;cursor:pointer;padding:4px 8px}
+  #provBusca{min-width:200px;border-radius:99px;padding:8px 14px;border:1px solid var(--border2);background:var(--panel);color:var(--text);font:inherit;font-size:.85rem}
+  #provAlcance b{margin-left:4px;opacity:.7}
   .comdet2{margin:10px 0 0} .comdet2 summary{cursor:pointer;color:var(--accent);font-size:.85rem;font-weight:500;padding:6px 0}
 </style>
 </head>
@@ -1217,7 +1222,9 @@
           <button type="button" data-cp="anio">Año elegido</button>
           <button type="button" data-cp="hist">Histórico</button>
         </div>
+        <select id="comProv" class="comprovsel" aria-label="Filtrar el panel por proveedor"></select>
       </div>
+      <div class="comnota" id="comFiltroNota" style="display:none" role="status"></div>
       <div id="comBody"></div>
       </div>
     </div>
@@ -3825,7 +3832,7 @@ function infoClienteDb(nombre){
 /* Contratos de la vista (sub-vista Maní / Aceite + Expeller y exportadores excluidos) */
 function contratosVista(todas){
   const sv = todas ? null : subActual(), lista = excluidosDe(UI.biz);
-  return (CONTRACTS[UI.biz] || []).filter(c => c.fecha && (!sv || !sv.test || sv.test({ product: c.producto })) &&
+  return (CONTRACTS[UI.biz] || []).filter(c => c.fecha && (!UI.comProv || claveProv(c.exportador) === UI.comProv) && (!sv || !sv.test || sv.test({ product: c.producto })) &&
     (UI.verExcluidos || !lista.some(n => mismaEmpresa(c.exportador, n))));
 }
 
@@ -3925,17 +3932,34 @@ function dibujarGlobo(cont, valores, puntos, opts){
 }
 
 /* ---------- panel ---------- */
-function renderComercial(recs, yA){
+const claveProv = n => normEmpresa(n) || n || "(sin dato)";
+function renderComercial(recsAll, yA){
   const card = document.getElementById("comCard");
   const bz = BUSINESSES.find(x => x.key === UI.biz);
   if (!card || !bz || bz.partnerViews !== true){ if (card) card.style.display = "none"; return; }
   card.style.display = "";
+  // filtro por proveedor: todo el panel (globo, cartera, embudo, precios) mira solo a ese exportador
+  const provs = new Map();
+  for (const r of recsAll){ const k = claveProv(r.exporter), x = provs.get(k) || { k, n: r.exporter || "(sin dato)", tns: 0 }; x.tns += r.tns || 0; provs.set(k, x); }
+  const opciones = [...provs.values()].sort((a, b) => b.tns - a.tns);
+  if (UI.comProv && !provs.has(UI.comProv)) UI.comProv = "";
+  const selProv = document.getElementById("comProv");
+  selProv.innerHTML = `<option value="">Todos los proveedores</option>` + opciones.map(o => `<option value="${esc(o.k)}">${esc(o.n)}</option>`).join("");
+  selProv.value = UI.comProv || "";
+  selProv.onchange = () => { UI.comProv = selProv.value; saveUI(); renderComercial(recsAll, yA); try { decorarExportables(); } catch(e){} };
+  COM.recsAll = recsAll;
+  const recs = UI.comProv ? recsAll.filter(r => claveProv(r.exporter) === UI.comProv) : recsAll;
+  const nota = document.getElementById("comFiltroNota");
+  nota.style.display = UI.comProv ? "" : "none";
+  nota.innerHTML = UI.comProv ? `Viendo solo lo de <b>${esc(provs.get(UI.comProv).n)}</b> <button type="button" id="comQuitarProv">Ver todos</button>` : "";
+  const qp = document.getElementById("comQuitarProv");
+  if (qp) qp.onclick = () => { UI.comProv = ""; saveUI(); renderComercial(recsAll, yA); };
   const vista = ["mapa", "cartera", "embudo", "prov"].includes(UI.comVista) ? UI.comVista : "mapa";
   const hist = UI.comPeriodo === "hist";
   const wire = (sel, attr, key, val) => document.querySelectorAll(sel).forEach(b => {
     const on = b.dataset[attr] === val;
     b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
-    b.onclick = () => { UI[key] = b.dataset[attr]; saveUI(); renderComercial(recs, yA); try { decorarExportables(); } catch(e){} };
+    b.onclick = () => { UI[key] = b.dataset[attr]; saveUI(); renderComercial(recsAll, yA); try { decorarExportables(); } catch(e){} };
   });
   wire("#comVista button", "cv", "comVista", vista);
   wire("#comPeriodo button", "cp", "comPeriodo", hist ? "hist" : "anio");
@@ -4255,7 +4279,7 @@ function renderComProv(el, R, recs, hist, yA){
   const prov = [...m.values()].sort((a, b) => b.tns - a.tns), totT = prov.reduce((s, x) => s + x.tns, 0);
   const top3 = prov.slice(0, 3).reduce((s, x) => s + x.tns, 0);
   const hace24 = new Date(Date.now() - 730 * DIA);
-  const recientes = new Set(recs.filter(r => r.etd && fechaD(r.etd) >= hace24).map(r => normEmpresa(r.exporter)));
+  const recientes = new Set((COM.recsAll || recs).filter(r => r.etd && fechaD(r.etd) >= hace24).map(r => normEmpresa(r.exporter)));
   const sinOps = db.filter(x => x.estado !== "INACTIVO" && !recientes.has(normEmpresa(x.n)) && ![...recientes].some(n => n && mismaEmpresa(n, x.n)));
   // precios por país y por producto, contra el año anterior (mismos meses)
   const mesMax = Math.max(0, ...recs.filter(r => r.year === yA).map(r => r.month));
@@ -4287,6 +4311,23 @@ function renderComProv(el, R, recs, hist, yA){
   const soloOil = [...cx.values()].filter(x => x.oil > 0 && !x.mani).sort((a, b) => b.oil - a.oil);
   const interesados = (CLI_DB[UI.biz] || []).filter(c => /oil|aceite|expeller/i.test(c.prod || "")).filter(c => {
     const hit = cx.get(normEmpresa(c.n)) || [...cx.values()].find(x => mismaEmpresa(x.n, c.n)); return !hit || !hit.oil; });
+  // lista: los que tuvieron cargas; con "Toda la base" se suman los de la database sin cargas en el período
+  const alcance = COM.provAlcance === "base" && db.length && !UI.comProv ? "base" : "cargas";
+  const filasProv = [...prov];
+  for (const x of db){
+    const k = normEmpresa(x.n);
+    if (!m.has(k) && ![...m.keys()].some(k2 => k2 && mismaEmpresa(k2, k))) filasProv.push({ n: x.n, tns: 0, usd: 0, cargas: 0, ult: null, estado: x.estado });
+  }
+  const qProv = normU(COM.provBusca);
+  const filasVer = (alcance === "base" ? filasProv : prov).filter(x => !qProv || normU(x.n).includes(qProv));
+  const cm = new Map();
+  if (UI.comProv) for (const r of R){
+    const k = claveProv(r.importer), x = cm.get(k) || { n: r.importer || "(sin dato)", pais: r.pais, tns: 0, usd: 0, cargas: 0, ult: null };
+    x.tns += r.tns || 0; x.usd += r.usd || 0; x.cargas++;
+    if (r.etd){ const d = fechaD(r.etd); if (!x.ult || d > x.ult) x.ult = d; }
+    cm.set(k, x);
+  }
+  const clientesProv = [...cm.values()].sort((a, b) => b.tns - a.tns);
   const caja = (t, v, h) => `<div class="pstat"><span class="plabel">${t}</span><div class="pval">${v}</div><div class="phint">${h}</div></div>`;
   const chips = arr => arr.length ? arr.map(c => `<span class="tag exp">${esc(c)}</span>`).join(" ") : "—";
   el.innerHTML = `<div class="pipestats comk">
@@ -4295,11 +4336,18 @@ function renderComProv(el, R, recs, hist, yA){
       ${caja("Los 3 principales", pctTxt(top3, totT), "de las toneladas")}
       ${db.length ? caja("En la base sin operaciones", fmt0(sinOps.length), "proveedores no inactivos sin cargas en 24 meses") : caja("Database de proveedores", "—", "conectala en ⚙️ Configurar")}
     </div>
-    <h3 class="subh">Proveedores</h3>
+    <div class="consbar embhead"><h3 class="subh" style="margin:0">Proveedores</h3>
+      <div class="seg" id="provAlcance" role="group" aria-label="Qué proveedores listar">
+        <button type="button" data-pa="cargas">Con cargas ${hist ? "(histórico)" : `en ${yA}`} <b>${fmt0(prov.length)}</b></button>
+        ${db.length && !UI.comProv ? `<button type="button" data-pa="base">Toda la base <b>${fmt0(filasProv.length)}</b></button>` : ""}
+      </div>
+      <input type="search" id="provBusca" placeholder="Buscar proveedor…" aria-label="Buscar proveedor" value="${esc(COM.provBusca || "")}"></div>
     ${tablaCorta("comTProv", ["Proveedor", "País", "Cargas", "Toneladas", "% t", "Facturación", "Última carga", "BRC", "Ofrece"],
-      prov.map(x => { const i = infoProv(x.n);
-        return [esc(x.n), i ? esc((paisInfo(i.pais) || {}).es || i.pais || "—") : "—", fmt0(x.cargas), fmt1(x.tns), `${pctTxt(x.tns, totT)}${shareBar(x.tns, totT, "var(--pvp0)")}`,
-          fmtUsd(x.usd), fFecha(x.ult), i ? (i.brc ? "✓" : "—") : "—", i ? chips(i.caps) : `<span class="comsub">no está en la base</span>`]; }), { max: 10 })}
+      filasVer.map(x => { const i = infoProv(x.n);
+        return [esc(x.n) + (x.cargas ? "" : ` <span class="tag">${esc(x.estado || "sin cargas")}</span>`), i ? esc((paisInfo(i.pais) || {}).es || i.pais || "—") : "—", x.cargas ? fmt0(x.cargas) : "—", x.cargas ? fmt1(x.tns) : "—",
+          x.cargas ? `${pctTxt(x.tns, totT)}${shareBar(x.tns, totT, "var(--pvp0)")}` : "—",
+          x.cargas ? fmtUsd(x.usd) : "—", fFecha(x.ult), i ? (i.brc ? "✓" : "—") : "—", i ? chips(i.caps) : `<span class="comsub">no está en la base</span>`]; }), { max: 10, vacio: "Ningún proveedor coincide con la búsqueda." })}
+    ${UI.comProv ? `<h3 class="subh" style="margin-top:22px">Clientes de este proveedor</h3>${tablaCorta("comTProvCli", ["Cliente", "País", "Cargas", "Toneladas", "Facturación", "Última carga"], clientesProv.map(x => [esc(x.n), esc((paisInfo(x.pais) || {}).es || "—"), fmt0(x.cargas), fmt1(x.tns), fmtUsd(x.usd), fFecha(x.ult)]), { max: 10 })}` : ""}
     ${sinOps.length ? `<details class="comdet2"><summary>${fmt0(sinOps.length)} proveedores de la base sin cargas en los últimos 24 meses</summary>
       <div class="tablewrap">${tablaHtml(["Proveedor", "País", "Estado", "BRC", "Ofrece"], sinOps.map(x => [esc(x.n), esc((paisInfo(x.pais) || {}).es || x.pais || "—"), esc(x.estado || "—"), x.brc ? "✓" : "—", chips(x.caps)]))}</div></details>` : ""}
     <div class="grid" style="margin:18px 0 0">
@@ -4313,7 +4361,17 @@ function renderComProv(el, R, recs, hist, yA){
     </div>
     ${interesados.length ? `<p class="comsub"><b>${pl(interesados.length, "empresa")}</b> de la base marcan interés en aceite o expeller y nunca lo compraron:</p><div class="prosp">${interesados.slice(0, 24).map(c => `<span>${esc(c.n)}</span>`).join("")}${interesados.length > 24 ? `<span class="mas">y ${fmt0(interesados.length - 24)} más</span>` : ""}</div>` : ""}
     <p class="comsub">Precio = facturación ÷ toneladas de las cargas por ETD. ${hist ? "" : `La comparación usa los mismos meses de ${yA - 1}.`} El país es el del cliente en la database.</p>`;
-  wireTablasCortas(el, () => renderComProv(el, R, recs, hist, yA));
+  const redib = () => renderComProv(el, R, recs, hist, yA);
+  wireTablasCortas(el, redib);
+  el.querySelectorAll("#provAlcance button").forEach(b => {
+    const on = b.dataset.pa === alcance; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { COM.provAlcance = b.dataset.pa; redib(); };
+  });
+  const bq = el.querySelector("#provBusca");
+  bq.oninput = () => {
+    COM.provBusca = bq.value; const pos = bq.selectionStart; redib();
+    const n = el.querySelector("#provBusca"); n.focus(); try { n.setSelectionRange(pos, pos); } catch(e){}
+  };
 }
 
 function renderMercado(recs, yA){
