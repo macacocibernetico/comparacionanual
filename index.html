@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   /* ============ Paleta clara (por defecto) ============ */
@@ -726,6 +727,17 @@
   .cardtools .kmenu button{background:transparent;border:none;border-radius:10px;text-align:left;padding:9px 12px;font-size:.84rem;color:var(--text);width:100%}
   .cardtools .kmenu button:hover{background:var(--panel2)}
   @media(max-width:720px){ .cardtools{position:absolute;top:14px;right:52px;margin:0} }
+
+  /* Tipografía de los KPIs (como "$41,540" de la referencia): Plus Jakarta Sans,
+     bold limpio y símbolos en la misma línea base que los dígitos */
+  .kpi{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif}
+  .kpi .value{font-weight:700;font-size:2.1rem;color:#0f172a;letter-spacing:-.02em;
+    -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  html[data-theme="dark"] .kpi .value{color:#f8fafc}
+  .kpi .value small,.kpi .value small.cur{font-size:.62em;font-weight:600;letter-spacing:0;vertical-align:baseline;color:var(--kpi-label)}
+  .kpi .value small.cur{margin-right:.18em}
+  .kpi .value small.unit{margin-left:.06em}
+  @media(max-width:720px){ .kpis .kpi .value{font-size:1.12rem;letter-spacing:-.02em} }
 </style>
 </head>
 <body>
