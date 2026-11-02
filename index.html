@@ -886,6 +886,15 @@
   @media(max-width:600px){ .fun{grid-template-columns:minmax(0,1fr) 70px} .funb{grid-column:1/-1;grid-row:2} }
   .vermas2{display:block;margin:8px auto 0;background:none;border:none;color:var(--accent);font-weight:600;font-size:.84rem;padding:8px 14px;border-radius:99px;cursor:pointer}
   .vermas2:hover{background:var(--accent-soft);transform:none}
+  .lfuera{display:none!important}
+  body.printing .lfuera{display:table-row!important}
+  body.printing .listabar,body.printing .listamas{display:none!important}
+  .listabar{display:flex;align-items:center;gap:10px;margin:2px 0 8px}
+  .listabuscar{flex:1 1 220px;max-width:340px;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:99px;padding:8px 14px;font-size:.85rem;outline:none}
+  .listabuscar:focus{border-color:var(--accent)}
+  .listacuenta{color:var(--faint);font-size:.78rem;white-space:nowrap}
+  .listamas{display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+  .listamas .vermas2{margin:8px 0 0}
   .comhint{color:var(--faint);font-size:.84rem;background:var(--panel2);border-radius:12px;padding:10px 14px;margin:0}
   .comdet{background:var(--panel2);border-radius:16px;padding:14px 16px}
   .comdeth{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
@@ -3827,6 +3836,48 @@ function tablaCorta(id, cab, filas, opts = {}){
   return `<div class="tablewrap" id="${id}">${tablaHtml(cab, todas ? filas : filas.slice(0, max), opts)}</div>` +
     (filas.length > max + 3 ? `<button type="button" class="vermas2" data-tc="${id}" aria-controls="${id}">${todas ? "Ver menos" : `Ver ${pl(filas.length, "fila")}`}</button>` : "");
 }
+/* Listas largas: muestran las primeras 10 filas, con buscador y "Mostrar más".
+   La búsqueda solo oculta o muestra filas que ya existen: no vuelve a armar la tabla. */
+const LISTAS = new Map();
+const normBusca = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+function listaFiltrable(el, id, paso = 10){
+  const t = el && el.querySelector("table");
+  if (!t) return;
+  const filas = [...t.querySelectorAll("tr")].filter(tr => !tr.querySelector("th") && !tr.classList.contains("total"));
+  if (filas.length <= paso) return;
+  const st = LISTAS.get(id) || { q: "", n: paso };
+  LISTAS.set(id, st);
+  const claves = filas.map(tr => normBusca(tr.cells[0] ? tr.cells[0].textContent : ""));
+  const barra = document.createElement("div");
+  barra.className = "listabar";
+  barra.innerHTML = `<input type="search" class="listabuscar" placeholder="Buscar en la lista…" aria-label="Buscar en la lista" value="${esc(st.q)}"><span class="listacuenta"></span>`;
+  const mas = document.createElement("div");
+  mas.className = "listamas";
+  mas.innerHTML = `<button type="button" class="vermas2" data-lm="mas"></button><button type="button" class="vermas2" data-lm="todas">Ver todas</button><button type="button" class="vermas2" data-lm="menos">Ver menos</button>`;
+  el.insertBefore(barra, el.firstChild);
+  t.insertAdjacentElement("afterend", mas);
+  const cuenta = barra.querySelector(".listacuenta"), bMas = mas.querySelector('[data-lm="mas"]'),
+        bTodas = mas.querySelector('[data-lm="todas"]'), bMenos = mas.querySelector('[data-lm="menos"]');
+  const aplicar = () => {
+    const q = normBusca(st.q);
+    let coinciden = 0;
+    filas.forEach((tr, i) => {
+      const ok = !q || claves[i].includes(q);
+      if (ok) coinciden++;
+      tr.classList.toggle("lfuera", !ok || coinciden > st.n);
+    });
+    cuenta.textContent = `${fmt0(Math.min(coinciden, st.n))} de ${fmt0(q ? coinciden : filas.length)}`;
+    bMas.style.display = bTodas.style.display = coinciden > st.n ? "" : "none";
+    bMas.textContent = `Mostrar más (${fmt0(Math.min(paso, coinciden - st.n))})`;
+    bMenos.style.display = st.n > paso && coinciden <= st.n ? "" : "none";
+  };
+  barra.querySelector("input").oninput = e => { st.q = e.target.value; st.n = paso; aplicar(); };
+  bMas.onclick = () => { st.n += paso; aplicar(); };
+  bTodas.onclick = () => { st.n = filas.length; aplicar(); };
+  bMenos.onclick = () => { st.n = paso; aplicar(); };
+  aplicar();
+}
+
 function wireTablasCortas(el, redibujar){
   el.querySelectorAll("button[data-tc]").forEach(b => b.onclick = () => {
     const id = b.dataset.tc; COM.abiertas.has(id) ? COM.abiertas.delete(id) : COM.abiertas.add(id); redibujar();
@@ -4515,6 +4566,8 @@ function renderMercado(recs, yA){
   };
   document.getElementById("mktExp").innerHTML = R.length ? tabla("exporter", false) : `<p class="empty">Sin cargas en el período.</p>`;
   document.getElementById("mktCli").innerHTML = R.length ? tabla("importer", true) : `<p class="empty">Sin cargas en el período.</p>`;
+  listaFiltrable(document.getElementById("mktExp"), "mktExp");
+  listaFiltrable(document.getElementById("mktCli"), "mktCli");
 
   // 3) Frecuencia: cargas (ETD) y contratos (Fecha) por cliente
   const F = new Map();
@@ -4556,6 +4609,7 @@ function renderMercado(recs, yA){
     Frecuencia = días promedio entre una fecha y la siguiente (con 1 sola fecha no se puede calcular).
     Cargas / mes sobre ${meses} mes(es) del período. “Último contrato” mira toda la hoja ALL CONTRATOS (cualquier año, producto o exportador). Los contratos se emparejan con el cliente por nombre (ignora S.A., SRL, puntos).</p>`;
   document.getElementById("mktFreq").innerHTML = filas.length ? h : `<p class="empty">Sin cargas ni contratos en el período.</p>`;
+  listaFiltrable(document.getElementById("mktFreq"), "mktFreq");
 }
 
 function renderPartners(recs){
@@ -4580,7 +4634,11 @@ function renderPartners(recs){
     sw.checked = UI.partnerOil !== false;
     sw.onchange = () => { UI.partnerOil = !!sw.checked; saveUI(); render(); };
   }
-  const incluyeOil = UI.partnerOil !== false;
+  // con sub-vistas (Maní / Aceite + Expeller) el recorte ya viene hecho: el switch no hace nada
+  const hayVistas = !!subVistas();
+  const swLabel = sw && sw.closest("label");
+  if (swLabel) swLabel.style.display = hayVistas ? "none" : "";
+  const incluyeOil = hayVistas || UI.partnerOil !== false;
   const recsP = incluyeOil ? recs : recs.filter(r => !isOilOrExpeller(r.product));
 
   const A = aggPartners(recsP, campo);
@@ -4713,6 +4771,7 @@ function renderPartners(recs){
         ${otrasN ? `<br>El gráfico muestra las <b>${TOP} principales</b> de ${anoTxt} y agrupa las otras ${otrasN} en “Otras”; esta tabla incluye a todas.` : ""}
         ${incluyeOil ? "" : `<br><b>Excluyendo Peanut oil y Expeller</b>: ${fmt0(recs.length - recsP.length)} carga(s) quedaron fuera de estos números.`}</p>`;
   tabla.innerHTML = h;
+  listaFiltrable(tabla, "partnerTable");
   // datos crudos para generar el PDF (sin depender del HTML)
   LAST_PARTNER_PDF = {
     titulo: `${(BUSINESSES.find(x => x.key === UI.biz) || {}).name || UI.biz} — ${campo === "exporter" ? "Exportadores" : "Importadores"}`,
