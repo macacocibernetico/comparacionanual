@@ -6563,8 +6563,11 @@ function renderDetalle(){
   tendBox.onchange = () => { DET.tend = tendBox.checked; renderDetalle(); };
 
   // grupos ordenados por volumen
-  const orden = [...G.entries()].filter(([, g]) => detSuma(g.tns) > 0 || detSuma(g.n) > 0).sort((x, y) => detSuma(y[1].tns) - detSuma(x[1].tns));
+  const orden = [...G.entries()].filter(([k, g]) => (detSuma(g.tns) > 0 || detSuma(g.n) > 0) && !(met === "precio" && k === "BF")).sort((x, y) => detSuma(y[1].tns) - detSuma(x[1].tns));
   const lineas = met === "precio";
+  // el precio no incluye BF (se vende distinto): ni en la vista por tipo ni en las líneas Raw / Blanched
+  const TIPOS_PRECIO = ["Raw", "Blanched"];
+  const GT = lineas && por === "general" ? detAgrupar(recs, yA, MM, "tipo") : null;
   const chips = document.getElementById("detChips");
   const PAL = typeof PALETTE !== "undefined" ? PALETTE : ["#0071e3", "#ff9500", "#34c759", "#af52de", "#ff2d55", "#5ac8fa", "#ffcc00", "#ff6482"];
   const colorDe = (k, i) => por === "tipo" && GRUPO_COLOR[k] ? GRUPO_COLOR[k] : PAL[i % PAL.length];
@@ -6593,9 +6596,12 @@ function renderDetalle(){
   };
   const y2 = (met === "com" || met === "etd") && por === "general";
   if (por === "general"){
-    if (lineas) ds.push(linea(String(yA), tot, cs("--accent") || "#0071e3", { _y: yA }));
+    if (lineas){
+      ds.push(linea("Total " + yA, tot, cs("--text") || "#1d1d1f", { _y: yA, borderWidth: 3.2 }));
+      TIPOS_PRECIO.forEach(k => { if (GT.get(k) && detSuma(GT.get(k).tns) > 0) ds.push(linea(k + " " + yA, GT.get(k), GRUPO_COLOR[k], { _y: yA, borderWidth: 2.2 })); });
+    }
     else ds.push({ type: "bar", label: String(yA), data: labels.map((_, m) => detValor(tot, met, m)), backgroundColor: cs("--accent") || "#0071e3", borderRadius: 6, borderSkipped: false, maxBarThickness: 56, _y: yA });
-    if (totB && DET.cmp) ds.push({ ...linea(String(yB), totB, "#8e8e93", { borderDash: [6, 4], borderWidth: 2, pointRadius: 3, tension: .25, _y: yB }), data: labels.map((_, m) => detValor(totB, met, m)) });
+    if (totB && DET.cmp) ds.push({ ...linea(lineas ? "Total " + yB : String(yB), totB, "#8e8e93", { borderDash: [6, 4], borderWidth: 2, pointRadius: 3, tension: .25, _y: yB }), data: labels.map((_, m) => detValor(totB, met, m)) });
     if (y2){
       const dt = labels.map((_, m) => met === "com" ? (tot.usd[m] ? tot.com[m] / tot.usd[m] * 100 : null) : (tot.n[m] ? tot.tns[m] / tot.n[m] : null));
       ds.push({ type: "line", label: met === "com" ? "% sobre la facturación" : "Toneladas por carga", data: dt, yAxisID: "y2", borderColor: "#af52de", backgroundColor: "#af52de", borderWidth: 2.5, tension: .25, spanGaps: true, pointRadius: 3,
@@ -6658,8 +6664,9 @@ function renderDetalle(){
   const cab = `<tr><th>${por === "general" ? "" : esc(DET_POR[por])}</th>${labels.map(m => `<th>${m}</th>`).join("")}<th>${met === "precio" ? "Año" : "Total"}</th></tr>`;
   let filas = "";
   if (por === "general"){
-    filas += fila(String(yA), tot);
-    if (totB) filas += fila(String(yB), totB);
+    filas += fila(lineas ? "Total " + yA : String(yA), tot);
+    if (GT) TIPOS_PRECIO.forEach(k => { if (GT.get(k) && detSuma(GT.get(k).tns) > 0) filas += fila(k + " " + yA, GT.get(k)); });
+    if (totB) filas += fila(lineas ? "Total " + yB : String(yB), totB);
     if (met !== "etd"){
       const v = labels.map((_, m) => detValor(tot, met, m));
       const prev = m => { for (let i = m - 1; i >= 0; i--) if (v[i] != null && v[i] > 0) return v[i]; return null; };
@@ -6675,6 +6682,7 @@ function renderDetalle(){
   // notas
   const notas = [];
   if (DET.tend) notas.push(por !== "general" && lineas ? "Las líneas finas punteadas son la tendencia de cada serie (ajuste lineal sobre los meses con datos)." : "La línea punteada naranja es la tendencia (ajuste lineal sobre los meses con datos).");
+  if (GT) notas.push("Raw y Blanched muestran su propio precio promedio; BF no se incluye acá. El total sí cuenta todos los tipos.");
   if (lineas) notas.push("Precio = facturación ÷ toneladas, solo de las cargas que ya tienen USD cargado. Los puntos huecos son meses con menos de 2 contenedores: el promedio ahí es poco confiable (y no cuentan para mes más caro / más barato).");
   if (met === "usd" && totB){
     const e = detEfecto(tot, totB);
