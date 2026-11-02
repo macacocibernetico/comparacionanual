@@ -777,8 +777,9 @@
   /* Detalle mensual por producto en formato visual */
   :root{--pvp0:#2f56f5;--pvp1:#1f9d45;--pvp2:#e0367f;--pvp3:#e3860f;--pvp4:#7a5af5}
   html[data-theme="dark"]{--pvp0:#6482ff;--pvp1:#4fd17a;--pvp2:#ff5aa0;--pvp3:#f2a03d;--pvp4:#a08bff}
-  #prodCard.pv #prodTable,#prodCard.pv .tblcopybar{display:none}
-  #prodCard:not(.pv) #prodViz{display:none}
+  #prodCard #prodTable,#prodCard .tblcopybar,#prodCard #prodVista{display:none}
+  #prodCard .pgm{margin-top:10px}
+  #prodCard #prodViz{display:none}
   .prodviz{display:flex;flex-direction:column;gap:8px}
   .pvtop{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:baseline}
   .pvsum{font-size:.95rem;color:var(--muted)}.pvsum b{color:var(--text);font-weight:600}
@@ -6051,7 +6052,7 @@ const GRUPOS_ABIERTOS = new Set();
 function renderProductGrupos(a, usd, yA){
   const el = document.getElementById("prodGrupos"); if (!el) return;
   const tot = usd ? a.prodUsd : a.prodTotals, porMes = usd ? a.productsUsd : a.products;
-  const f = usd ? fmtUsd : (x => fmt1(x) + " t");
+  const f = usd ? fmtUsd : (x => fmt1(x) + " t"), fm = usd ? fmtUsd : fmt1;
   const cnt = a.prodCount || {}, G = new Map();
   for (const p of Object.keys(a.prodTotals)){
     const { g, sub } = grupoProducto(p), v = tot[p] || 0;
@@ -6073,15 +6074,19 @@ function renderProductGrupos(a, usd, yA){
     const spark = x.meses.map((v, m) => `<i class="pvm${m === pico && v > 0 ? " pk" : ""}" style="height:${v > 0 ? Math.max(10, v / mx * 100) : 0}%" title="${MESES[m]}: ${v ? f(v) : "sin cargas"}"></i>`).join("");
     const subs = [...x.subs.values()].sort((p, q) => q.v - p.v), smax = Math.max(1, ...subs.map(s => s.v));
     const abierto = GRUPOS_ABIERTOS.has(x.g);
+    const prodsG = Object.keys(a.prodTotals).filter(p => grupoProducto(p).g === x.g).sort((p, q) => (tot[q] || 0) - (tot[p] || 0));
+    const tabla = `<div class="tablewrap pgm"><table><tr><th>Producto</th>${MESES.map(m => `<th>${m}</th>`).join("")}<th>Total</th></tr>` +
+      prodsG.map(p => `<tr><td>${esc(p)}</td>${(porMes[p] || []).map(v => `<td>${v ? fm(v) : ""}</td>`).join("")}<td><b>${fm(tot[p] || 0)}</b></td></tr>`).join("") +
+      `<tr class="total"><td>Total</td>${x.meses.map(v => `<td>${v ? fm(v) : ""}</td>`).join("")}<td>${fm(x.v)}</td></tr></table></div>`;
     const det = subs.map(s => `<div class="pgs"><span class="pgsn">${esc(s.sub)}</span><span class="pgsb"><i style="width:${(s.v / smax * 100).toFixed(1)}%"></i></span><span class="pgsv">${f(s.v)}</span><span class="pgsp">${x.v ? (s.v / x.v * 100).toFixed(1).replace(".", ",") : "0"}%</span><span class="pgsc">${pl(s.n, "carga", "cargas")}</span></div>`).join("");
     return `<div class="pvr" data-g="${esc(x.g)}" style="--w:${(x.v / max * 100).toFixed(1)}%;--pvc:var(--pvp${i % 5})">
-      <button type="button" class="pvh" aria-expanded="${abierto}" title="Ver cómo se compone">
+      <button type="button" class="pvh" aria-expanded="${abierto}" title="Ver cómo se compone y el detalle mensual">
         <span class="pvrk" aria-hidden="true">${subs.length}</span>
         <span class="pvn"><b>${esc(x.g)}</b><span class="pvbar"><i></i></span></span>
         <span class="pvspark" aria-hidden="true">${spark}</span>
         <span class="pvv"><b>${f(x.v)}</b><small>${(x.v / total * 100).toFixed(1).replace(".", ",")}% · ${pl(x.n, "carga", "cargas")}</small></span>
       </button>
-      <div class="pgd"${abierto ? "" : " hidden"}>${det}</div></div>`;
+      <div class="pgd"${abierto ? "" : " hidden"}>${det}${tabla}</div></div>`;
   }).join("");
   el.innerHTML = `<div class="pvtop"><span class="pvsum"><b>Por tipo de producto</b> · ${yA} · el número en el círculo son las variantes de cada grupo</span></div>${filas}`;
   el.querySelectorAll(".pvr").forEach(r => r.querySelector(".pvh").onclick = e => {
