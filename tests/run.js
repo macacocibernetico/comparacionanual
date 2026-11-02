@@ -120,11 +120,12 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('gráficos, detalle y comparación son plegables', ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'prodCard', 'compareCard'].every(id => p.PLEGABLES.includes(id)));
   ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard', 'compareCard'].forEach(id => { g(id).style.display = ''; });
   p.UI.biz = 'axt'; p.UI.cerradas = []; p.renderSecNav();
-  t('botón "Plegar todo"', /Plegar todo/.test(g('secNav').innerHTML));
-  g('btnPlegarTodo').onclick();
-  t('"Plegar todo" cierra todas las visibles', ['cardTns', 'prodCard', 'compareCard'].every(id => p.UI.cerradas.includes(id)) && /Desplegar todo/.test(g('secNav').innerHTML));
-  g('btnPlegarTodo').onclick();
-  t('"Desplegar todo" las vuelve a abrir', !p.UI.cerradas.some(id => ['cardTns', 'prodCard', 'compareCard'].includes(id)));
+  // ventanas: cada pestaña muestra solo sus secciones y solo aparecen las que existen
+  p.UI.biz = 'axt'; p.UI.ventana = 'res'; p.renderSecNav();
+  t('ventanas: pestañas Resumen, Evolución y Productos', /Resumen/.test(g('secNav').innerHTML) && /Evolución/.test(g('secNav').innerHTML) && /Productos/.test(g('secNav').innerHTML) && !/Contratos/.test(g('secNav').innerHTML));
+  t('ventanas: en Resumen se ven los gráficos y no el detalle', !g('cardTns').classList.contains('fuera') && g('prodCard').classList.contains('fuera'));
+  p.UI.ventana = 'prod'; p.renderSecNav();
+  t('ventanas: en Productos se ve el detalle y no los gráficos', g('cardTns').classList.contains('fuera') && !g('prodCard').classList.contains('fuera'));
 }
 
 // link para compartir la configuración

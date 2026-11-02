@@ -737,11 +737,14 @@
   .context{margin-bottom:10px;gap:6px}
   .ctag{font-size:.78rem;padding:5px 12px}
   #statusLine{font-size:.78rem;color:var(--faint);margin:0 0 10px}
-  .secnav{margin:2px 0 16px}
-  .secnav .navtoggle{margin-left:auto;border-radius:9999px;background:var(--text);color:var(--panel);padding:6px 14px;font-size:.79rem;font-weight:600;border:none}
-  .secnav .navtoggle:hover{background:var(--muted);color:var(--panel)}
-  .secnav .navtoggle[aria-pressed="true"]{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgba(15,23,42,.08)}
-  @media(max-width:720px){ .secnav .navtoggle{flex:0 0 auto;min-height:40px} }
+  /* Ventanas: pestañas de sección, siempre a la vista al desplazarse */
+  .fuera{display:none!important}
+  .secnav{margin:4px 0 18px;gap:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;background:var(--bg,var(--panel2))}
+  .secnav::-webkit-scrollbar{display:none}
+  .secnav button{flex:0 0 auto;background:transparent;border:none;border-bottom:3px solid transparent;border-radius:0;padding:11px 16px;font-size:.9rem;font-weight:500;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:7px;min-height:44px;margin-bottom:-1px;transition:color .2s var(--ease),border-color .2s var(--ease),background .2s var(--ease)}
+  .secnav button:hover{color:var(--text);background:var(--accent-soft)}
+  .secnav button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+  .secnav button.navhi:not(.on){color:var(--text)}
   @media(min-width:1101px){
     /* Barra de filtros en dos filas: negocio + acciones arriba; vista, años y ajustes abajo */
     .toolbar{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;
@@ -1626,6 +1629,7 @@ function loadUI(){
   if (typeof ui.contractSearch !== "string") ui.contractSearch = "";
   if (!ui.contractSort) ui.contractSort = { by: "total", dir: "desc" };
   if (!Array.isArray(ui.contractYears)) ui.contractYears = [];   // vacío = todos los años
+  if (typeof ui.ventana !== "string") ui.ventana = "res";
   if (!Array.isArray(ui.cerradas)) ui.cerradas = [];             // secciones plegadas
   if (ui.focusMetric !== "usd") ui.focusMetric = "tns";
   if (!ui.bizSub || typeof ui.bizSub !== "object") ui.bizSub = {};
@@ -5086,7 +5090,8 @@ function renderFocusExporter(recs){
   const card = document.getElementById("focusCard");
   const bz = BUSINESSES.find(x => x.key === UI.biz);
   const objetivo = ((CONFIG[UI.biz] || {}).FOCUS_EXPORTER || "").trim();
-  if (!bz || bz.focusExporter !== true || !objetivo){
+  const sv0 = subActual();
+  if (!bz || bz.focusExporter !== true || !objetivo || (sv0 && sv0.key !== "oilexp")){
     card.style.display = "none";
     if (charts.chFocus){ charts.chFocus.destroy(); delete charts.chFocus; }
     LAST_FOCUS_PDF = null;
@@ -6028,56 +6033,48 @@ function aplicarPlegado(){
   }
 }
 
-/* Accesos directos: solo a las secciones que existen en la pestaña actual */
+/* Ventanas: cada pestaña muestra solo sus secciones (en vez de una página larga con scroll).
+   Una ventana aparece únicamente si alguna de sus secciones existe en la vista actual. */
+const VENTANAS = [
+  { key: "res",  label: "Resumen",            icon: "▦", ids: ["kpis", "zOverview", "cardTns", "cardUsd", "cardCom", "cardEtd", "bizCard"] },
+  { key: "ae",   label: "Aceite vs Expeller", icon: "💧", ids: ["oilexpCard"], destacado: true },
+  { key: "foco", label: "FOCO",               icon: "🏢", ids: ["focusCard"], destacado: true },
+  { key: "evo",  label: "Evolución",          icon: "📈", ids: ["rollCard", "compareCard"] },
+  { key: "prod", label: "Productos",          icon: "📦", ids: ["prodCard"] },
+  { key: "cons", label: "Consolidación",      icon: "🧩", ids: ["consSection", "gruposCard"] },
+  { key: "cli",  label: "Clientes y mercado", icon: "🌍", ids: ["comCard", "mktCard", "partnerCard"] },
+  { key: "con",  label: "Contratos",          icon: "📄", ids: ["contractsCard", "pipeCard"] }
+];
+function ventanaVisible(v){
+  return v.ids.some(id => { const el = document.getElementById(id); return el && el.style.display !== "none"; });
+}
 function renderSecNav(){
   const nav = document.getElementById("secNav");
   if (!nav) return;
-  const bz = BUSINESSES.find(x => x.key === UI.biz);
   const focusName = ((CONFIG[UI.biz] || {}).FOCUS_EXPORTER || "").trim();
-  // en el mismo orden en que aparecen en la página
-  const items = [{ id: "kpis", label: "Resumen" }];
-  const sv = subActual();
-  if (sv && sv.key === "oilexp") items.push({ id: "oilexpCard", label: "Aceite vs Expeller", destacado: true });
-  if (bz && bz.focusExporter && focusName) items.push({ id: "focusCard", label: focusName, destacado: true });
-  items.push({ id: "rollCard", label: "Tendencia 12m" });
-  if (UI.biz === TOTAL_KEY) items.push({ id: "bizCard", label: "Por negocio" });
-  if (bz && bz.consViews) items.push({ id: "consSection", label: "Consolidación" }, { id: "gruposCard", label: "Grupos comerciales" });
-  if (bz && bz.partnerViews) items.push({ id: "mktCard", label: "Exportación vs local", destacado: true }, { id: "comCard", label: "Panel comercial", destacado: true }, { id: "partnerCard", label: "Exportadores / importadores" });
-  if (bz && bz.contractViews) items.push({ id: "contractsCard", label: "Contratos" }, { id: "pipeCard", label: "Programación" });
-  const visibles = items.filter(it => {
-    const el = document.getElementById(it.id);
-    return el && el.style.display !== "none";
+  const vis = VENTANAS.filter(ventanaVisible);
+  const todos = VENTANAS.flatMap(v => v.ids);
+  if (vis.length < 2){
+    nav.innerHTML = "";
+    todos.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove("fuera"); });
+    return;
+  }
+  if (!vis.some(v => v.key === UI.ventana)) UI.ventana = vis[0].key;
+  const activa = vis.find(v => v.key === UI.ventana);
+  const etiqueta = v => v.key === "foco" ? (focusName || v.label) : v.label;
+  nav.setAttribute("role", "tablist");
+  nav.innerHTML = vis.map(v =>
+    `<button type="button" role="tab" data-win="${v.key}" aria-selected="${v === activa}" class="${v === activa ? "on" : ""}${v.destacado ? " navhi" : ""}"><span aria-hidden="true">${v.icon}</span> ${esc(etiqueta(v))}</button>`).join("");
+  todos.forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.classList.toggle("fuera", !activa.ids.includes(id));
   });
-  // secciones plegables que se ven en esta pestaña (para "Plegar todo / Desplegar todo")
-  const plegVis = PLEGABLES.filter(id => { const el = document.getElementById(id); return el && el.style.display !== "none"; });
-  const todoPlegado = plegVis.length > 0 && plegVis.every(id => (UI.cerradas || []).includes(id));
-  const toggleTodo = plegVis.length >= 2
-    ? `<button type="button" class="navtoggle" id="btnPlegarTodo" aria-pressed="${todoPlegado}" title="${todoPlegado ? "Abrir todas las secciones" : "Cerrar todas las secciones y dejar solo el resumen"}">${todoPlegado ? "Desplegar todo" : "Plegar todo"}</button>`
-    : "";
-  if (visibles.length < 3 && !toggleTodo){ nav.innerHTML = ""; return; }
-  nav.innerHTML = (visibles.length >= 3 ? `<span class="navlabel">Ir a</span>` + visibles.map(it =>
-    `<a href="#${it.id}" data-go="${it.id}" class="${it.destacado ? "navhi" : ""}">${it.label}</a>`).join("") : "") + toggleTodo;
-  const bt = document.getElementById("btnPlegarTodo");
-  if (bt) bt.onclick = () => {
-    const set = new Set(UI.cerradas || []);
-    plegVis.forEach(id => todoPlegado ? set.delete(id) : set.add(id));
-    UI.cerradas = [...set];
-    saveUI(); aplicarPlegado(); renderSecNav();
-    setTimeout(() => Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} }), 60);
-  };
-  nav.querySelectorAll("a").forEach(a => {
-    a.onclick = e => {
-      e.preventDefault();
-      const el = document.getElementById(a.dataset.go);
-      if (!el) return;
-      if (el.classList && el.classList.contains("collapsed")){
-        UI.cerradas = (UI.cerradas || []).filter(x => x !== a.dataset.go);
-        saveUI(); aplicarPlegado();
-        setTimeout(() => Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} }), 60);
-      }
-      if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      el.classList.add("justjumped");
-      setTimeout(() => el.classList.remove("justjumped"), 1200);
+  nav.querySelectorAll("button[data-win]").forEach(b => {
+    b.onclick = () => {
+      UI.ventana = b.dataset.win; saveUI(); renderSecNav();
+      const ref = document.getElementById("secNav");
+      if (ref && ref.getBoundingClientRect().top < 0) ref.scrollIntoView({ block: "start" });
+      setTimeout(() => { Object.values(charts).forEach(c => { try { c.resize(); } catch(e){} }); window.dispatchEvent(new Event("resize")); }, 60);
     };
   });
 }
