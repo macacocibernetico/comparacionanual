@@ -761,6 +761,12 @@
   /* Header limpio: el resumen de la carga se oculta cuando todo anduvo bien (sigue en el tooltip de ↻ Actualizar) */
   #statusLine.quiet{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
   .context:empty{display:none}
+  /* ↻ Actualizar es la acción principal de la barra: botón lleno y la hora de los datos al lado */
+  #btnReload{background:var(--accent)!important;color:#fff!important;border-color:transparent!important;font-weight:600;padding-inline:18px;box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 35%,transparent)}
+  #btnReload:hover{filter:brightness(1.08);transform:none}
+  #btnReload:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  #frescura{font-size:.78rem;color:var(--muted);white-space:nowrap;margin-right:2px;align-self:center}
+  @media(max-width:720px){ #frescura{flex:1 1 100%;order:-1;text-align:right} }
   #btnReload.busy > span{display:inline-block;animation:girar 1s linear infinite}
   @keyframes girar{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion: reduce){ #btnReload.busy > span{animation:none} }
@@ -981,6 +987,7 @@
     <div class="group right" id="grpData">
       <span class="glabel">Datos</span>
       <div class="grow">
+        <span id="frescura" aria-live="polite"></span>
         <button id="btnReload" type="button" title="Volver a leer las planillas de Google Sheets"><span aria-hidden="true">↻</span> Actualizar</button>
         <button id="btnConfig" type="button" title="Conectar planillas y asignar columnas"><span aria-hidden="true">⚙️</span> Configurar</button>
       </div>
@@ -2414,9 +2421,12 @@ async function loadData(){
 
 /* Con los datos bien leídos el resumen de la carga no se muestra (queda para lectores de pantalla
    y en el tooltip de ↻ Actualizar); se ve solo mientras lee por primera vez, con datos de ejemplo o con error. */
+function textoFrescura(){ return "Actualizado " + new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }); }
 function estadoDatos(listo, leyendo = !listo){
   const st = document.getElementById("statusLine"), bt = document.getElementById("btnReload");
   if (!st) return;
+  const fr = document.getElementById("frescura");
+  if (fr) fr.textContent = leyendo ? "Leyendo planillas…" : (listo ? textoFrescura() : "");
   st.classList.toggle("quiet", !!listo);
   if (bt){
     bt.classList.toggle("busy", !!leyendo);

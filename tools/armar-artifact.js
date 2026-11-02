@@ -123,6 +123,21 @@ reemplazar("Los demás negocios quedan vacíos hasta que conectes su planilla. P
 reemplazar("Datos de ejemplo — todavía no hay planillas conectadas", "Datos de ejemplo — todavía no se cargaron los datos reales", { opcional: true });
 reemplazar("Este negocio todavía no tiene planilla conectada.<br>Tocá <b>⚙️ Configurar</b> arriba a la derecha, elegí el negocio y pegá el enlace de su planilla.",
            "Este negocio todavía no tiene datos cargados.<br>Pedile a Claude que los cargue desde su planilla.", { opcional: true });
+/* 4a · ↻ Actualizar: vuelve a leer la copia publicada (que se renueva sola a las 18:00) y dice de cuándo es */
+reemplazar(`function textoFrescura(){ return "Actualizado " + new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }); }`,
+           `function textoFrescura(){ return "Datos del " + fechaCopia(); }`);
+reemplazar(`document.getElementById("btnReload").onclick = () => { closeSheet(); init({ force: true }); };`,
+`document.getElementById("btnReload").title = "Vuelve a leer la copia de datos. La copia se renueva sola todos los días a las 18:00.";
+document.getElementById("btnReload").onclick = async () => {
+  closeSheet();
+  const antes = ARTIFACT.manifest && ARTIFACT.manifest.generatedAt;
+  await cargarDatosArtifact();
+  const despues = ARTIFACT.manifest && ARTIFACT.manifest.generatedAt;
+  await init({ force: true });
+  try { aviso(despues && despues !== antes ? "Datos nuevos cargados (" + fechaCopia() + ")" : "Ya tenés la última copia (" + fechaCopia() + "). Se renueva sola a las 18:00."); } catch(e){}
+};`);
+reemplazar(`\\n\\nTocá para volver a leer las planillas.`, `\\n\\nTocá para volver a leer la copia. Se renueva sola todos los días a las 18:00.`, { opcional: true });
+reemplazar(`  const res = await fetch(ARTIFACT.base + archivo);`, `  const res = await fetch(ARTIFACT.base + archivo, { cache: "no-store" });`);
 /* 4b · vista inicial del Artifact: Brokerage Maní, el año en curso solo, sin comparar (se aplica en cada apertura) */
 reemplazar(`  if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", sel: null };`,
 `  ui.biz = "brokerage"; ui.mode = "solo"; ui.year = new Date().getFullYear(); ui.cmpSet = [];
