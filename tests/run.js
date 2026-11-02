@@ -212,5 +212,14 @@ const tr1 = api.detTendencia([100, 110, 120, 130]);
 t('tendencia: pendiente 10 por mes', tr1 && Math.abs(tr1.b - 10) < 1e-9 && Math.abs(tr1.a - 100) < 1e-9);
 t('tendencia ignora meses sin dato', Math.abs(api.detTendencia([100, null, 120, 130, 140]).b - (140 - 100) / 4) < 1e-9);
 t('tendencia necesita 3 meses', api.detTendencia([100, 110]) === null);
+// orden de tablas
+t('orden: número es-AR con US$', api.valorOrden('US$ 1.121').n === 1121 && api.valorOrden('12,5 t').n === 12.5 && api.valorOrden('+3,2%').n === 3.2);
+t('orden: fecha y "meses"', api.valorOrden('15/03/2026').n === new Date(2026, 2, 15).getTime() && api.valorOrden('7 meses').n === 7 && api.valorOrden('cada 30 días').n === 30);
+t('orden: vacío sin dato', api.valorOrden('—').n === null && api.valorOrden('<b>—</b>').n === null);
+const fo = [['A','3'],['B','10'],['C','—'],['D','2']];
+t('orden: numérico de mayor a menor, vacío al final', api.ordenarFilas(fo, { c: 1, d: -1 }, true).map(x => x[0]).join('') === 'BADC');
+t('orden: de menor a mayor, vacío al final', api.ordenarFilas(fo, { c: 1, d: 1 }, true).map(x => x[0]).join('') === 'DABC');
+t('orden: texto A a Z', api.ordenarFilas([['b'],['A'],['c']], { c: 0, d: 1 }, false).map(x => x[0]).join('') === 'Abc');
+t('orden: ciclo de toques', (() => { const a = api.siguienteOrden(null, 1, true), b = api.siguienteOrden(a, 1, true), c = api.siguienteOrden(b, 1, true); return a.d === -1 && b.d === 1 && c === null; })());
 console.log(`\n${ok} ok · ${bad} fallas`);
 process.exit(bad ? 1 : 0);
