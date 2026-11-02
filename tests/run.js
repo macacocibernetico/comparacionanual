@@ -72,7 +72,7 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('con datos: tarjetas vuelven', ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard'].every(id => g(id).style.display === ''));
 
   // accesibilidad del HTML estático
-  t('3 modales con role=dialog y nombre', (h.match(/class="modal[^"]*" role="dialog" aria-modal="true" aria-labelledby="\w+"/g) || []).length === 3);
+  t('4 modales con role=dialog y nombre', (h.match(/class="modal[^"]*" role="dialog" aria-modal="true" aria-labelledby="\w+"/g) || []).length === 4);
   t('hay <main> y el skip-link apunta a él', /<main id="main"/.test(h) && /href="#main" class="skip-link"/.test(h) && /<\/main>/.test(h));
   t('pill Todos con aria-pressed', /data-y="all" aria-pressed=/.test(h));
 
@@ -191,5 +191,20 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('cartera: contratos abiertos y días sin comprar', dos.abiertos === 1 && dos.saldo === 5 && !tres.activo && tres.dias > 900);
 }
 
+
+// panel de detalle: precio ponderado, país y calibre
+const RD = (product, tns, usd, mo, pais = '') => ({ biz: 'brokerage', product, tns, usd, comision: usd * 0.02, month: mo, year: 2026, pais });
+const dr = [RD('Split Blanched G2', 100, 100000, 1, 'Spain'), RD('Split Blanched G2', 300, 330000, 1, 'Spain'), RD('38/42 Raw', 50, 0, 1, ''), RD('38/42 Raw', 50, 60000, 2, 'Italy')];
+const dg = api.detAgrupar(dr, 2026, 12, 'general').get('Total');
+t('precio = USD / t de cargas con USD (ignora la que no tiene USD)', Math.abs(api.detValor(dg, 'precio', 0) - 430000 / 400) < 1e-9);
+t('enero tiene 3 cargas', api.detValor(dg, 'etd', 0) === 3);
+t('total del año de precio ponderado', Math.abs(api.detTotal(dg, 'precio') - 490000 / 450) < 1e-9);
+t('mes sin datos de precio es null', api.detValor(dg, 'precio', 5) === null);
+t('por tipo separa Blanched y Raw', [...api.detAgrupar(dr, 2026, 12, 'tipo').keys()].sort().join() === 'Blanched,Raw');
+t('por país: sin país', api.detAgrupar(dr, 2026, 12, 'pais').has('Sin país'));
+t('calibre une calibre y tipo', api.detClave(dr[0], 'calibre') === 'Split G2 · Blanched');
+t('corte de meses: MM=1 deja afuera febrero', api.detAgrupar(dr, 2026, 1, 'general').get('Total').tns[1] === 0);
+const ef = api.detEfecto(api.detAgrupar([RD('X', 200, 220000, 1)], 2026, 12, 'general').get('Total'), api.detAgrupar([RD('X', 100, 100000, 1)].map(r => ({ ...r, year: 2025 })), 2025, 12, 'general').get('Total'));
+t('volumen + precio = diferencia de facturación', ef && Math.abs(ef.vol + ef.precio - ef.dif) < 1e-6);
 console.log(`\n${ok} ok · ${bad} fallas`);
 process.exit(bad ? 1 : 0);

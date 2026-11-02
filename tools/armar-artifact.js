@@ -143,24 +143,8 @@ reemplazar(`  if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", se
 `  ui.biz = "brokerage"; ui.mode = "solo"; ui.year = new Date().getFullYear(); ui.cmpSet = [];
   ui.bizSub = { ...(ui.bizSub || {}), brokerage: "mani" };
   if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", sel: null };`);
-/* 5 · estilo Zentra: marca, título grande, resumen nuevo y estilos (tools/zentra/) */
-const ZDIR = path.join(__dirname, "zentra");
-const zleer = f => fs.readFileSync(path.join(ZDIR, f), "utf8").replace(/\r\n/g, "\n");
-reemplazar("</style>", zleer("zentra.css") + "\n  /* Artifact: la configuración de planillas la maneja Claude */\n  #btnConfig{display:none!important}\n</style>");
-reemplazar(`<div class="topbar">
-    <h1>Dashboard de Negocios</h1>`, `<div class="topbar">
-    <span class="zbrand"><span class="zmark" aria-hidden="true">L</span><span>Latinut<small>Exportaciones</small></span></span>
-    <h1>Dashboard de Negocios</h1>`);
-reemplazar(`  <div class="toolbar" role="group" aria-label="Controles del dashboard">`,
-`  <div class="ztitle" id="zTitle"><div class="ztitle-row"><h2 id="zH1">Dashboard</h2><span class="zbadge" id="zBadge" hidden>Datos de ejemplo</span></div><p class="zsub" id="zSub"></p></div>
-
-  <div class="toolbar" role="group" aria-label="Controles del dashboard">`);
-reemplazar(`<div class="kpis" id="kpis"></div>`, zleer("zentra.html").trim() + `\n\n  <div class="kpis" id="kpis"></div>`);
-reemplazar(`let paintedFromCache = false;`, zleer("zentra.js") + `\nlet paintedFromCache = false;`);
-reemplazar(`  mk("chEtd", "etdCount", { dots: true });`, `  mk("chEtd", "etdCount", { dots: true });
-  renderZentra({ a, b, yA, yB, cmpYears, MM, ytd, SP, aN, aC, mk, biz });`);
-reemplazar(`const SECCIONES_CON_DATOS = ["cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard"];`,
-           `const SECCIONES_CON_DATOS = ["zOverview", "cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard"];`);
+/* 5 · el estilo Zentra (marca, título, resumen) ya vive en index.html; acá solo se oculta la configuración de planillas */
+reemplazar("</style>", "\n  /* Artifact: la configuración de planillas la maneja Claude */\n  #btnConfig{display:none!important}\n</style>");
 /* 6 · el mapa del globo va en la copia de datos (bajar-datos.js lo baja como data/world-110m.json) */
 reemplazar('function urlMundo(){ return "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json"; }',
            'function urlMundo(){ return ARTIFACT.base + "data/world-110m.json"; }');

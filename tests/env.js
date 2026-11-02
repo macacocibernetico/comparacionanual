@@ -13,4 +13,4 @@ global.confirm=()=>true;global.location={href:'http://localhost/',hash:''};globa
 global.fetch=()=>Promise.reject(new Error('x'));global.getComputedStyle=()=>({getPropertyValue:()=>'#000'});global.requestAnimationFrame=f=>f();global.navigator={userAgent:''};
 module.exports={load(){const h=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 const sc=[...h.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(s=>s.trim());
-return new Function(sc.at(-1)+";return {UI,CONFIG,DATA,OPEN,BUSINESSES,SUBVISTAS,aggregate,renderKpis,renderBizChart,renderRolling,abrirRollZoom,renderProductTable,renderPipeline,mezclarExactos,parseNumber,detectDecimalSep,parseDate,normHeader,mismaEmpresa,bizKeyTotal,subActual,fmt1,fmtUsd};")();}};
+return new Function(sc.at(-1)+";return {UI,CONFIG,DATA,OPEN,BUSINESSES,SUBVISTAS,aggregate,detAgrupar,detValor,detTotal,detClave,detEfecto,renderKpis,renderBizChart,renderRolling,abrirRollZoom,renderProductTable,renderPipeline,mezclarExactos,parseNumber,detectDecimalSep,parseDate,normHeader,mismaEmpresa,bizKeyTotal,subActual,fmt1,fmtUsd};")();}};
