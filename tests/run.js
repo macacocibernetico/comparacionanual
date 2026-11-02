@@ -115,6 +115,18 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
     t('detalle: forma de ver tabla', !g('prodCard').classList.contains('pv'));
   }
 
+  // productos agrupados por tipo: BF manda, Sortex/Ungraded/In shell/otros van a "Otros"
+  {
+    const gp = new Function(code + ';return {grupoProducto};')().grupoProducto;
+    const k = n => { const r = gp(n); return r.g + '|' + r.sub; };
+    t('grupos: BF manda sobre Raw y Blanched', k('Split Raw BF') === 'BF|Split' && k('Split Blanched BF') === 'BF|Split' && k('70/80 Raw BF') === 'BF|70/80' && k('Sortex BF') === 'BF|Sortex');
+    t('grupos: Raw, Blanched y Roasted con su calibre', k('38/42 Raw') === 'Raw|38/42' && k('Split Blanched G2') === 'Blanched|Split G2' && k('Split Roasted') === 'Roasted|Split');
+    t('grupos: mismo calibre escrito distinto', k('Blanched 40/50') === 'Blanched|40/50' && k('40/50 blanched Grade 1') === 'Blanched|40/50 G1' && k('Split Blancheado G1') === 'Blanched|Split G1' && k('38/42 crudo') === 'Raw|38/42' && k('Split blanched peanuts') === 'Blanched|Split');
+    t('grupos: Sortex solo, Ungraded Raw, In shell y otros van a Otros', ['Sortex', 'Ungraded Raw', 'In shell Raw', 'Loose grain Raw', 'Ciruela desecada cajas 10kg'].every(n => gp(n).g === 'Otros'));
+    t('grupos: Ungraded con tipo explícito conserva su tipo', k('Ungraded Blanched') === 'Blanched|Ungraded' && k('Ungraded Roasted') === 'Roasted|Ungraded');
+    t('grupos: aceite y expeller aparte', gp('Peanut Oil').g === 'Aceite y expeller' && gp('Expeller').g === 'Aceite y expeller');
+  }
+
   // plegar: gráficos, detalle y comparación se pliegan; "Plegar todo" cierra todo lo visible y lo vuelve a abrir
   const p = new Function(code + ';return {UI,PLEGABLES,renderSecNav};')();
   t('gráficos, detalle y comparación son plegables', ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'prodCard', 'compareCard'].every(id => p.PLEGABLES.includes(id)));
