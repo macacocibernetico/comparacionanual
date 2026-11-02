@@ -367,20 +367,21 @@
   .dpbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
   .modal .dpbar .seg{width:auto;margin:0}.dpbar .seg button{flex:none;padding:7px 18px}
   .dpl{font-size:.8rem;color:var(--muted)}
-  .dpcmp{display:flex;align-items:center;gap:7px;margin:0 0 0 auto;font-size:.82rem;color:var(--muted);cursor:pointer}
-  .dpcmp input{width:auto}
+  .dpchks{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap}
+  .dpcmp,.dpchk{display:flex;align-items:center;gap:7px;margin:0;font-size:.82rem;color:var(--muted);cursor:pointer}
+  .dpcmp input,.dpchk input{width:auto}
   .dpchips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;align-items:center}
   .dpchips[hidden]{display:none}
   .dpchl{font-size:.8rem;color:var(--muted)}
   .dpchip{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:999px;padding:5px 12px;font-size:.8rem;cursor:pointer}
   .dpchip.on{background:var(--c);border-color:var(--c);color:#fff}
-  .dpchart{position:relative;height:360px;margin:6px 0 18px}
+  .dpchart{position:relative;height:430px;margin:6px 0 18px}
   .dpnota{margin-top:12px}
   #detTabla table{font-size:.8rem}
   #detTabla tr.dpdelta td{color:var(--muted);font-size:.76rem}
   .kpi[data-det],.zdetable{cursor:pointer}
   .kpi[data-det]:hover{filter:brightness(1.04)}
-  @media(max-width:760px){.dpstats{grid-template-columns:repeat(2,minmax(0,1fr))}.dpchart{height:300px}.dpcmp{margin-left:0}}
+  @media(max-width:760px){.dpstats{grid-template-columns:repeat(2,minmax(0,1fr))}.dpchart{height:320px}.dpchks{margin-left:0}}
   .modal .seg{width:100%;margin:16px 0 4px}
   .modal .seg button{flex:1}
 
@@ -1596,7 +1597,7 @@
   <div class="modal wide dpanel" role="dialog" aria-modal="true" aria-labelledby="detTitulo">
     <div class="dphead"><div><h2 id="detTitulo"></h2><p class="hint" id="detSub"></p></div><button type="button" class="dpx" id="detX" aria-label="Cerrar">✕</button></div>
     <div class="dpstats" id="detStats"></div>
-    <div class="dpbar"><span class="dpl">Ver por</span><div class="seg" id="detPor" role="group" aria-label="Desglose"></div><label class="dpcmp"><input type="checkbox" id="detCmp"> Comparar con el año anterior</label></div>
+    <div class="dpbar"><span class="dpl">Ver por</span><div class="seg" id="detPor" role="group" aria-label="Desglose"></div><span class="dpchks"><label class="dpchk"><input type="checkbox" id="detTend"> Línea de tendencia</label><label class="dpcmp"><input type="checkbox" id="detCmp"> Comparar con el año anterior</label></span></div>
     <div class="dpchips" id="detChips" hidden></div>
     <div class="dpchart"><canvas id="detChart" role="img" aria-label="Evolución mensual"></canvas></div>
     <div class="tablewrap" id="detTabla"></div>
@@ -6407,13 +6408,13 @@ function renderProductCompare(a, b, yA, yB){
    en general o desglosada por tipo, calibre o país. Usa los mismos registros que el resto del dashboard
    (getRecords: respeta negocio, sub-vista y filtro de productos) y el año y corte del Resumen (DET_CTX). ===== */
 let DET_CTX = null;
-const DET = { m: "precio", por: "general", cmp: true, sel: {} };
+const DET = { m: "precio", por: "general", cmp: true, tend: true, sel: {} };
 const DET_METRICAS = {
   tns:    { label: "Toneladas",       f: v => fmt1(v) + " t",  fs: fmt1, por: ["general", "tipo", "calibre", "pais"] },
   usd:    { label: "Facturación",     f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre", "pais"] },
   com:    { label: "Comisión",        f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre"] },
   etd:    { label: "Embarques",       f: v => fmt0(v) + (v === 1 ? " carga" : " cargas"), fs: fmt0, por: ["general", "tipo", "calibre"] },
-  precio: { label: "Precio promedio", f: v => fmtUsd(v) + " /t", fs: fmt0, por: ["general", "tipo", "calibre", "pais"] },
+  precio: { label: "Precio promedio", f: v => fmtUsd(v) + " /t", fs: fmt0, por: ["general", "tipo", "calibre"] },
 };
 const DET_POR = { general: "General", tipo: "Tipo", calibre: "Calibre", pais: "País" };
 const detVacio = () => ({ tns: Array(12).fill(0), usd: Array(12).fill(0), com: Array(12).fill(0), n: Array(12).fill(0), tnsU: Array(12).fill(0) });
@@ -6449,6 +6450,27 @@ function detValor(g, met, m){
   return met === "etd" ? g.n[m] : g[met][m];
 }
 const detSuma = a => a.reduce((s, v) => s + v, 0);
+/* Recta de tendencia (mínimos cuadrados) sobre los meses con dato; hace falta al menos 3 */
+function detTendencia(vals){
+  const p = vals.map((v, i) => [i, v]).filter(([, v]) => v != null && v > 0);
+  if (p.length < 3) return null;
+  const n = p.length, sx = detSuma(p.map(([x]) => x)), sy = detSuma(p.map(([, y]) => y));
+  const sxx = detSuma(p.map(([x]) => x * x)), sxy = detSuma(p.map(([x, y]) => x * y)), d = n * sxx - sx * sx;
+  if (!d) return null;
+  const b = (n * sxy - sx * sy) / d;
+  return { a: (sy - b * sx) / n, b, desde: p[0][0], hasta: p[p.length - 1][0] };
+}
+const detRecta = (tr, largo) => Array.from({ length: largo }, (_, i) => tr && i >= tr.desde && i <= tr.hasta ? tr.a + tr.b * i : null);
+const detCorto = v => v >= 1e6 ? (v / 1e6).toFixed(2).replace(".", ",") + " M" : v >= 1e4 ? fmt0(v / 1e3) + " mil" : fmt0(v);
+/* Número sobre cada punto o barra de la serie principal (solo en pantallas anchas) */
+const detEtiq = { id: "detEtiq", afterDatasetsDraw(ch){
+  const d0 = ch.data.datasets[0];
+  if (!d0 || !d0._etiq || ch.width < 560) return;
+  const meta = ch.getDatasetMeta(0), c = ch.ctx;
+  c.save(); c.fillStyle = cssVar("--text"); c.font = "600 11px system-ui, sans-serif"; c.textAlign = "center";
+  d0.data.forEach((v, i) => { const el = meta.data[i]; if (v != null && v > 0 && el) c.fillText(d0._etiq(v), el.x, el.y - 10); });
+  c.restore();
+} };
 function detTotal(g, met){
   if (!g) return null;
   if (met === "precio"){ const t = detSuma(g.tnsU); return t > 0 ? detSuma(g.usd) / t : null; }
@@ -6471,10 +6493,10 @@ function detStats(met, g, gB, MM, yB){
   const f = DET_METRICAS[met].f, mes = i => i < 0 ? "—" : MESES[i];
   const out = [];
   if (met === "precio"){
-    const hi = mejor((a, b) => a > b, true), lo = mejor((a, b) => a < b, true);
+    const tr = detTendencia(val), hi = mejor((a, b) => a > b, true), lo = mejor((a, b) => a < b, true);
     const prim = conDato.length ? val[conDato[0]] : null, ult = conDato.length ? val[conDato[conDato.length - 1]] : null;
     out.push(["Promedio del año", T == null ? "—" : f(T)], ["Mes más caro", hi < 0 ? "—" : f(val[hi]), mes(hi)], ["Mes más barato", lo < 0 ? "—" : f(val[lo]), mes(lo)],
-      ["Variación primer → último mes", prim ? detPct((ult - prim) / prim * 100) : "—", conDato.length > 1 ? `${MESES[conDato[0]]} → ${MESES[conDato[conDato.length - 1]]}` : ""]);
+      ["Tendencia", tr ? detSigno(tr.b, fmtUsd) + " /t por mes" : "—", prim && conDato.length > 1 ? `${detPct((ult - prim) / prim * 100)} de ${MESES[conDato[0]]} a ${MESES[conDato[conDato.length - 1]]}` : ""]);
   } else if (met === "com"){
     const bm = mejor((a, b) => a > b);
     out.push(["Comisión total", f(T)], ["% sobre la facturación", detSuma(g.usd) ? (T / detSuma(g.usd) * 100).toFixed(2).replace(".", ",") + "%" : "—"],
@@ -6514,9 +6536,7 @@ function cerrarDetalle(){
 function renderDetalle(){
   if (!DET_CTX) return;
   const { recs, yA, MM } = DET_CTX, M = DET_METRICAS[DET.m], por = DET.por, met = DET.m;
-  // año comparado: el del Resumen o, si no se está comparando, el anterior. Sin comparación explícita se corta en el último mes cargado de este año.
-  const yB = DET_CTX.yB != null ? DET_CTX.yB : (recs.some(r => r.year === yA - 1) ? yA - 1 : null);
-  const MMb = DET_CTX.yB != null ? MM : Math.min(MM, Math.max(1, ...recs.filter(r => r.year === yA).map(r => r.month)));
+  const yB = DET_CTX.yB;   // solo hay comparación si el Resumen está en modo Comparar
   const biz = BUSINESSES.find(b => b.key === UI.biz), svc = subActual();
   const vista = UI.biz === TOTAL_KEY ? "Σ Total" : (svc ? svc.label : (biz ? biz.name : ""));
   document.getElementById("detTitulo").textContent = `${M.label} · ${yA}`;
@@ -6524,7 +6544,7 @@ function renderDetalle(){
 
   const G = detAgrupar(recs, yA, MM, por), Gt = por === "general" ? G : detAgrupar(recs, yA, MM, "general");
   const tot = Gt.get("Total") || detVacio();
-  const totB = yB != null ? (detAgrupar(recs, yB, MMb, "general").get("Total") || null) : null;
+  const totB = yB != null ? (detAgrupar(recs, yB, MM, "general").get("Total") || null) : null;
 
   // números de arriba
   document.getElementById("detStats").innerHTML = detStats(met, tot, totB, MM, yB)
@@ -6538,6 +6558,9 @@ function renderDetalle(){
   cmpBox.parentElement.style.display = yB != null && por === "general" ? "" : "none";
   cmpBox.checked = DET.cmp;
   cmpBox.onchange = () => { DET.cmp = cmpBox.checked; renderDetalle(); };
+  const tendBox = document.getElementById("detTend");
+  tendBox.checked = DET.tend;
+  tendBox.onchange = () => { DET.tend = tendBox.checked; renderDetalle(); };
 
   // grupos ordenados por volumen
   const orden = [...G.entries()].filter(([, g]) => detSuma(g.tns) > 0 || detSuma(g.n) > 0).sort((x, y) => detSuma(y[1].tns) - detSuma(x[1].tns));
@@ -6575,7 +6598,7 @@ function renderDetalle(){
     if (totB && DET.cmp) ds.push({ ...linea(String(yB), totB, "#8e8e93", { borderDash: [6, 4], borderWidth: 2, pointRadius: 3, tension: .25, _y: yB }), data: labels.map((_, m) => detValor(totB, met, m)) });
     if (y2){
       const dt = labels.map((_, m) => met === "com" ? (tot.usd[m] ? tot.com[m] / tot.usd[m] * 100 : null) : (tot.n[m] ? tot.tns[m] / tot.n[m] : null));
-      ds.push({ type: "line", label: met === "com" ? "% sobre la facturación" : "Toneladas por carga", data: dt, yAxisID: "y2", borderColor: "#ff9500", backgroundColor: "#ff9500", borderWidth: 2.5, tension: .25, spanGaps: true, pointRadius: 3,
+      ds.push({ type: "line", label: met === "com" ? "% sobre la facturación" : "Toneladas por carga", data: dt, yAxisID: "y2", borderColor: "#af52de", backgroundColor: "#af52de", borderWidth: 2.5, tension: .25, spanGaps: true, pointRadius: 3,
         _f: v => met === "com" ? v.toFixed(2).replace(".", ",") + "%" : fmt1(v) + " t" });
     }
   } else if (lineas){
@@ -6590,18 +6613,31 @@ function renderDetalle(){
       ds.push({ type: "bar", label: `Resto (${resto.length})`, data: labels.map((_, m) => detValor(rg, met, m)), backgroundColor: "#8e8e93", borderRadius: 4, borderSkipped: false, maxBarThickness: 64, stack: "s", _y: yA });
     }
   }
+  if (DET.tend){
+    const tend = (label, vals, color, oculta) => {
+      const tr = detTendencia(vals); if (!tr) return;
+      ds.push({ type: "line", label, data: detRecta(tr, labels.length), borderColor: color, backgroundColor: color, borderWidth: oculta ? 1.8 : 2.8, borderDash: [3, 5],
+        pointRadius: 0, pointHoverRadius: 0, tension: 0, spanGaps: true, yAxisID: "y", _y: yA, _oculta: oculta, _f: yFmt });
+    };
+    if (por === "general") tend("Tendencia", labels.map((_, m) => detValor(tot, met, m)), "#ff9500", false);
+    else if (lineas) elegidos.forEach(([k], i) => tend(k + " (tendencia)", labels.map((_, m) => detValor(G.get(k), met, m)), colorDe(k, orden.findIndex(([kk]) => kk === k)), true));
+    else tend("Tendencia del total", labels.map((_, m) => detValor(tot, met, m)), "#ff9500", false);
+  }
+  if (por === "general" && ds[0]) ds[0]._etiq = met === "usd" || met === "com" ? detCorto : fmt0;
   if (charts.detChart){ charts.detChart.destroy(); delete charts.detChart; }
   const apilado = por !== "general" && !lineas;
   charts.detChart = new Chart(document.getElementById("detChart"), {
+    plugins: [detEtiq],
     data: { labels, datasets: ds },
     options: {
       responsive: true, maintainAspectRatio: false,
       animation: { duration: paintedFromCache ? 0 : 400, easing: "easeOutQuart" },
+      layout: { padding: { top: 20, right: 22 } },
       interaction: { mode: "index", intersect: false },
       onClick: (e, els) => { if (els && els.length && ds[els[0].datasetIndex]._y === yA) openDetail(els[0].index, yA); },
       plugins: {
-        legend: { labels: { color: cs("--muted"), boxWidth: 12, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } },
-        tooltip: { filter: c => c.parsed.y != null && (c.parsed.y !== 0 || !apilado), callbacks: {
+        legend: { labels: { color: cs("--muted"), boxWidth: 12, boxHeight: 10, useBorderRadius: true, borderRadius: 3, filter: (it, data) => !data.datasets[it.datasetIndex]._oculta } },
+        tooltip: { filter: c => !c.dataset._oculta && c.parsed.y != null && (c.parsed.y !== 0 || !apilado), callbacks: {
           label: c => ` ${c.dataset.label}: ${c.dataset._f ? c.dataset._f(c.parsed.y) : yFmt(c.parsed.y)}`,
           footer: items => apilado && items.length > 1 ? "Total: " + yFmt(items.reduce((s, c) => s + (c.parsed.y || 0), 0)) : "" } },
       },
@@ -6638,6 +6674,7 @@ function renderDetalle(){
 
   // notas
   const notas = [];
+  if (DET.tend) notas.push(por !== "general" && lineas ? "Las líneas finas punteadas son la tendencia de cada serie (ajuste lineal sobre los meses con datos)." : "La línea punteada naranja es la tendencia (ajuste lineal sobre los meses con datos).");
   if (lineas) notas.push("Precio = facturación ÷ toneladas, solo de las cargas que ya tienen USD cargado. Los puntos huecos son meses con menos de 2 contenedores: el promedio ahí es poco confiable (y no cuentan para mes más caro / más barato).");
   if (met === "usd" && totB){
     const e = detEfecto(tot, totB);
