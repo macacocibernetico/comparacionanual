@@ -779,6 +779,10 @@
   html[data-theme="dark"]{--pvp0:#6482ff;--pvp1:#4fd17a;--pvp2:#ff5aa0;--pvp3:#f2a03d;--pvp4:#a08bff}
   #prodCard #prodTable,#prodCard .tblcopybar,#prodCard #prodVista{display:none}
   #prodCard .pgm{margin-top:10px}
+  #prodCard .pgchart{position:relative;height:280px;margin:6px 0 14px}
+  #prodCard .pgchart.pgbig{height:360px;margin:8px 0 22px}
+  #prodCard .pgtop{display:flex;align-items:baseline;gap:10px;font-size:15px}
+  #prodCard .pgtop span{color:var(--muted);font-size:13px}
   #prodCard #prodViz{display:none}
   .prodviz{display:flex;flex-direction:column;gap:8px}
   .pvtop{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:baseline}
@@ -6049,8 +6053,34 @@ function grupoProducto(nombre){
   return { g, sub: sub || "Sin calibre" };
 }
 const GRUPOS_ABIERTOS = new Set();
+const GRUPO_COLOR = { Raw: "#2f56f5", Blanched: "#1f9d45", BF: "#e0367f", Roasted: "#e3860f", Otros: "#7a5af5", "Aceite y expeller": "#8e8e93" };
+/* Columnas apiladas por mes (una serie por grupo o por calibre). */
+function barrasMensuales(id, series, f){
+  const cv = document.getElementById(id); if (!cv) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(cv, {
+    type: "bar",
+    data: { labels: MESES, datasets: series.map(s => ({ label: s.label, data: s.data, backgroundColor: s.color, borderRadius: 4, borderSkipped: false, maxBarThickness: 64, stack: "s" })) },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: paintedFromCache ? 0 : 450, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { labels: { color: cssVar("--muted"), boxWidth: 12, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } },
+        tooltip: { filter: c => c.parsed.y > 0, callbacks: {
+          label: c => ` ${c.dataset.label}: ${f(c.parsed.y)}`,
+          footer: items => items.length > 1 ? "Total: " + f(items.reduce((s, c) => s + c.parsed.y, 0)) : "" } },
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: cssVar("--tick") }, grid: { display: false }, border: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick"), maxTicksLimit: 7, callback: v => fmt0(v) }, grid: { color: cssVar("--grid") }, border: { display: false } },
+      },
+    },
+  });
+}
 function renderProductGrupos(a, usd, yA){
   const el = document.getElementById("prodGrupos"); if (!el) return;
+  ["pgcTop"].concat([...Array(8).keys()].map(i => "pgc" + i)).forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
   const tot = usd ? a.prodUsd : a.prodTotals, porMes = usd ? a.productsUsd : a.products;
   const f = usd ? fmtUsd : (x => fmt1(x) + " t"), fm = usd ? fmtUsd : fmt1;
   const cnt = a.prodCount || {}, G = new Map();
@@ -6059,8 +6089,9 @@ function renderProductGrupos(a, usd, yA){
     const x = G.get(g) || { g, v: 0, n: 0, meses: Array(12).fill(0), subs: new Map() };
     x.v += v; x.n += cnt[p] || 0;
     (porMes[p] || []).forEach((m, i) => { x.meses[i] += m; });
-    const s = x.subs.get(sub) || { sub, v: 0, n: 0 };
-    s.v += v; s.n += cnt[p] || 0; x.subs.set(sub, s);
+    const s = x.subs.get(sub) || { sub, v: 0, n: 0, meses: Array(12).fill(0) };
+    s.v += v; s.n += cnt[p] || 0; (porMes[p] || []).forEach((m, i) => { s.meses[i] += m; });
+    x.subs.set(sub, s);
     G.set(g, x);
   }
   const tipos = ["Raw", "Blanched", "Roasted", "BF"];
@@ -6069,30 +6100,40 @@ function renderProductGrupos(a, usd, yA){
   const resto = ["Aceite y expeller", "Otros"].map(t => G.get(t)).filter(x => x && (x.v > 0 || x.n > 0));
   const lista = [...principales, ...resto];
   const total = lista.reduce((s, x) => s + x.v, 0) || 1, max = Math.max(1, ...lista.map(x => x.v));
+  const grafGrupo = new Map();
   const filas = lista.map((x, i) => {
-    const mx = Math.max(1, ...x.meses), pico = x.meses.indexOf(Math.max(...x.meses));
-    const spark = x.meses.map((v, m) => `<i class="pvm${m === pico && v > 0 ? " pk" : ""}" style="height:${v > 0 ? Math.max(10, v / mx * 100) : 0}%" title="${MESES[m]}: ${v ? f(v) : "sin cargas"}"></i>`).join("");
     const subs = [...x.subs.values()].sort((p, q) => q.v - p.v), smax = Math.max(1, ...subs.map(s => s.v));
-    const abierto = GRUPOS_ABIERTOS.has(x.g);
+    const abierto = GRUPOS_ABIERTOS.has(x.g), col = GRUPO_COLOR[x.g] || PALETTE[i % PALETTE.length];
+    const top = subs.slice(0, 7), otros = subs.slice(7);
+    const series = top.map((s, k) => ({ label: s.sub, data: s.meses, color: PALETTE[k % PALETTE.length] }));
+    if (otros.length) series.push({ label: "Resto (" + otros.length + ")", data: Array(12).fill(0).map((_, m) => otros.reduce((t, s) => t + s.meses[m], 0)), color: "#8e8e93" });
+    grafGrupo.set(i, series);
     const prodsG = Object.keys(a.prodTotals).filter(p => grupoProducto(p).g === x.g).sort((p, q) => (tot[q] || 0) - (tot[p] || 0));
     const tabla = `<div class="tablewrap pgm"><table><tr><th>Producto</th>${MESES.map(m => `<th>${m}</th>`).join("")}<th>Total</th></tr>` +
       prodsG.map(p => `<tr><td>${esc(p)}</td>${(porMes[p] || []).map(v => `<td>${v ? fm(v) : ""}</td>`).join("")}<td><b>${fm(tot[p] || 0)}</b></td></tr>`).join("") +
       `<tr class="total"><td>Total</td>${x.meses.map(v => `<td>${v ? fm(v) : ""}</td>`).join("")}<td>${fm(x.v)}</td></tr></table></div>`;
     const det = subs.map(s => `<div class="pgs"><span class="pgsn">${esc(s.sub)}</span><span class="pgsb"><i style="width:${(s.v / smax * 100).toFixed(1)}%"></i></span><span class="pgsv">${f(s.v)}</span><span class="pgsp">${x.v ? (s.v / x.v * 100).toFixed(1).replace(".", ",") : "0"}%</span><span class="pgsc">${pl(s.n, "carga", "cargas")}</span></div>`).join("");
-    return `<div class="pvr" data-g="${esc(x.g)}" style="--w:${(x.v / max * 100).toFixed(1)}%;--pvc:var(--pvp${i % 5})">
-      <button type="button" class="pvh" aria-expanded="${abierto}" title="Ver cómo se compone y el detalle mensual">
+    return `<div class="pvr" data-g="${esc(x.g)}" data-i="${i}" style="--w:${(x.v / max * 100).toFixed(1)}%;--pvc:${col}">
+      <button type="button" class="pvh pgh" aria-expanded="${abierto}" title="Ver cómo se compone y el detalle mensual">
         <span class="pvrk" aria-hidden="true">${subs.length}</span>
         <span class="pvn"><b>${esc(x.g)}</b><span class="pvbar"><i></i></span></span>
-        <span class="pvspark" aria-hidden="true">${spark}</span>
         <span class="pvv"><b>${f(x.v)}</b><small>${(x.v / total * 100).toFixed(1).replace(".", ",")}% · ${pl(x.n, "carga", "cargas")}</small></span>
       </button>
-      <div class="pgd"${abierto ? "" : " hidden"}>${det}${tabla}</div></div>`;
+      <div class="pgd"${abierto ? "" : " hidden"}><div class="pgchart"><canvas id="pgc${i}"></canvas></div>${det}${tabla}</div></div>`;
   }).join("");
-  el.innerHTML = `<div class="pvtop"><span class="pvsum"><b>Por tipo de producto</b> · ${yA} · el número en el círculo son las variantes de cada grupo</span></div>${filas}`;
-  el.querySelectorAll(".pvr").forEach(r => r.querySelector(".pvh").onclick = e => {
-    const d = r.querySelector(".pgd"), abre = d.hidden;
-    d.hidden = !abre; e.currentTarget.setAttribute("aria-expanded", String(abre));
-    abre ? GRUPOS_ABIERTOS.add(r.dataset.g) : GRUPOS_ABIERTOS.delete(r.dataset.g);
+  el.innerHTML = `<div class="pgtop"><b>Evolución mensual por tipo</b><span>${yA}</span></div><div class="pgchart pgbig"><canvas id="pgcTop"></canvas></div>` +
+    `<div class="pvtop"><span class="pvsum"><b>Por tipo de producto</b> · tocá uno para ver su composición por calibre y el detalle mensual</span></div>${filas}`;
+  barrasMensuales("pgcTop", lista.map(x => ({ label: x.g, data: x.meses, color: GRUPO_COLOR[x.g] || "#8e8e93" })), f);
+  const dibujar = i => { if (i < 8) barrasMensuales("pgc" + i, grafGrupo.get(i), f); };
+  el.querySelectorAll(".pvr").forEach(r => {
+    const i = +r.dataset.i;
+    if (GRUPOS_ABIERTOS.has(r.dataset.g)) dibujar(i);
+    r.querySelector(".pvh").onclick = e => {
+      const d = r.querySelector(".pgd"), abre = d.hidden;
+      d.hidden = !abre; e.currentTarget.setAttribute("aria-expanded", String(abre));
+      abre ? GRUPOS_ABIERTOS.add(r.dataset.g) : GRUPOS_ABIERTOS.delete(r.dataset.g);
+      if (abre) dibujar(i);
+    };
   });
 }
 
