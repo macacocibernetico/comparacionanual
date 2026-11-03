@@ -1440,7 +1440,7 @@
           <button type="button" data-mm="com">Comisión</button>
         </div>
       </div>
-      <h3 class="subh">Exportación vs mercado local · todo Brokerage</h3>
+      <h3 class="subh" id="mktSplitTit">Exportación vs mercado local · todo Brokerage</h3>
       <div class="tablewrap" id="mktSplit" style="margin-bottom:18px"></div>
       <h3 class="subh">Cantidad de cargas por mes · exportación vs local</h3>
       <div class="chartbox" style="height:260px;margin-bottom:18px"><canvas id="chMkt" role="img" aria-label="Cargas por mes, exportación y mercado local"></canvas></div>
@@ -1806,7 +1806,9 @@ function linkCompartir(){
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e){}
   const url = location.href.split("#")[0];
-  return url + "#cfg=" + b64url(JSON.stringify({ v: 1, cfg: saved }));
+  // además de las planillas: lo que el usuario dejó armado (vista, filtros, colores)
+  const leer = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } };
+  return url + "#cfg=" + b64url(JSON.stringify({ v: 2, cfg: saved, ui: leer(UI_KEY), colors: leer(COLORS_KEY) }));
 }
 let CFG_IMPORTADA = false;
 (function importarDesdeLink(){
@@ -1824,6 +1826,8 @@ let CFG_IMPORTADA = false;
       }
       if (actual && !igual) localStorage.setItem(LS_KEY + "_backup", actual);
       localStorage.setItem(LS_KEY, JSON.stringify(obj.cfg));
+      if (obj.ui && typeof obj.ui === "object") localStorage.setItem(UI_KEY, JSON.stringify(obj.ui));
+      if (obj.colors && typeof obj.colors === "object") localStorage.setItem(COLORS_KEY, JSON.stringify(obj.colors));
       localStorage.removeItem("dashboardCache");   // datos del navegador anterior: se leen de nuevo
       CFG_IMPORTADA = true;
     }
@@ -2644,8 +2648,8 @@ async function loadData(){
           errors.push(`<b>${b.name} · database de clientes:</b> ${esc(errorCriollo(e))}`);
         }
       } else CLI_INFO[b.key] = null;
-      if (CONFIG[b.key].SUPPLIERS_URL){
-        try { PROV_DB[b.key] = await fetchProveedores(CONFIG[b.key]) || []; }
+      if (cfgProveedores(b.key).SUPPLIERS_URL){
+        try { PROV_DB[b.key] = await fetchProveedores(cfgProveedores(b.key)) || []; }
         catch(e){ PROV_DB[b.key] = []; errors.push(`<b>${b.name} · database de proveedores:</b> ${esc(errorCriollo(e))}`); }
       }
     }
@@ -4035,6 +4039,13 @@ function colDe(hdr, ...nombres){
   return -1;
 }
 
+/* La database de proveedores es una sola para los tres negocios: si se pegó en uno, los otros la usan también */
+function cfgProveedores(key){
+  const c = CONFIG[key] || {};
+  if ((c.SUPPLIERS_URL || "").trim()) return c;
+  const otro = Object.values(CONFIG).find(x => x && (x.SUPPLIERS_URL || "").trim());
+  return otro ? { ...c, SUPPLIERS_URL: otro.SUPPLIERS_URL, SUPPLIERS_SHEET: otro.SUPPLIERS_SHEET } : c;
+}
 /* Database de proveedores: empresa, país, qué productos ofrece, BRC y estado */
 async function fetchProveedores(cfg){
   const raw = (cfg.SUPPLIERS_URL || "").trim();
@@ -4508,7 +4519,7 @@ function renderComMapaProv(el, hist, yA, aviso){
   const P = armarProvMundo(emb, R, contratos);
   const fm = met === "usd" ? fmtUsd : met === "exp" ? v => pl(v, "exportador", "exportadores") : v => fmt1(v) + " t";
   const valorDe = x => met === "exp" ? x.exps.size : x[met];
-  const cfgProv = (CONFIG[UI.biz] || {}).SUPPLIERS_URL, dbProv = PROV_DB[UI.biz];
+  const cfgProv = cfgProveedores(UI.biz).SUPPLIERS_URL, dbProv = PROV_DB[UI.biz];
   const avisoProv = dbProv && dbProv.length ? "" : !cfgProv
     ? `<p class="comaviso">Conectá la database de proveedores (hoja «Database suppliers») en ⚙️ Configurar para ubicar a cada exportador en su país.</p>`
     : !dbProv ? `<p class="comaviso">⏳ Leyendo la database de proveedores…</p>`
@@ -4952,10 +4963,12 @@ function renderMercado(recs, yA){
     : caja("Exportación", exp, "#0071e3") + caja("Mercado local (Argentina)", loc, "#34c759") +
       `<div class="pstat suma"><span class="plabel">Total</span><div class="pval">${fm(tot)}</div><div class="phint">${fmt0(R.length)} cargas</div></div>`;
 
-  // 1b) Brokerage completo (Maní + Aceite/Expeller), sin importar la vista elegida
-  const base = applyFilter(quitarExcluidas(DATA[UI.biz] || [], UI.biz)).filter(r => r.etd && (hist || r.etd.y === yA));
-  const svs = SUBVISTAS[UI.biz] || [];
-  const cols = [...svs.map(x => ({ name: x.label.replace(/^Brokerage /, ""), arr: base.filter(x.test) })), { name: "Brokerage total", arr: base, total: true }];
+  // 1b) solo lo de la pestaña elegida (Maní o Aceite + Expeller); en Brokerage total no hay recorte
+  const sub = subActual();
+  const base = applyFilter(quitarExcluidas(DATA[UI.biz] || [], UI.biz)).filter(r => r.etd && (hist || r.etd.y === yA) && (!sub || sub.test(r)));
+  const cols = [{ name: sub ? sub.label.replace(/^Brokerage /, "") : "Total", arr: base, total: true }];
+  const hMkt = document.getElementById("mktSplitTit");
+  if (hMkt) hMkt.textContent = "Exportación vs mercado local · " + (sub ? sub.label : "todo Brokerage");
   const celda = (arr, f, totArr) => { const val = sum(arr, f), tt = sum(totArr, f);
     return `${f === tnsF ? fmt1(val) + " t" : fmtUsd(val)} <span style="color:var(--faint);font-size:.78rem">${pc(val, tt)}</span>`; };
   const tnsF = r => r.tns, usdF = r => r.usd, comF = r => r.comision;
@@ -4974,7 +4987,7 @@ function renderMercado(recs, yA){
     hs += `<p style="color:var(--amber);font-size:.76rem;margin-top:8px;line-height:1.5">⚠️ ${lista(sinDb)} no los encontré en la columna “${esc(ciX && ciX.col || "Company")}” de la database${ciX && ciX.filas ? ` (leí ${fmt0(ciX.filas)} filas, ${fmt0(ciX.clientes)} empresas distintas)` : ""}: se cuentan como exportación.</p>`;
   document.getElementById("mktSplit").innerHTML = sinPais ? "" : (base.length ? hs : `<p class="empty">Sin cargas en el período.</p>`);
 
-  // 1c) cargas por mes (todo Brokerage): barras apiladas
+  // 1c) cargas por mes (de la pestaña elegida): barras apiladas
   if (charts.chMkt){ charts.chMkt.destroy(); delete charts.chMkt; }
   if (!sinPais && base.length){
     let labelsM, keyM;
