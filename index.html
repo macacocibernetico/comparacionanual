@@ -4468,6 +4468,11 @@ function paisDeProveedor(nombre){
   paisDeProveedor.c.set(k, p);
   return p;
 }
+function motivoSinPais(nombre){
+  const db = PROV_DB[UI.biz] || [], k = claveProv(nombre);
+  const hit = db.find(x => normEmpresa(x.n) === k) || db.find(x => mismaEmpresa(x.n, nombre));
+  return hit ? "Country vacío en la hoja" : "no está en la hoja";
+}
 /* País → exportadores → clientes, con las operaciones de cada exportador */
 function armarProvMundo(emb, R, contratos){
   const paises = new Map();
@@ -4503,7 +4508,11 @@ function renderComMapaProv(el, hist, yA, aviso){
   const P = armarProvMundo(emb, R, contratos);
   const fm = met === "usd" ? fmtUsd : met === "exp" ? v => pl(v, "exportador", "exportadores") : v => fmt1(v) + " t";
   const valorDe = x => met === "exp" ? x.exps.size : x[met];
-  const avisoProv = (PROV_DB[UI.biz] || []).length ? "" : `<p class="comaviso">Conectá la database de proveedores en ⚙️ Configurar para ubicar a cada exportador en su país.</p>`;
+  const cfgProv = (CONFIG[UI.biz] || {}).SUPPLIERS_URL, dbProv = PROV_DB[UI.biz];
+  const avisoProv = dbProv && dbProv.length ? "" : !cfgProv
+    ? `<p class="comaviso">Conectá la database de proveedores (hoja «Database suppliers») en ⚙️ Configurar para ubicar a cada exportador en su país.</p>`
+    : !dbProv ? `<p class="comaviso">⏳ Leyendo la database de proveedores…</p>`
+    : `<p class="comaviso">La hoja «Database suppliers» se leyó pero no trajo proveedores. Revisá el link en ⚙️ Configurar.</p>`;
   if (COMP.pais && !P.has(COMP.pais)){ COMP.pais = null; COMP.exp = null; COMP.cli = null; }
   const X = COMP.pais ? P.get(COMP.pais) : null;
   if (COMP.exp && !(X && X.exps.has(COMP.exp))){ COMP.exp = null; COMP.cli = null; }
@@ -4538,12 +4547,13 @@ function renderComMapaProv(el, hist, yA, aviso){
     const idt = s => s + "_" + modo;
     if (!E){
       const exps = [...X.exps.values()].sort((a, b) => b.tns - a.tns);
-      lado = crumb + stats(X) + (X.k === "sin" ? `<p class="comsub">Estos exportadores no figuran en la database de proveedores o no tienen país cargado.</p>` : "") +
+      const nota = e => X.k === "sin" ? ` <span class="tag">${motivoSinPais(e.nom)}</span>` : "";
+      lado = crumb + stats(X) + (X.k === "sin" ? `<p class="comsub">Estos exportadores no tienen país: o la columna <b>Country</b> está vacía en la hoja «Database suppliers», o el exportador no está en esa hoja. Completá eso y se ubican solos.</p>` : "") +
         `<h3 class="subh">Exportadores de ${esc(X.es)} <span class="comsub">· tocá uno para ver con quién operó</span></h3>` +
         tablaCorta(idt("pmExp"), emb ? ["Exportador", "Toneladas", "% del país", "Facturación", "Clientes", "Cargas", "Última carga"] : ["Exportador", "Contratadas (t)", "% del país", "Valor", "Pendiente (t)", "Clientes", "Contratos", "Último contrato"],
           exps.map(e => emb
-            ? [lk("data-pe", e.k, e.nom), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmt0(e.clis.size), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—"]
-            : [lk("data-pe", e.k, e.nom), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmt1(e.pend), fmt0(e.clis.size), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—"]), { max: 12 });
+            ? [lk("data-pe", e.k, e.nom) + nota(e), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmt0(e.clis.size), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—"]
+            : [lk("data-pe", e.k, e.nom) + nota(e), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmt1(e.pend), fmt0(e.clis.size), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—"]), { max: 12 });
     } else {
       const clis = [...E.clis.values()].sort((a, b) => b.tns - a.tns);
       const ops = E.ops.filter(o => !COMP.cli || o.kc === COMP.cli).sort((a, b) => (b.f || 0) - (a.f || 0));
