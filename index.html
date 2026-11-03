@@ -917,6 +917,21 @@
   .crkb i{display:block;height:100%;border-radius:99px;background:var(--accent)}
   .comdet h4,.comh4{margin:0 0 8px;font-size:.92rem;font-weight:600}
   .comsub{color:var(--faint);font-size:.8rem;line-height:1.55;margin:8px 0}
+  .comleyenda{flex-direction:column;gap:6px}
+  .comleyenda .comsub{margin:0;text-align:center}
+  .gesc{display:inline-flex;align-items:center;gap:10px;font-size:.78rem;color:var(--muted)}
+  .gbar{width:120px;height:8px;border-radius:99px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 25%,var(--panel3)),var(--accent))}
+  .comgrid.pm{grid-template-columns:minmax(0,1fr) minmax(0,1.45fr)}
+  @media(max-width:900px){ .comgrid.pm{grid-template-columns:minmax(0,1fr)} }
+  .comlado .pipestats.comk{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:6px}
+  .comlado .pipestats.comk.dos{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .comlado .pipestats.comk .pstat{padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+  .comlado .pipestats.comk .pval{font-size:1.2rem;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .comlado .pipestats.comk .phint{margin-top:0;min-height:1em}
+  @media(max-width:560px){ .comlado .pipestats.comk{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .comgrid.pm .comlado table{font-size:.78rem}
+  .comgrid.pm .comlado th,.comgrid.pm .comlado td{padding:8px 7px}
+  .comgrid.pm .comlado td:first-child,.comgrid.pm .comlado th:first-child{text-align:left;white-space:normal;min-width:120px}
   .comaviso{background:var(--panel2);border-radius:12px;padding:10px 14px;font-size:.82rem;color:var(--muted);margin:0 0 14px}
   .pipestats.comk{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
   .pstat.alerta .pval{color:var(--red)}
@@ -1460,8 +1475,8 @@
       <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="comVista" role="group" aria-label="Sección del panel comercial">
-          <button type="button" data-cv="mapa">🌎 Globo de clientes</button>
           <button type="button" data-cv="pmapa">🏭 Globo de proveedores</button>
+          <button type="button" data-cv="mapa">🌎 Globo de clientes</button>
           <button type="button" data-cv="cartera">Salud de la cartera</button>
           <button type="button" data-cv="embudo">Embudo y vendedores</button>
           <button type="button" data-cv="prov">Proveedores y precios</button>
@@ -2242,6 +2257,7 @@ function buildRecords(rows, cfg, bizKey){
   for (const h of [cfg.PAIS_COL, "Country", "País", "Pais", "Destination Country", "Country of destination"].filter(Boolean)){
     const ix = findInMap(h, hmap); if (ix !== undefined){ paisIdx = ix; break; }
   }
+  const etaIdx = findInMap("ETA", hmap);
   const recs = [];
   recs.paisCol = paisIdx >= 0;
   for (let i = headerRowIdx + 1; i < rows.length; i++){
@@ -2265,6 +2281,7 @@ function buildRecords(rows, cfg, bizKey){
       containers: countContainers(r[C.containers]),
       etd,
       consolidacion: cons,
+      eta: etaIdx !== undefined ? parseDate(r[etaIdx], cfg.DATE_FORMAT) : null,
       port: String(r[C.port] ?? "").trim() || "(sin destino)",
       packing: String(r[C.packing] ?? "").trim(),
       cobro: parseDate(r[C.cobro], cfg.DATE_FORMAT) || parseDate(r[C.cobroEst], cfg.DATE_FORMAT),
@@ -4335,7 +4352,7 @@ function renderComercial(recsAll, yA){
   nota.innerHTML = UI.comProv ? `Viendo solo lo de <b>${esc(provs.get(UI.comProv).n)}</b> <button type="button" id="comQuitarProv">Ver todos</button>` : "";
   const qp = document.getElementById("comQuitarProv");
   if (qp) qp.onclick = () => { UI.comProv = ""; saveUI(); renderComercial(recsAll, yA); };
-  const vista = ["mapa", "pmapa", "cartera", "embudo", "prov"].includes(UI.comVista) ? UI.comVista : "mapa";
+  const vista = ["mapa", "pmapa", "cartera", "embudo", "prov"].includes(UI.comVista) ? UI.comVista : "pmapa";
   const hist = UI.comPeriodo === "hist";
   const wire = (sel, attr, key, val) => document.querySelectorAll(sel).forEach(b => {
     const on = b.dataset[attr] === val;
@@ -4418,7 +4435,7 @@ function renderComMapa(el, R, recs, aviso, hist, yA){
     </div>
     <div class="comgrid">
       <div><div class="globo" id="comGlobo"><p class="comsub">Cargando el mapa…</p><div class="gtip" aria-hidden="true"></div></div>
-        <div class="comleyenda">${modo === "compra" ? `<span class="gleg"><i class="gl1"></i>menos</span><span class="gleg"><i class="gl2"></i>más ${metrica === "cli" ? "clientes" : metrica === "tns" ? "toneladas" : "US$"}</span>` : `<span class="gleg"><i class="gl2"></i>con clientes que compran</span><span class="gleg"><i class="gl3"></i>solo prospectos</span>`}
+        <div class="comleyenda">${modo === "compra" ? `<span class="gesc">Menos<i class="gbar"></i>Más ${metrica === "cli" ? "clientes" : metrica === "tns" ? "toneladas" : "US$"}</span>` : `<span class="gleg"><i class="gl2"></i>con clientes que compran</span><span class="gleg"><i class="gl3"></i>solo prospectos</span>`}
           <span class="comsub">Arrastrá para girar el globo.</span></div>
         ${sinPais.cargas && modo === "compra" ? `<p class="comsub" style="text-align:center">${pl(sinPais.cargas, "carga")} (${fmt1(sinPais.tns)} t) de clientes sin país en la database no aparecen en el mapa.</p>` : ""}
       </div>
@@ -4488,21 +4505,22 @@ function motivoSinPais(nombre){
 function armarProvMundo(emb, R, contratos){
   const paises = new Map();
   const items = emb
-    ? R.map(r => ({ exp: r.exporter, cli: r.importer, paisCli: (paisInfo(r.pais) || {}).es || "—", tns: r.tns || 0, usd: r.usd || 0, pend: 0, f: r.etd ? fechaD(r.etd) : null, r }))
+    ? R.map(r => ({ exp: r.exporter, cli: r.importer, paisCli: (paisInfo(r.pais) || {}).es || "—", tns: r.tns || 0, usd: r.usd || 0, com: r.comision || 0, pend: 0, f: r.etd ? fechaD(r.etd) : null, eta: r.eta ? fechaD(r.eta) : null, r }))
     : contratos.map(c => { const d = infoClienteDb(c.importador);
         return { exp: c.exportador, cli: c.importador, paisCli: d && d.pais ? (paisInfo(d.pais) || {}).es || d.pais : "—",
-          tns: c.toneladas || 0, usd: c.total || (c.precio || 0) * (c.toneladas || 0), pend: Math.max(0, c.saldo || 0), f: c.fecha ? fechaD(c.fecha) : null, r: c }; });
-  const suma = (o, it) => { o.tns += it.tns; o.usd += it.usd; o.pend += it.pend; o.cant++; if (it.f && (!o.ult || it.f > o.ult)) o.ult = it.f; };
+          tns: c.toneladas || 0, usd: c.total || (c.precio || 0) * (c.toneladas || 0), com: 0, eta: null, pend: Math.max(0, c.saldo || 0), f: c.fecha ? fechaD(c.fecha) : null, r: c }; });
+  const suma = (o, it) => { o.tns += it.tns; o.usd += it.usd; o.com += it.com; o.pend += it.pend; o.cant++;
+    if (it.f && (!o.ult || it.f > o.ult)) o.ult = it.f; if (it.eta && (!o.eta || it.eta > o.eta)) o.eta = it.eta; };
   for (const it of items){
     const p = paisDeProveedor(it.exp), kp = p ? (p.id || "x:" + p.es) : "sin";
     let x = paises.get(kp);
-    if (!x){ x = { k: kp, id: p && p.id, es: p ? p.es : "Sin país en la database", coord: p && p.coord, tns: 0, usd: 0, pend: 0, cant: 0, ult: null, exps: new Map() }; paises.set(kp, x); }
+    if (!x){ x = { k: kp, id: p && p.id, es: p ? p.es : "Sin país en la database", coord: p && p.coord, tns: 0, usd: 0, com: 0, pend: 0, cant: 0, ult: null, eta: null, exps: new Map() }; paises.set(kp, x); }
     const ke = claveProv(it.exp);
     let e = x.exps.get(ke);
-    if (!e){ e = { k: ke, nom: it.exp || "(sin dato)", tns: 0, usd: 0, pend: 0, cant: 0, ult: null, clis: new Map(), ops: [] }; x.exps.set(ke, e); }
+    if (!e){ e = { k: ke, nom: it.exp || "(sin dato)", tns: 0, usd: 0, com: 0, pend: 0, cant: 0, ult: null, eta: null, clis: new Map(), ops: [] }; x.exps.set(ke, e); }
     const kc = claveProv(it.cli);
     let c = e.clis.get(kc);
-    if (!c){ c = { k: kc, nom: it.cli || "(sin dato)", pais: it.paisCli, tns: 0, usd: 0, pend: 0, cant: 0, ult: null }; e.clis.set(kc, c); }
+    if (!c){ c = { k: kc, nom: it.cli || "(sin dato)", pais: it.paisCli, tns: 0, usd: 0, com: 0, pend: 0, cant: 0, ult: null, eta: null }; e.clis.set(kc, c); }
     suma(x, it); suma(e, it); suma(c, it);
     e.ops.push({ ...it, kc });
   }
@@ -4541,9 +4559,10 @@ function renderComMapaProv(el, hist, yA, aviso){
   const maxR = Math.max(1, ...rank.map(valorDe)), totR = rank.reduce((s, x) => s + valorDe(x), 0);
   const caja = (t, v, h) => `<div class="pstat"><span class="plabel">${t}</span><div class="pval">${v}</div><div class="phint">${h || ""}</div></div>`;
   const pctEmb = (tns, pend) => tns > 0 ? pctTxt(Math.max(0, tns - pend), tns) : "—";
-  const stats = o => `<div class="pipestats comk">` + (emb
-    ? caja("Toneladas", fmt1(o.tns) + " t", "embarcadas") + caja("Facturación", fmtUsd(o.usd), "") + caja("Cargas", fmt0(o.cant), "") + caja("Última carga", o.ult ? fFecha(o.ult) : "—", "")
-    : caja("Contratadas", fmt1(o.tns) + " t", `${pl(o.cant, "contrato")}`) + caja("Valor", fmtUsd(o.usd), "") + caja("Pendiente", fmt1(o.pend) + " t", "saldo por embarcar") + caja("Embarcado", pctEmb(o.tns, o.pend), "de lo contratado")) + `</div>`;
+  const stats = o => `<div class="pipestats comk${emb ? "" : " dos"}">` + (emb
+    ? caja("Toneladas", fmt1(o.tns) + " t", "embarcadas") + caja("Facturación", fmtUsd(o.usd), "total") + caja("Comisión", fmtUsd(o.com), "total") +
+      caja("Cargas", fmt0(o.cant), "operaciones") + caja("Última ETD", o.ult ? fFecha(o.ult) : "—", "salida") + caja("Última ETA", o.eta ? fFecha(o.eta) : "—", "llegada")
+    : caja("Contratadas", fmt1(o.tns) + " t", `${pl(o.cant, "contrato")}`) + caja("Valor", fmtUsd(o.usd), "total") + caja("Pendiente", fmt1(o.pend) + " t", "saldo por embarcar") + caja("Embarcado", pctEmb(o.tns, o.pend), "de lo contratado")) + `</div>`;
   const lk = (attr, k, txt) => `<button type="button" class="pmlink" ${attr}="${esc(k)}">${esc(txt)}</button>`;
 
   let lado;
@@ -4561,33 +4580,33 @@ function renderComMapaProv(el, hist, yA, aviso){
       const nota = e => X.k === "sin" ? ` <span class="tag">${motivoSinPais(e.nom)}</span>` : "";
       lado = crumb + stats(X) + (X.k === "sin" ? `<p class="comsub">Estos exportadores no tienen país: o la columna <b>Country</b> está vacía en la hoja «Database suppliers», o el exportador no está en esa hoja. Completá eso y se ubican solos.</p>` : "") +
         `<h3 class="subh">Exportadores de ${esc(X.es)} <span class="comsub">· tocá uno para ver con quién operó</span></h3>` +
-        tablaCorta(idt("pmExp"), emb ? ["Exportador", "Toneladas", "% del país", "Facturación", "Clientes", "Cargas", "Última carga"] : ["Exportador", "Contratadas (t)", "% del país", "Valor", "Pendiente (t)", "Clientes", "Contratos", "Último contrato"],
+        tablaCorta(idt("pmExp"), emb ? ["Exportador", "Toneladas", "% del país", "Facturación", "Comisión", "Cargas", "Última ETD", "Última ETA"] : ["Exportador", "Contratadas (t)", "% del país", "Valor", "Pendiente (t)", "Clientes", "Contratos", "Último contrato"],
           exps.map(e => emb
-            ? [lk("data-pe", e.k, e.nom) + nota(e), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmt0(e.clis.size), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—"]
+            ? [lk("data-pe", e.k, e.nom) + nota(e), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmtUsd(e.com), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—", e.eta ? fFecha(e.eta) : "—"]
             : [lk("data-pe", e.k, e.nom) + nota(e), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmt1(e.pend), fmt0(e.clis.size), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—"]), { max: 12 });
     } else {
       const clis = [...E.clis.values()].sort((a, b) => b.tns - a.tns);
       const ops = E.ops.filter(o => !COMP.cli || o.kc === COMP.cli).sort((a, b) => (b.f || 0) - (a.f || 0));
       const fila = o => emb
-        ? [esc(o.r.negocio || "—"), esc(o.r.importer || "—"), esc(o.r.product || "—"), esc(o.r.port || "—"), o.f ? fFecha(o.f) : "—", fmt1(o.tns), fmtUsd(o.usd)]
+        ? [esc(o.r.negocio || "—"), esc(o.r.importer || "—"), esc(o.r.product || "—"), esc(o.r.port || "—"), o.f ? fFecha(o.f) : "—", o.eta ? fFecha(o.eta) : "—", fmt1(o.tns), fmtUsd(o.usd), fmtUsd(o.com)]
         : [esc(o.r.contrato || "—"), o.f ? fFecha(o.f) : "—", esc(o.r.importador || "—"), esc(o.r.producto || "—"), fmt1(o.tns), fmt1(o.pend), pctEmb(o.tns, o.pend), fmtUsd(o.usd)];
       lado = crumb + stats(E) +
         `<h3 class="subh">Clientes de ${esc(E.nom)} <span class="comsub">· tocá uno para filtrar las operaciones</span></h3>` +
-        tablaCorta(idt("pmCli"), emb ? ["Cliente", "País", "Cargas", "Toneladas", "Facturación", "Última carga"] : ["Cliente", "País", "Contratos", "Contratadas (t)", "Pendiente (t)", "% embarcado", "Valor", "Último contrato"],
+        tablaCorta(idt("pmCli"), emb ? ["Cliente", "País", "Cargas", "Toneladas", "Facturación", "Comisión", "Última ETD", "Última ETA"] : ["Cliente", "País", "Contratos", "Contratadas (t)", "Pendiente (t)", "% embarcado", "Valor", "Último contrato"],
           clis.map(c => emb
-            ? [lk("data-pc", c.k, c.nom) + (COMP.cli === c.k ? " ✓" : ""), esc(c.pais), fmt0(c.cant), fmt1(c.tns), fmtUsd(c.usd), c.ult ? fFecha(c.ult) : "—"]
+            ? [lk("data-pc", c.k, c.nom) + (COMP.cli === c.k ? " ✓" : ""), esc(c.pais), fmt0(c.cant), fmt1(c.tns), fmtUsd(c.usd), fmtUsd(c.com), c.ult ? fFecha(c.ult) : "—", c.eta ? fFecha(c.eta) : "—"]
             : [lk("data-pc", c.k, c.nom) + (COMP.cli === c.k ? " ✓" : ""), esc(c.pais), fmt0(c.cant), fmt1(c.tns), fmt1(c.pend), pctEmb(c.tns, c.pend), fmtUsd(c.usd), c.ult ? fFecha(c.ult) : "—"]), { max: 10 }) +
         `<h3 class="subh" style="margin-top:20px">${emb ? "Cargas" : "Contratos"}${COMP.cli ? ` con ${esc(E.clis.get(COMP.cli).nom)} <button type="button" class="pmlink" data-pc="${esc(COMP.cli)}">× quitar filtro</button>` : ""} <span class="comsub">· ${pl(ops.length, emb ? "carga" : "contrato")}</span></h3>` +
-        tablaCorta(idt("pmOps"), emb ? ["Ref.", "Cliente", "Producto", "Destino", "ETD", "Toneladas", "Facturación"] : ["Contrato", "Fecha", "Cliente", "Producto", "Contratadas (t)", "Pendiente (t)", "% embarcado", "Valor"], ops.map(fila), { max: 12 });
+        tablaCorta(idt("pmOps"), emb ? ["Ref.", "Cliente", "Producto", "Destino", "ETD", "ETA", "Toneladas", "Facturación", "Comisión"] : ["Contrato", "Fecha", "Cliente", "Producto", "Contratadas (t)", "Pendiente (t)", "% embarcado", "Valor"], ops.map(fila), { max: 12 });
     }
   }
   el.innerHTML = aviso + avisoProv + `<div class="consbar">
       <div class="seg" id="pmModo" role="group" aria-label="Embarcado o contratado"><button type="button" data-pm="emb">Embarcado</button><button type="button" data-pm="con">Contratado</button></div>
       <div class="seg" id="pmMetrica" role="group" aria-label="Métrica del mapa">${PM_METRICAS[modo].map(([k, t]) => `<button type="button" data-px="${k}">${t}</button>`).join("")}</div>
     </div>
-    <div class="comgrid">
+    <div class="comgrid pm">
       <div><div class="globo" id="pmGlobo"><p class="comsub">Cargando el mapa…</p><div class="gtip" aria-hidden="true"></div></div>
-        <div class="comleyenda"><span class="gleg"><i class="gl1"></i>menos</span><span class="gleg"><i class="gl2"></i>más ${met === "exp" ? "exportadores" : met === "usd" ? "US$" : "toneladas"}</span>
+        <div class="comleyenda"><span class="gesc">Menos<i class="gbar"></i>Más ${met === "exp" ? "exportadores" : met === "usd" ? "US$" : "toneladas"}</span>
           <span class="comsub">Países de los exportadores · arrastrá para girar el globo.</span></div>
       </div>
       <div class="comlado">${lado}</div>
