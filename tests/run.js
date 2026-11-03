@@ -72,7 +72,7 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   t('con datos: tarjetas vuelven', ['cardTns', 'cardUsd', 'cardCom', 'cardEtd', 'rollCard', 'prodCard'].every(id => g(id).style.display === ''));
 
   // accesibilidad del HTML estático
-  t('4 modales con role=dialog y nombre', (h.match(/class="modal[^"]*" role="dialog" aria-modal="true" aria-labelledby="\w+"/g) || []).length === 4);
+  t('5 modales con role=dialog y nombre', (h.match(/class="modal[^"]*" role="dialog" aria-modal="true" aria-labelledby="\w+"/g) || []).length === 5);
   t('hay <main> y el skip-link apunta a él', /<main id="main"/.test(h) && /href="#main" class="skip-link"/.test(h) && /<\/main>/.test(h));
   t('pill Todos con aria-pressed', /data-y="all" aria-pressed=/.test(h));
 

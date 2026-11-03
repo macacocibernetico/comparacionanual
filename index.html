@@ -928,6 +928,17 @@
   table.anual .y2{background:hsla(32,70%,55%,.16)} table.anual .y3{background:hsla(52,75%,55%,.16)}
   table.anual .y4{background:hsla(150,40%,50%,.16)} table.anual .yt{background:hsla(215,30%,50%,.22)}
   table.anual td.cero{color:var(--faint)}
+  table.anual.min th,table.anual.min td{padding:9px 12px}
+  table.anual.min thead th{text-align:right;font-weight:500;color:var(--muted);font-size:.78rem}
+  table.anual.min thead th.nom{text-align:left}
+  table.anual.min td{font-variant-numeric:tabular-nums}
+  table.anual.min td.cli{cursor:pointer}
+  table.anual.min tbody tr{cursor:pointer;transition:background .15s}
+  table.anual.min tbody tr:hover td{background:var(--panel2)}
+  table.anual.min td.tt{font-weight:600}
+  .anualbusca{margin:2px 0 12px}
+  .anualbusca input{width:100%;max-width:340px;padding:9px 14px;border-radius:99px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font:inherit;font-size:.88rem}
+  .anualbusca input:focus{outline:2px solid var(--accent);outline-offset:1px}
   table.anual tr.tot td{font-weight:700;border-top:2px solid var(--border);background:var(--panel2)}
   table.anual tr.tot td.nom{background:var(--panel2)}
   .comleyenda{flex-direction:column;gap:6px}
@@ -1455,7 +1466,7 @@
 
     <div class="card wide" id="anualCard" style="display:none">
       <h2 class="clickhead">Análisis por año <span id="lblAnual" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Todos los años en una sola vista: toneladas y facturación por producto y por cliente, según la fecha que elijas: <b>ETD</b> o <b>consolidación</b>.</p>
+      <p class="csub" id="anualSub"></p>
       <div class="cardbody">
       <div class="consbar">
         <div class="seg" id="anualFecha" role="group" aria-label="Fecha que define el año">
@@ -1468,9 +1479,12 @@
           <button type="button" data-ao="nom">A–Z</button>
         </div>
       </div>
-      <h3 class="subh" id="anualTitProd"></h3>
-      <div class="tablewrap" id="anualProd" style="margin-bottom:22px"></div>
+      <div id="anualProdBox">
+        <h3 class="subh" id="anualTitProd"></h3>
+        <div class="tablewrap" id="anualProd" style="margin-bottom:22px"></div>
+      </div>
       <h3 class="subh" id="anualTitCli"></h3>
+      <div class="anualbusca" id="anualBuscaBox" hidden><input type="search" id="anualBusca" placeholder="Buscar un cliente…" autocomplete="off" aria-label="Buscar un cliente"></div>
       <div class="tablewrap" id="anualCli"></div>
       <div class="listamas" id="anualMas"></div>
       </div>
@@ -1647,6 +1661,19 @@
     <p class="hint" id="rollZoomSub"></p>
     <div class="chartbox" style="height:min(62vh,560px)"><canvas id="chRollZoom" role="img" aria-label="Gráfico ampliado"></canvas></div>
     <div class="actions"><button class="primary" id="rollZoomClose">Cerrar</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="cliBg">
+  <div class="modal wide dpanel" role="dialog" aria-modal="true" aria-labelledby="cliTitulo">
+    <div class="dphead"><div><h2 id="cliTitulo"></h2><p class="hint" id="cliSub"></p></div><button type="button" class="dpx" id="cliX" aria-label="Cerrar">✕</button></div>
+    <div class="dpstats" id="cliStats"></div>
+    <h3 class="subh">Toneladas por año y producto</h3>
+    <div class="dpchart" style="height:300px"><canvas id="cliChart" role="img" aria-label="Toneladas por año y producto"></canvas></div>
+    <h3 class="subh">Productos que compró</h3>
+    <div class="tablewrap" id="cliProd"></div>
+    <h3 class="subh" style="margin-top:20px">Últimas cargas</h3>
+    <div class="tablewrap" id="cliOps"></div>
   </div>
 </div>
 
@@ -5013,12 +5040,24 @@ function renderComProv(el, R, recs, hist, yA){
 }
 
 /* ---------- Análisis por año: producto × años y cliente × años en una sola tabla ---------- */
+let ANUAL_Q = "", ANUAL_RECS = [], ANUAL_R = [], ANUAL_CLI = "";
+const sinTildes = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function renderAnual(recs){
   const card = document.getElementById("anualCard");
   if (!card) return;
-  const cons = UI.anualFecha === "cons";
+  ANUAL_RECS = recs || [];
+  const brok = UI.biz === "brokerage";                          // solo clientes, en versión compacta
+  const conCons = UI.biz === "axt" || UI.biz === "buzaram";     // la fecha de consolidación se registra solo en estos negocios
+  const cons = conCons && UI.anualFecha === "cons";
   const fechaDe = r => cons ? r.consolidacion : r.etd;
+  document.getElementById("anualFecha").style.display = conCons ? "" : "none";
+  document.getElementById("anualProdBox").style.display = brok ? "none" : "";
+  document.getElementById("anualBuscaBox").hidden = !brok;
+  document.getElementById("anualSub").innerHTML = brok
+    ? "Toneladas por cliente y por año (según <b>ETD</b>). Buscá uno o tocalo para ver su historial: gráfico, productos y cargas."
+    : "Todos los años en una sola vista: toneladas y facturación por producto y por cliente, según " + (conCons ? "la fecha que elijas: <b>ETD</b> o <b>consolidación</b>." : "<b>ETD</b>.");
   const R = (recs || []).filter(r => fechaDe(r)).map(r => ({ ...r, year: fechaDe(r).y }));
+  ANUAL_R = R;
   if (!R.length){ card.style.display = (recs || []).length ? "" : "none"; document.getElementById("anualProd").innerHTML = (recs || []).length ? `<p class="empty">Ninguna carga tiene fecha de ${cons ? "consolidación" : "ETD"}.</p>` : ""; document.getElementById("anualCli").innerHTML = ""; document.getElementById("anualMas").innerHTML = ""; return; }
   card.style.display = "";
   document.querySelectorAll("#anualFecha button").forEach(b => {
@@ -5028,7 +5067,7 @@ function renderAnual(recs){
   const sinFecha = (recs || []).length - R.length;
   const años = [...new Set(R.map(r => r.year))].sort((a, b) => a - b);
   const orden = ["usd", "nom"].includes(UI.anualOrden) ? UI.anualOrden : "tns";
-  const todos = !!UI.anualTodos, LIM = 20;
+  const todos = !!UI.anualTodos, LIM = brok ? 15 : 20;
   document.getElementById("lblAnual").textContent = años.length > 1 ? `${años[0]} a ${años[años.length - 1]}` : String(años[0]);
   document.querySelectorAll("#anualOrden button").forEach(b => {
     const on = b.dataset.ao === orden; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
@@ -5057,19 +5096,91 @@ function renderAnual(recs){
       vis.map(f => `<tr><td class="nom" title="${esc(f.n)}">${esc(f.n)}</td>${celdas(f.por, f.tns, f.usd)}</tr>`).join("") +
       `<tr class="tot"><td class="nom">TOTAL</td>${celdas(totPor, tT, tU)}</tr></tbody></table>`;
   };
-  const prods = agrupar(r => r.product || "(sin producto)");
+  // versión compacta: una fila por cliente, solo toneladas por año; tocar una fila abre su historial
+  const tablaMin = filas => `<table class="anual min"><thead><tr><th class="nom">Cliente</th>${años.map(y => `<th>${y}</th>`).join("")}<th>Total (t)</th><th>Facturado</th></tr></thead><tbody>` +
+    filas.map(f => `<tr data-cli="${esc(f.n)}" tabindex="0" role="button" title="Ver el historial de ${esc(f.n)}"><td class="nom cli">${esc(f.n)}</td>${años.map(y => { const v = (f.por[y] || {}).tns; return `<td class="${v ? "" : "cero"}">${v ? fmt0(v) : "·"}</td>`; }).join("")}<td class="tt">${fmt0(f.tns)}</td><td>${fmtUsd(f.usd)}</td></tr>`).join("") + "</tbody></table>";
   const clis = agrupar(r => r.importer || "(sin cliente)");
   const rango = años.length > 1 ? `${años[0]} a ${años[años.length - 1]}` : String(años[0]);
-  document.getElementById("anualTitProd").textContent = `Análisis por producto · ${rango} · por ${cons ? "consolidación" : "ETD"}`;
-  document.getElementById("anualTitCli").textContent = `Análisis por cliente · ${rango}`;
-  document.getElementById("anualProd").innerHTML = tabla("PRODUCTO", prods);
-  document.getElementById("anualCli").innerHTML = tabla("CLIENTE", clis, todos ? 0 : LIM);
   const mas = document.getElementById("anualMas");
   const nota = sinFecha ? `<p class="comsub" style="width:100%;text-align:center">${pl(sinFecha, "carga")} sin fecha de ${cons ? "consolidación" : "ETD"} no ${sinFecha === 1 ? "entra" : "entran"} en esta tabla.</p>` : "";
-  mas.innerHTML = nota + (clis.length > LIM ? `<button type="button" class="vermas2" id="anualVerMas">${todos ? "Ver menos" : `Ver los ${fmt0(clis.length)} clientes`}</button>` : "");
+  document.getElementById("anualTitCli").textContent = `Análisis por cliente · ${rango}${conCons ? " · por " + (cons ? "consolidación" : "ETD") : ""}`;
+  if (brok){
+    const q = sinTildes(ANUAL_Q).trim();
+    const hit = q ? clis.filter(c => sinTildes(c.n).includes(q)) : clis;
+    const vis = q ? hit.slice(0, 60) : (todos ? hit : hit.slice(0, LIM));
+    document.getElementById("anualCli").innerHTML = vis.length ? tablaMin(vis) : `<p class="empty">Ningún cliente coincide con «${esc(ANUAL_Q.trim())}».</p>`;
+    document.querySelectorAll("#anualCli tr[data-cli]").forEach(tr => {
+      tr.onclick = () => abrirCliente(tr.dataset.cli);
+      tr.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); abrirCliente(tr.dataset.cli); } };
+    });
+    const bq = document.getElementById("anualBusca");
+    bq.oninput = () => { ANUAL_Q = bq.value; renderAnual(ANUAL_RECS); };
+    mas.innerHTML = nota + (q ? `<p class="comsub" style="width:100%;text-align:center">${pl(hit.length, "cliente")} coinciden${hit.length > 60 ? " · mostrando los 60 principales" : ""}.</p>`
+      : clis.length > LIM ? `<button type="button" class="vermas2" id="anualVerMas">${todos ? "Ver menos" : `Ver los ${fmt0(clis.length)} clientes`}</button>` : "");
+  } else {
+    const prods = agrupar(r => r.product || "(sin producto)");
+    document.getElementById("anualTitProd").textContent = `Análisis por producto · ${rango}${conCons ? " · por " + (cons ? "consolidación" : "ETD") : ""}`;
+    document.getElementById("anualProd").innerHTML = tabla("PRODUCTO", prods);
+    document.getElementById("anualCli").innerHTML = tabla("CLIENTE", clis, todos ? 0 : LIM);
+    mas.innerHTML = nota + (clis.length > LIM ? `<button type="button" class="vermas2" id="anualVerMas">${todos ? "Ver menos" : `Ver los ${fmt0(clis.length)} clientes`}</button>` : "");
+  }
   const bt = document.getElementById("anualVerMas");
   if (bt) bt.onclick = () => { UI.anualTodos = !UI.anualTodos; saveUI(); renderAnual(recs); };
+  // si el historial de un cliente está abierto, se redibuja con los datos nuevos
+  if (brok && ANUAL_CLI && document.getElementById("cliBg").classList.contains("open")) abrirCliente(ANUAL_CLI);
 }
+
+/* Historial de un cliente: gráfico por año y producto, productos que compró y últimas cargas */
+function abrirCliente(nombre){
+  const rs = ANUAL_R.filter(r => (r.importer || "(sin cliente)") === nombre);
+  if (!rs.length) return;
+  ANUAL_CLI = nombre;
+  const años = [...new Set(rs.map(r => r.year))].sort((a, b) => a - b);
+  const sum = (arr, k) => arr.reduce((s, r) => s + (r[k] || 0), 0);
+  const tns = sum(rs, "tns"), usd = sum(rs, "usd"), com = sum(rs, "comision");
+  const ets = rs.map(r => r.etd).filter(Boolean).map(fechaD).sort((a, b) => a - b);
+  const pais = (paisInfo(rs.find(r => r.pais) ? rs.find(r => r.pais).pais : "") || {}).es;
+  document.getElementById("cliTitulo").textContent = nombre;
+  document.getElementById("cliSub").textContent = [pais, `${años[0]}${años.length > 1 ? " a " + años[años.length - 1] : ""}`, "por ETD"].filter(Boolean).join(" · ");
+  const prodTns = new Map();
+  for (const r of rs){ const p = r.product || "(sin producto)"; prodTns.set(p, (prodTns.get(p) || 0) + (r.tns || 0)); }
+  const prods = [...prodTns.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  const stats = [["Toneladas", fmt1(tns) + " t"], ["Facturación", fmtUsd(usd)], ["Comisión", fmtUsd(com)], ["Cargas", fmt0(rs.length)],
+    ["Precio promedio", tns ? fmtUsd(usd / tns) + " /t" : "—"], ["Productos", fmt0(prods.length)],
+    ["Primera ETD", ets.length ? fFecha(ets[0]) : "—"], ["Última ETD", ets.length ? fFecha(ets[ets.length - 1]) : "—"]];
+  document.getElementById("cliStats").innerHTML = stats.map(([l, v]) => `<div class="dps"><span>${l}</span><b>${esc(v)}</b></div>`).join("");
+  // gráfico: barras apiladas por año, una serie por producto (los menores se agrupan)
+  const TOP = 7, top = prods.slice(0, TOP), resto = prods.slice(TOP);
+  const serie = (nom, lista) => ({ label: nom, data: años.map(y => sum(rs.filter(r => r.year === y && lista.includes(r.product || "(sin producto)")), "tns")) });
+  const ds = top.map((p, i) => ({ ...serie(p, [p]), backgroundColor: PALETTE[i % PALETTE.length], borderRadius: 3 }));
+  if (resto.length) ds.push({ ...serie(`Otros (${resto.length})`, resto), backgroundColor: "#8e8e93", borderRadius: 3 });
+  if (charts.cliChart){ charts.cliChart.destroy(); delete charts.cliChart; }
+  document.getElementById("cliBg").classList.add("open");
+  charts.cliChart = new Chart(document.getElementById("cliChart"), {
+    type: "bar", data: { labels: años.map(String), datasets: ds },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: 350 },
+      plugins: { legend: { display: ds.length > 1, position: "bottom", labels: { color: cssVar("--muted"), boxWidth: 12 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt1(c.parsed.y)} t`, footer: it => "Total: " + fmt1(it.reduce((s, x) => s + x.parsed.y, 0)) + " t" } } },
+      scales: { x: { stacked: true, ticks: { color: cssVar("--tick") }, grid: { display: false } },
+                y: { stacked: true, beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") }, title: { display: true, text: "Toneladas", color: cssVar("--tick") } } } },
+  });
+  // productos × años
+  document.getElementById("cliProd").innerHTML = `<table class="anual min"><thead><tr><th class="nom">Producto</th>${años.map(y => `<th>${y}</th>`).join("")}<th>Total (t)</th><th>% del cliente</th><th>US$/t</th></tr></thead><tbody>` +
+    prods.map(p => { const pr = rs.filter(r => (r.product || "(sin producto)") === p), t0 = sum(pr, "tns"), u0 = sum(pr, "usd");
+      return `<tr style="cursor:default"><td class="nom">${esc(p)}</td>${años.map(y => { const v = sum(pr.filter(r => r.year === y), "tns"); return `<td class="${v ? "" : "cero"}">${v ? fmt0(v) : "·"}</td>`; }).join("")}<td class="tt">${fmt0(t0)}</td><td>${tns ? (t0 / tns * 100).toFixed(1).replace(".", ",") + "%" : "—"}</td><td>${t0 ? fmtUsd(u0 / t0) : "—"}</td></tr>`; }).join("") + "</tbody></table>";
+  // últimas cargas
+  const ult = rs.filter(r => r.etd).sort((a, b) => fechaD(b.etd) - fechaD(a.etd)).slice(0, 15);
+  document.getElementById("cliOps").innerHTML = `<table class="anual min"><thead><tr><th class="nom">Ref.</th><th>ETD</th><th>ETA</th><th class="nom">Producto</th><th class="nom">Destino</th><th>Toneladas</th><th>Facturación</th><th>Comisión</th></tr></thead><tbody>` +
+    ult.map(r => `<tr style="cursor:default"><td class="nom">${esc(r.negocio || "—")}</td><td>${fFecha(fechaD(r.etd))}</td><td>${r.eta ? fFecha(fechaD(r.eta)) : "—"}</td><td class="nom">${esc(r.product || "—")}</td><td class="nom">${esc(r.port || "—")}</td><td>${fmt1(r.tns || 0)}</td><td>${fmtUsd(r.usd || 0)}</td><td>${fmtUsd(r.comision || 0)}</td></tr>`).join("") + "</tbody></table>" +
+    (rs.length > ult.length ? `<p class="hint">Mostrando las ${ult.length} más recientes de ${fmt0(rs.length)} cargas.</p>` : "");
+}
+function cerrarCliente(){
+  ANUAL_CLI = "";
+  document.getElementById("cliBg").classList.remove("open");
+  if (charts.cliChart){ charts.cliChart.destroy(); delete charts.cliChart; }
+}
+document.getElementById("cliX").onclick = cerrarCliente;
+document.getElementById("cliBg").onclick = e => { if (e.target.id === "cliBg") cerrarCliente(); };
 
 function renderMercado(recs, yA){
   const card = document.getElementById("mktCard");
@@ -7948,6 +8059,7 @@ window.addEventListener("keydown", e => {
   const abierto = id => { const el = document.getElementById(id); return el && el.classList.contains("open"); };
   if (abierto("rollZoomBg")) cerrarRollZoom();
   else if (abierto("detailBg")) document.getElementById("detailBg").classList.remove("open");
+  else if (abierto("cliBg")) cerrarCliente();
   else if (abierto("detBg")) cerrarDetalle();
   else if (abierto("modalBg")) document.getElementById("modalBg").classList.remove("open");
   else closeSheet();
