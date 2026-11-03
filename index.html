@@ -3759,12 +3759,49 @@ async function exportarCard(card, formato, btn){
     setTimeout(() => { btn.textContent = txt; btn.classList.remove("ok"); btn.disabled = false; }, 1400);
   }
 }
+/* Color real de una celda: compone los fondos translúcidos de ella y sus padres (Excel no entiende alfa) */
+function colorHex(c){ return "#" + c.map(v => Math.round(v).toString(16).padStart(2, "0")).join(""); }
+function fondoReal(el){
+  const capas = [];
+  for (let e = el; e; e = e.parentElement){
+    const m = getComputedStyle(e).backgroundColor.match(/[\d.]+/g);
+    if (!m) continue;
+    const a = m.length > 3 ? +m[3] : 1;
+    if (a > 0){ capas.push([+m[0], +m[1], +m[2], a]); if (a >= 1) break; }
+  }
+  let base = [255, 255, 255];
+  for (let i = capas.length - 1; i >= 0; i--){ const [r, g, b, a] = capas[i]; base = [r * a + base[0] * (1 - a), g * a + base[1] * (1 - a), b * a + base[2] * (1 - a)]; }
+  return colorHex(base);
+}
+function colorTexto(el){ const m = getComputedStyle(el).color.match(/[\d.]+/g); return m ? colorHex([+m[0], +m[1], +m[2]]) : "#000000"; }
 async function copiarTabla(tabla, btn){
-  const filas = [...tabla.querySelectorAll("tr")].map(tr => [...tr.querySelectorAll("th,td")].map(td =>
-    td.innerText.replace(/[\t\n\r]+/g, " ").replace(/^■\s*/, "").trim()));
-  const tsv = filas.map(f => f.join("\t")).join("\n");
-  const esc = x => x.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  const html = "<table>" + filas.map((f, i) => "<tr>" + f.map(c => (i ? "<td>" : "<th>") + esc(c) + (i ? "</td>" : "</th>")).join("") + "</tr>").join("") + "</table>";
+  const esc = x => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const conEstilo = tabla.classList.contains("anual");   // colores y negritas tal como se ven en pantalla
+  const limpio = td => td.innerText.replace(/[\t\n\r]+/g, " ").replace(/^■\s*/, "").trim();
+  // grilla con colspan/rowspan expandidos: cada columna queda en su lugar al pegar
+  const trs = [...tabla.querySelectorAll("tr")], grilla = trs.map(() => []);
+  trs.forEach((tr, i) => {
+    let c = 0;
+    [...tr.children].forEach(td => {
+      while (grilla[i][c]) c++;
+      const cs = td.colSpan || 1, rs = td.rowSpan || 1, txt = limpio(td);
+      for (let dy = 0; dy < rs && grilla[i + dy]; dy++) for (let dx = 0; dx < cs; dx++)
+        grilla[i + dy][c + dx] = { vacio: dy || dx, txt: dy || dx ? "" : txt };
+      c += cs;
+    });
+  });
+  const tsv = grilla.map(f => Array.from(f, x => x ? x.txt : "").join("\t")).join("\n");
+  const filasHtml = trs.map(tr => "<tr>" + [...tr.children].map(td => {
+    const th = td.tagName === "TH", tag = th ? "th" : "td", txt = esc(limpio(td));
+    const attrs = (td.colSpan > 1 ? ` colspan="${td.colSpan}"` : "") + (td.rowSpan > 1 ? ` rowspan="${td.rowSpan}"` : "");
+    if (!conEstilo) return `<${tag}${attrs}>${txt}</${tag}>`;
+    const cs = getComputedStyle(td), bold = (parseInt(cs.fontWeight, 10) || 400) >= 600;
+    const ali = cs.textAlign === "center" ? "center" : cs.textAlign === "left" || cs.textAlign === "start" ? "left" : "right";
+    const borde = "1px solid " + (td.closest("tr.tot") ? "#888888" : "#c8c8c8");
+    const st = `background-color:${fondoReal(td)};color:${colorTexto(td)};font-weight:${bold ? "bold" : "normal"};text-align:${ali};vertical-align:middle;border:${borde};padding:3px 6px`;
+    return `<${tag}${attrs} style="${st}">${bold ? "<b>" + txt + "</b>" : txt}</${tag}>`;
+  }).join("") + "</tr>").join("");
+  const html = `<table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt">${filasHtml}</table>`;
   try {
     if (navigator.clipboard && window.ClipboardItem){
       await navigator.clipboard.write([new ClipboardItem({
@@ -3773,6 +3810,9 @@ async function copiarTabla(tabla, btn){
       await navigator.clipboard.writeText(tsv);
     } else throw new Error("sin portapapeles");
   } catch (e){
+    // sin API moderna: se copia con execCommand, que también lleva el HTML con estilos
+    const alCopiar = ev => { ev.clipboardData.setData("text/plain", tsv); ev.clipboardData.setData("text/html", html); ev.preventDefault(); };
+    document.addEventListener("copy", alCopiar, { once: true });
     const ta = document.createElement("textarea"); ta.value = tsv; document.body.appendChild(ta);
     ta.select(); document.execCommand("copy"); ta.remove();
   }
