@@ -917,6 +917,19 @@
   .crkb i{display:block;height:100%;border-radius:99px;background:var(--accent)}
   .comdet h4,.comh4{margin:0 0 8px;font-size:.92rem;font-weight:600}
   .comsub{color:var(--faint);font-size:.8rem;line-height:1.55;margin:8px 0}
+  table.anual{border-collapse:separate;border-spacing:0}
+  table.anual th,table.anual td{padding:7px 10px;border-bottom:1px solid var(--border)}
+  table.anual thead th{text-align:center;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+  table.anual thead tr:nth-child(2) th{font-weight:500;color:var(--muted);font-size:.74rem}
+  table.anual th.nom,table.anual td.nom{text-align:left;position:sticky;left:0;background:var(--panel);z-index:1;min-width:190px;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+  table.anual th.nom{vertical-align:middle}
+  table.anual .gy{border-left:1px solid var(--border)}
+  table.anual .y0{background:hsla(205,45%,55%,.16)} table.anual .y1{background:hsla(265,40%,62%,.16)}
+  table.anual .y2{background:hsla(32,70%,55%,.16)} table.anual .y3{background:hsla(52,75%,55%,.16)}
+  table.anual .y4{background:hsla(150,40%,50%,.16)} table.anual .yt{background:hsla(215,30%,50%,.22)}
+  table.anual td.cero{color:var(--faint)}
+  table.anual tr.tot td{font-weight:700;border-top:2px solid var(--border);background:var(--panel2)}
+  table.anual tr.tot td.nom{background:var(--panel2)}
   .comleyenda{flex-direction:column;gap:6px}
   .comleyenda .comsub{margin:0;text-align:center}
   .gesc{display:inline-flex;align-items:center;gap:10px;font-size:.78rem;color:var(--muted)}
@@ -1440,6 +1453,24 @@
     </div>
     </div>
 
+    <div class="card wide" id="anualCard" style="display:none">
+      <h2 class="clickhead">Análisis por año <span id="lblAnual" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Todos los años en una sola vista: toneladas y facturación por producto y por cliente, según <b>ETD</b>.</p>
+      <div class="cardbody">
+      <div class="consbar">
+        <div class="seg" id="anualOrden" role="group" aria-label="Ordenar las filas por">
+          <button type="button" data-ao="tns">Más toneladas</button>
+          <button type="button" data-ao="usd">Más facturación</button>
+          <button type="button" data-ao="nom">A–Z</button>
+        </div>
+      </div>
+      <h3 class="subh" id="anualTitProd"></h3>
+      <div class="tablewrap" id="anualProd" style="margin-bottom:22px"></div>
+      <h3 class="subh" id="anualTitCli"></h3>
+      <div class="tablewrap" id="anualCli"></div>
+      <div class="listamas" id="anualMas"></div>
+      </div>
+    </div>
     <div class="card wide" id="mktCard" style="display:none">
       <h2 class="clickhead">Mercado, clientes y frecuencia <span id="lblMkt" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Local = importador con Country <b>ARGENTINA</b> en la database de clientes; cualquier otro país o Country vacío es exportación. Cargas por <b>ETD</b> (hoja ALL), contratos por su <b>Fecha</b>.</p>
@@ -4937,6 +4968,57 @@ function renderComProv(el, R, recs, hist, yA){
   };
 }
 
+/* ---------- Análisis por año: producto × años y cliente × años en una sola tabla ---------- */
+function renderAnual(recs){
+  const card = document.getElementById("anualCard");
+  if (!card) return;
+  const R = (recs || []).filter(r => r.etd && r.year);
+  if (!R.length){ card.style.display = "none"; return; }
+  card.style.display = "";
+  const años = [...new Set(R.map(r => r.year))].sort((a, b) => a - b);
+  const orden = ["usd", "nom"].includes(UI.anualOrden) ? UI.anualOrden : "tns";
+  const todos = !!UI.anualTodos, LIM = 20;
+  document.getElementById("lblAnual").textContent = años.length > 1 ? `${años[0]} a ${años[años.length - 1]}` : String(años[0]);
+  document.querySelectorAll("#anualOrden button").forEach(b => {
+    const on = b.dataset.ao === orden; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI.anualOrden = b.dataset.ao; saveUI(); renderAnual(recs); };
+  });
+  const agrupar = nombreDe => {
+    const m = new Map();
+    for (const r of R){
+      const n = nombreDe(r), x = m.get(n) || { n, por: {}, tns: 0, usd: 0 };
+      const y = x.por[r.year] || (x.por[r.year] = { tns: 0, usd: 0 });
+      y.tns += r.tns || 0; y.usd += r.usd || 0; x.tns += r.tns || 0; x.usd += r.usd || 0;
+      m.set(n, x);
+    }
+    const cmp = orden === "nom" ? (a, b) => a.n.localeCompare(b.n, "es", { sensitivity: "base" }) : (a, b) => b[orden] - a[orden];
+    return [...m.values()].sort(cmp);
+  };
+  const celdas = (por, tns, usd, gy) => años.map((y, i) => { const v = por[y] || { tns: 0, usd: 0 };
+      return `<td class="gy${v.tns ? "" : " cero"}">${v.tns ? fmt0(v.tns) : "0"}</td><td class="${v.usd ? "" : "cero"}">${v.usd ? fmtUsd(v.usd) : "US$ 0"}</td>`; }).join("") +
+    `<td class="gy">${fmt0(tns)}</td><td>${fmtUsd(usd)}</td>`;
+  const tabla = (titulo, filas, limite) => {
+    const vis = limite ? filas.slice(0, limite) : filas;
+    const totPor = {}; let tT = 0, tU = 0;
+    for (const f of filas){ tT += f.tns; tU += f.usd; for (const y in f.por){ const o = totPor[y] || (totPor[y] = { tns: 0, usd: 0 }); o.tns += f.por[y].tns; o.usd += f.por[y].usd; } }
+    return `<table class="anual"><thead><tr><th class="nom" rowspan="2">${titulo}</th>${años.map((y, i) => `<th class="gy y${i % 5}" colspan="2">${y}</th>`).join("")}<th class="gy yt" colspan="2">Total</th></tr>
+      <tr>${años.map((y, i) => `<th class="gy y${i % 5}">Tns</th><th class="y${i % 5}">Facturado</th>`).join("")}<th class="gy yt">Tns</th><th class="yt">Facturado</th></tr></thead><tbody>` +
+      vis.map(f => `<tr><td class="nom" title="${esc(f.n)}">${esc(f.n)}</td>${celdas(f.por, f.tns, f.usd)}</tr>`).join("") +
+      `<tr class="tot"><td class="nom">TOTAL</td>${celdas(totPor, tT, tU)}</tr></tbody></table>`;
+  };
+  const prods = agrupar(r => r.product || "(sin producto)");
+  const clis = agrupar(r => r.importer || "(sin cliente)");
+  const rango = años.length > 1 ? `${años[0]} a ${años[años.length - 1]}` : String(años[0]);
+  document.getElementById("anualTitProd").textContent = `Análisis por producto · ${rango}`;
+  document.getElementById("anualTitCli").textContent = `Análisis por cliente · ${rango}`;
+  document.getElementById("anualProd").innerHTML = tabla("PRODUCTO", prods);
+  document.getElementById("anualCli").innerHTML = tabla("CLIENTE", clis, todos ? 0 : LIM);
+  const mas = document.getElementById("anualMas");
+  mas.innerHTML = clis.length > LIM ? `<button type="button" class="vermas2" id="anualVerMas">${todos ? "Ver menos" : `Ver los ${fmt0(clis.length)} clientes`}</button>` : "";
+  const bt = document.getElementById("anualVerMas");
+  if (bt) bt.onclick = () => { UI.anualTodos = !UI.anualTodos; saveUI(); renderAnual(recs); };
+}
+
 function renderMercado(recs, yA){
   const card = document.getElementById("mktCard");
   const bz = BUSINESSES.find(x => x.key === UI.biz);
@@ -7007,7 +7089,7 @@ document.getElementById("detX").onclick = cerrarDetalle;
 document.getElementById("detBg").onclick = e => { if (e.target.id === "detBg") cerrarDetalle(); };
 
 /* Secciones que se pueden plegar para despejar la pantalla */
-const PLEGABLES = ["cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard", "compareCard", "mktCard", "comCard", "oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
+const PLEGABLES = ["cardTns", "cardUsd", "cardCom", "cardEtd", "rollCard", "prodCard", "anualCard", "compareCard", "mktCard", "comCard", "oilexpCard", "focusCard", "bizCard", "consSection", "gruposCard", "partnerCard", "contractsCard", "pipeCard"];
 function aplicarPlegado(){
   const cerradas = new Set(UI.cerradas || []);
   for (const id of PLEGABLES){
@@ -7043,6 +7125,7 @@ const VENTANAS = [
   { key: "foco", label: "FOCO",               icon: "🏢", ids: ["focusCard"], destacado: true },
   { key: "evo",  label: "Evolución",          icon: "📈", ids: ["rollCard", "compareCard"] },
   { key: "prod", label: "Productos",          icon: "📦", ids: ["prodCard"] },
+  { key: "anual", label: "Análisis por año",   icon: "🗓", ids: ["anualCard"] },
   { key: "cons", label: "Consolidación",      icon: "🧩", ids: ["consSection", "gruposCard"] },
   { key: "cli",  label: "Panel comercial",    icon: "🌍", ids: ["comCard"], destacado: true },
   { key: "mkt",  label: "Mercado y empresas", icon: "🏪", ids: ["mktCard", "partnerCard"] },
@@ -7150,7 +7233,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "mktCard", "comCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
+    ["consSection", "gruposCard", "anualCard", "mktCard", "comCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -7182,7 +7265,7 @@ function render(){
     document.getElementById("secNav").innerHTML = "";
     document.getElementById("consTable").innerHTML = "";
     document.getElementById("portTable").innerHTML = "";
-    ["consSection", "gruposCard", "mktCard", "comCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
+    ["consSection", "gruposCard", "anualCard", "mktCard", "comCard", "partnerCard", "contractsCard", "focusCard", "oilexpCard", "pipeCard"].forEach(id => {
       const el = document.getElementById(id); if (el) el.style.display = "none";
     });
     return;
@@ -7282,6 +7365,7 @@ function render(){
   renderProductCompare(a, b, yA, yB);
   renderConsolidacion(recs, yA, MM);
   renderGrupos(recs, yA, MM);
+  renderAnual(recs);
   renderMercado(recs, yA);
   renderComercial(recs, yA);
   renderPartners(recs);
