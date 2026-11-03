@@ -1455,9 +1455,13 @@
 
     <div class="card wide" id="anualCard" style="display:none">
       <h2 class="clickhead">Análisis por año <span id="lblAnual" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Todos los años en una sola vista: toneladas y facturación por producto y por cliente, según <b>ETD</b>.</p>
+      <p class="csub">Todos los años en una sola vista: toneladas y facturación por producto y por cliente, según la fecha que elijas: <b>ETD</b> o <b>consolidación</b>.</p>
       <div class="cardbody">
       <div class="consbar">
+        <div class="seg" id="anualFecha" role="group" aria-label="Fecha que define el año">
+          <button type="button" data-af="etd" title="El año sale de la fecha de ETD">Por ETD</button>
+          <button type="button" data-af="cons" title="El año sale de la fecha de consolidación">Por consolidación</button>
+        </div>
         <div class="seg" id="anualOrden" role="group" aria-label="Ordenar las filas por">
           <button type="button" data-ao="tns">Más toneladas</button>
           <button type="button" data-ao="usd">Más facturación</button>
@@ -4972,9 +4976,16 @@ function renderComProv(el, R, recs, hist, yA){
 function renderAnual(recs){
   const card = document.getElementById("anualCard");
   if (!card) return;
-  const R = (recs || []).filter(r => r.etd && r.year);
-  if (!R.length){ card.style.display = "none"; return; }
+  const cons = UI.anualFecha === "cons";
+  const fechaDe = r => cons ? r.consolidacion : r.etd;
+  const R = (recs || []).filter(r => fechaDe(r)).map(r => ({ ...r, year: fechaDe(r).y }));
+  if (!R.length){ card.style.display = (recs || []).length ? "" : "none"; document.getElementById("anualProd").innerHTML = (recs || []).length ? `<p class="empty">Ninguna carga tiene fecha de ${cons ? "consolidación" : "ETD"}.</p>` : ""; document.getElementById("anualCli").innerHTML = ""; document.getElementById("anualMas").innerHTML = ""; return; }
   card.style.display = "";
+  document.querySelectorAll("#anualFecha button").forEach(b => {
+    const on = b.dataset.af === (cons ? "cons" : "etd"); b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI.anualFecha = b.dataset.af; saveUI(); renderAnual(recs); };
+  });
+  const sinFecha = (recs || []).length - R.length;
   const años = [...new Set(R.map(r => r.year))].sort((a, b) => a - b);
   const orden = ["usd", "nom"].includes(UI.anualOrden) ? UI.anualOrden : "tns";
   const todos = !!UI.anualTodos, LIM = 20;
@@ -5009,12 +5020,13 @@ function renderAnual(recs){
   const prods = agrupar(r => r.product || "(sin producto)");
   const clis = agrupar(r => r.importer || "(sin cliente)");
   const rango = años.length > 1 ? `${años[0]} a ${años[años.length - 1]}` : String(años[0]);
-  document.getElementById("anualTitProd").textContent = `Análisis por producto · ${rango}`;
+  document.getElementById("anualTitProd").textContent = `Análisis por producto · ${rango} · por ${cons ? "consolidación" : "ETD"}`;
   document.getElementById("anualTitCli").textContent = `Análisis por cliente · ${rango}`;
   document.getElementById("anualProd").innerHTML = tabla("PRODUCTO", prods);
   document.getElementById("anualCli").innerHTML = tabla("CLIENTE", clis, todos ? 0 : LIM);
   const mas = document.getElementById("anualMas");
-  mas.innerHTML = clis.length > LIM ? `<button type="button" class="vermas2" id="anualVerMas">${todos ? "Ver menos" : `Ver los ${fmt0(clis.length)} clientes`}</button>` : "";
+  const nota = sinFecha ? `<p class="comsub" style="width:100%;text-align:center">${pl(sinFecha, "carga")} sin fecha de ${cons ? "consolidación" : "ETD"} no ${sinFecha === 1 ? "entra" : "entran"} en esta tabla.</p>` : "";
+  mas.innerHTML = nota + (clis.length > LIM ? `<button type="button" class="vermas2" id="anualVerMas">${todos ? "Ver menos" : `Ver los ${fmt0(clis.length)} clientes`}</button>` : "");
   const bt = document.getElementById("anualVerMas");
   if (bt) bt.onclick = () => { UI.anualTodos = !UI.anualTodos; saveUI(); renderAnual(recs); };
 }
