@@ -1232,6 +1232,18 @@
     .ztitle{margin:6px 0 10px}
   }
 
+
+  /* Auditoría UX/UI: contraste en modo oscuro y primera pantalla del celular */
+  html[data-theme="dark"] #btnReload{background:color-mix(in srgb,var(--accent) 76%,#000)!important}
+  html[data-theme="dark"] .tag.exp{color:color-mix(in srgb,var(--accent) 80%,#fff)}
+  @media(max-width:720px){
+    /* los datos tienen que verse sin desplazar: años en una sola fila deslizable, sin subtítulo ni rótulos de grupo */
+    #zSub{display:none}
+    .toolbar .group > .glabel{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+    #yearPills{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;min-width:0;max-width:100%;padding-bottom:2px}
+    #yearPills::-webkit-scrollbar{display:none}
+    #yearPills .pill{flex:none}
+  }
 </style>
 </head>
 <body>
