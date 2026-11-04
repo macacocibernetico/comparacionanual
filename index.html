@@ -6959,6 +6959,16 @@ const DET_METRICAS = {
 };
 const DET_POR = { general: "General", tipo: "Tipo", calibre: "Calibre", pais: "País", proveedor: "País proveedor" };
 const DET_PROV_ABIERTOS = new Set();
+/* Colores fijos por país del proveedor: los tres principales con su color, el resto repartido sin repetir */
+const COLOR_PAIS = { "Argentina": "#1f6feb", "Paraguay": "#e5383b", "Brasil": "#1f9d45", "Suiza": "#e0367f", "Bolivia": "#e8b911", "Uruguay": "#30b0c7",
+  "China": "#af52de", "India": "#ff9500", "Estados Unidos": "#6d7b8d", "Perú": "#a2845e", "Chile": "#14b8a6", "Egipto": "#c77d3a", "Sudáfrica": "#7c5cff" };
+const COLOR_PAIS_EXTRA = ["#8bc34a", "#ff6f61", "#00acc1", "#9c6ade", "#d4a017", "#4f8a8b", "#c2185b", "#5d6bd6"];
+function colorPais(nombre){
+  if (nombre === "Sin país") return "#8e8e93";
+  if (COLOR_PAIS[nombre]) return COLOR_PAIS[nombre];
+  let h = 0; for (const c of String(nombre)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return COLOR_PAIS_EXTRA[h % COLOR_PAIS_EXTRA.length];
+}
 /* "Cargas Brokerage 2026": así se llama la vista de comisión, en el Resumen y adentro */
 function tituloCargas(yA){
   const biz = BUSINESSES.find(b => b.key === UI.biz);
@@ -7155,7 +7165,7 @@ function renderDetalle(){
   const GT = lineas && por === "general" ? detAgrupar(recs, yA, MM, "tipo") : null;
   const chips = document.getElementById("detChips");
   const PAL = typeof PALETTE !== "undefined" ? PALETTE : ["#0071e3", "#ff9500", "#34c759", "#af52de", "#ff2d55", "#5ac8fa", "#ffcc00", "#ff6482"];
-  const colorDe = (k, i) => por === "tipo" && GRUPO_COLOR[k] ? GRUPO_COLOR[k] : PAL[i % PAL.length];
+  const colorDe = (k, i) => por === "tipo" && GRUPO_COLOR[k] ? GRUPO_COLOR[k] : por === "proveedor" ? colorPais(k) : PAL[i % PAL.length];
   let elegidos = orden;
   if (lineas && por !== "general"){
     const cand = orden.slice(0, 14);
@@ -7243,7 +7253,7 @@ function renderDetalle(){
   // país proveedor: barra dividida 100% y, por país, sus exportadores con comisión y demás
   const pv = document.getElementById("detProv");
   if (por === "proveedor"){
-    const colorK = k => { const i = orden.findIndex(([kk]) => kk === k); return i >= 0 && i < 7 ? colorDe(k, i) : "#8e8e93"; };
+    const colorK = k => colorPais(k);
     pv.hidden = false; pv.innerHTML = detProveedorHtml(recs, yA, MM, met, M, colorK);
     pv.querySelectorAll(".dpph[data-k]").forEach(b => b.onclick = () => {
       const d = b.nextElementSibling, abre = d.hidden; d.hidden = !abre; b.setAttribute("aria-expanded", String(abre));
