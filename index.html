@@ -6970,13 +6970,13 @@ function renderProductCompare(a, b, yA, yB){
 let DET_CTX = null;
 const DET = { m: "precio", por: "general", cmp: true, tend: true, sel: {} };
 const DET_METRICAS = {
-  tns:    { label: "Toneladas",       f: v => fmt1(v) + " t",  fs: fmt1, por: ["general", "tipo", "calibre", "pais"] },
-  usd:    { label: "Facturación",     f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre", "pais"] },
+  tns:    { label: "Toneladas",       f: v => fmt1(v) + " t",  fs: fmt1, por: ["general", "tipo", "calibre", "proveedor", "pais"] },
+  usd:    { label: "Facturación",     f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre", "proveedor", "pais"] },
   com:    { label: "Comisión",        f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "proveedor"] },
   etd:    { label: "Embarques",       f: v => fmt0(v) + (v === 1 ? " carga" : " cargas"), fs: fmt0, por: ["general", "tipo", "calibre"] },
   precio: { label: "Precio promedio", f: v => fmtUsd(v) + " /t", fs: fmt0, por: ["general", "tipo", "calibre"] },
 };
-const DET_POR = { general: "General", tipo: "Tipo", calibre: "Calibre", pais: "País", proveedor: "País proveedor" };
+const DET_POR = { general: "General", tipo: "Tipo", calibre: "Calibre", pais: "País cliente", proveedor: "País exportador" };
 const DET_PROV_ABIERTOS = new Set();
 /* Colores fijos por país del proveedor: los tres principales con su color, el resto repartido sin repetir */
 const COLOR_PAIS = { "Argentina": "#1f6feb", "Paraguay": "#e5383b", "Brasil": "#1f9d45", "Suiza": "#e0367f", "Bolivia": "#e8b911", "Uruguay": "#30b0c7",
@@ -7132,17 +7132,20 @@ function detProveedorHtml(recs, yA, MM, met, M, colorK){
   const dolar = v => fmtUsd(v);
   const barra = `<div class="dpsplit" role="img" aria-label="${esc(M.label)} repartida entre los países de los proveedores">` + paises.filter(x => val(x) > 0).map(x =>
     `<button type="button" class="dpseg" data-k="${esc(x.k)}" style="flex:${val(x)};--c:${colorK(x.k)}" title="${esc(x.k)} · ${esc(M.f(val(x)))} · ${pc(val(x), T)}">${val(x) / T >= 0.06 ? pc(val(x), T) : ""}</button>`).join("") + "</div>";
-  const cab = `<div class="dpph cab" aria-hidden="true"><span></span><span>País del proveedor</span><span class="dpm">Comisión</span><span class="dpm x">Toneladas</span><span class="dpm x">Facturación</span><span class="dpm x">Comisión / t</span></div>`;
+  // la métrica del panel va primero; las otras dos y la comisión por tonelada la acompañan
+  const DEF = { tns: ["Toneladas", o => fmt1(o.tns) + " t"], usd: ["Facturación", o => dolar(o.usd)], com: ["Comisión", o => dolar(o.com)] };
+  const pri = DEF[met] ? met : "com", otras = Object.keys(DEF).filter(k => k !== pri);
+  const cab = `<div class="dpph cab" aria-hidden="true"><span></span><span>País del exportador</span><span class="dpm">${DEF[pri][0]}</span>${otras.map(k => `<span class="dpm x">${DEF[k][0]}</span>`).join("")}<span class="dpm x">Comisión / t</span></div>`;
   const filas = paises.map(x => {
     const abierto = DET_PROV_ABIERTOS.has(x.k);
     const exps = [...x.exps.values()].sort((a, b) => val(b) - val(a));
-    const tabla = `<div class="tablewrap"><table><tr><th>Empresa</th><th>Comisión</th><th>% del país</th><th>Toneladas</th><th>Facturación</th><th>Cargas</th><th>Comisión / t</th><th>Última ETD</th></tr>` +
-      exps.map(e => `<tr><td>${esc(e.nom)}</td><td><b>${dolar(e.com)}</b></td><td>${pc(val(e), val(x))}</td><td>${fmt1(e.tns)} t</td><td>${dolar(e.usd)}</td><td>${fmt0(e.n)}</td><td>${ct(e.com, e.tns)}</td><td>${e.ult ? fFecha(e.ult) : "—"}</td></tr>`).join("") +
-      `<tr class="total"><td>Total ${esc(x.k)}</td><td>${dolar(x.com)}</td><td>100%</td><td>${fmt1(x.tns)} t</td><td>${dolar(x.usd)}</td><td>${fmt0(x.n)}</td><td>${ct(x.com, x.tns)}</td><td></td></tr></table></div>`;
+    const tabla = `<div class="tablewrap"><table><tr><th>Empresa</th><th>${DEF[pri][0]}</th><th>% del país</th>${otras.map(k => `<th>${DEF[k][0]}</th>`).join("")}<th>Cargas</th><th>Comisión / t</th><th>Última ETD</th></tr>` +
+      exps.map(e => `<tr><td>${esc(e.nom)}</td><td><b>${DEF[pri][1](e)}</b></td><td>${pc(val(e), val(x))}</td>${otras.map(k => `<td>${DEF[k][1](e)}</td>`).join("")}<td>${fmt0(e.n)}</td><td>${ct(e.com, e.tns)}</td><td>${e.ult ? fFecha(e.ult) : "—"}</td></tr>`).join("") +
+      `<tr class="total"><td>Total ${esc(x.k)}</td><td>${DEF[pri][1](x)}</td><td>100%</td>${otras.map(k => `<td>${DEF[k][1](x)}</td>`).join("")}<td>${fmt0(x.n)}</td><td>${ct(x.com, x.tns)}</td><td></td></tr></table></div>`;
     return `<div class="dpp"><button type="button" class="dpph" data-k="${esc(x.k)}" aria-expanded="${abierto}" style="--c:${colorK(x.k)}" title="Ver las empresas de este país">
         <i class="dot"></i><span class="dpn"><b>${esc(x.k)}</b><small>${pl(x.exps.size, "empresa")} · ${pl(x.n, "carga")}</small></span>
-        <span class="dpm k"><b>${dolar(x.com)}</b><small>${pc(val(x), T)} del total</small></span>
-        <span class="dpm x">${fmt1(x.tns)} t</span><span class="dpm x">${dolar(x.usd)}</span><span class="dpm x">${ct(x.com, x.tns)}</span></button>
+        <span class="dpm k"><b>${DEF[pri][1](x)}</b><small>${pc(val(x), T)} del total</small></span>
+        ${otras.map(k => `<span class="dpm x">${DEF[k][1](x)}</span>`).join("")}<span class="dpm x">${ct(x.com, x.tns)}</span></button>
       <div class="dpd"${abierto ? "" : " hidden"}>${tabla}</div></div>`;
   }).join("");
   return barra + cab + filas;
@@ -7320,7 +7323,7 @@ function renderDetalle(){
   if (por === "proveedor"){
     const sp = G.get("Sin país"), tt = detSuma(tot.tns);
     notas.push(sp && tt ? `${(detSuma(sp.tns) / tt * 100).toFixed(1).replace(".", ",")}% de las toneladas es de exportadores sin país: o la columna Country está vacía en la hoja «Database suppliers», o no figuran ahí.` : "Todos los exportadores tienen país.");
-    notas.push("Tocá un país para ver sus empresas con la comisión y el resto del desglose.");
+    notas.push("Tocá un país para ver sus empresas con las toneladas, la comisión y el resto del desglose.");
   }
   if (por === "pais"){
     const sp = G.get("Sin país"), tt = detSuma(tot.tns);
