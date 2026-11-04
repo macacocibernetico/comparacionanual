@@ -927,7 +927,7 @@
   .globo canvas.arrastrando{cursor:grabbing}
   .globo canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .gzoom{position:absolute;top:58px;right:8px;display:flex;flex-direction:column;gap:6px;z-index:4}
-  .gzoom button{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--panel);color:var(--text);box-shadow:inset 0 0 0 1px var(--border2),0 2px 8px rgba(0,0,0,.12)}
+  .gzoom button{width:36px;height:36px;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--panel);color:var(--text);box-shadow:inset 0 0 0 1px var(--border2),0 2px 8px rgba(0,0,0,.12)}
   .gzoom button:hover{background:var(--panel3)}
   .gbusca{position:relative;max-width:340px;margin:0 auto 10px;z-index:5}
   .gbusca input{width:100%;padding:9px 14px 9px 34px;border-radius:99px;border:0;background:var(--panel);color:var(--text);font:inherit;font-size:.86rem;box-shadow:inset 0 0 0 1px var(--border2),0 2px 8px rgba(0,0,0,.12)}
@@ -1044,7 +1044,7 @@
   .comdet tr.total td,.comdet tr.total td:first-child{background:var(--panel2)}
   .comdeth{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   .comdeth h4{margin:0}
-  .comcerrar{width:28px;height:28px;padding:0;border-radius:99px;font-size:1.1rem;line-height:1;background:var(--panel);color:var(--muted);border:none;cursor:pointer}
+  .comcerrar{width:28px;height:28px;padding:0;border-radius:99px;display:grid;place-items:center;font-size:1.1rem;line-height:1;background:var(--panel);color:var(--muted);border:none;cursor:pointer}
   .comdet .tablewrap{max-height:260px;overflow:auto}
   .prosp{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
   .prosp span{background:var(--panel2);border-radius:99px;padding:4px 11px;font-size:.78rem;color:var(--muted)}
@@ -4856,7 +4856,7 @@ function renderComMapa(el, R, recs, aviso, hist, yA){
     const nombre = (c || b || {}).es || "";
     const clientes = c ? [...c.cli.values()].sort((a, z) => z.tns - a.tns) : [];
     const pros = b ? b.prospectos : [];
-    return `<div class="comdet"><div class="comdeth"><h4>${esc(nombre)}</h4><button type="button" class="comcerrar" aria-label="Cerrar el detalle de ${esc(nombre)}">×</button></div>` +
+    return `<div class="comdet"><div class="comdeth"><h4>${esc(nombre)}</h4><button type="button" class="comcerrar" aria-label="Cerrar el detalle de ${esc(nombre)}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>` +
       (clientes.length ? `<div class="tablewrap">${tablaHtml(["Cliente", "Toneladas", "Facturación", "Cargas"], clientes.map(x => [esc(x.n), fmt1(x.tns) + " t", fmtUsd(x.usd), fmt0(x.cargas)]))}</div>` : `<p class="empty">Sin compras en el período.</p>`) +
       (pros.length ? `<p class="comsub"><b>${pl(pros.length, "empresa")}</b> de la base sin compras:</p><div class="prosp">${pros.slice(0, 24).map(n => `<span>${esc(n)}</span>`).join("")}${pros.length > 24 ? `<span class="mas">y ${fmt0(pros.length - 24)} más</span>` : ""}</div>` : "") + `</div>`;
   })() : `<p class="comhint">Tocá un país en el globo o en la lista para ver sus clientes.</p>`;
