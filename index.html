@@ -923,8 +923,23 @@
   .comgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start}
   @media(max-width:900px){ .comgrid{grid-template-columns:minmax(0,1fr)} }
   .globo{position:relative;max-width:560px;margin:0 auto;touch-action:none}
-  .globo svg{display:block;cursor:grab;user-select:none}
-  .globo svg.arrastrando{cursor:grabbing}
+  .globo canvas{display:block;width:100%;height:auto;cursor:grab;user-select:none;border-radius:50%}
+  .globo canvas.arrastrando{cursor:grabbing}
+  .globo canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .gzoom{position:absolute;top:58px;right:8px;display:flex;flex-direction:column;gap:6px;z-index:4}
+  .gzoom button{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--panel);color:var(--text);box-shadow:inset 0 0 0 1px var(--border2),0 2px 8px rgba(0,0,0,.12)}
+  .gzoom button:hover{background:var(--panel3)}
+  .gbusca{position:relative;max-width:340px;margin:0 auto 10px;z-index:5}
+  .gbusca input{width:100%;padding:9px 14px 9px 34px;border-radius:99px;border:0;background:var(--panel);color:var(--text);font:inherit;font-size:.86rem;box-shadow:inset 0 0 0 1px var(--border2),0 2px 8px rgba(0,0,0,.12)}
+  .gbusca input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .gbusca .glupa{position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:.6;pointer-events:none}
+  .gres{position:absolute;top:calc(100% + 6px);left:0;right:0;margin:0;padding:6px;list-style:none;background:var(--panel);border-radius:18px;box-shadow:var(--shadow-lg),inset 0 0 0 1px var(--border2);max-height:280px;overflow:auto}
+  .gres[hidden]{display:none}
+  .gres li{display:flex;flex-direction:column;gap:1px;padding:9px 12px;border-radius:12px;cursor:pointer;font-size:.88rem}
+  .gres li small{color:var(--faint);font-size:.74rem}
+  .gres li.on,.gres li:hover{background:var(--accent-soft)}
+  .ghint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 12px;border-radius:99px;background:var(--text);color:var(--panel);font-size:.78rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:4}
+  .ghint.on{opacity:.92}
   .gsph{fill:color-mix(in srgb,var(--accent) 7%,var(--panel2));stroke:color-mix(in srgb,var(--text) 30%,transparent);stroke-width:1.2}
   .ggrat{fill:none;stroke:color-mix(in srgb,var(--text) 9%,transparent);stroke-width:.5}
   .gpais{stroke:color-mix(in srgb,var(--text) 55%,transparent);stroke-width:.7;stroke-linejoin:round;transition:opacity .15s}
@@ -4479,60 +4494,263 @@ async function cargarMundo(){
   cargarMundo.fronteras = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);   // líneas compartidas entre países
   return cargarMundo.geo;
 }
+/* Globo en canvas: arrastrar para girar, zoom (botones, Ctrl + rueda, pellizco, doble toque), buscador de país o empresa
+   y vuelo suave hasta el país elegido. Un solo dibujo por cuadro; los países se ubican con su caja geográfica antes de probar si contienen el punto. */
 function dibujarGlobo(cont, valores, puntos, opts){
   const d3 = window.d3, geo = cargarMundo.geo;
   if (!d3 || !geo) return;
-  const w = Math.max(280, cont.clientWidth || 600), h = Math.min(w, 520);
-  cont.querySelectorAll("svg").forEach(s => s.remove());
+  if (cont._globoStop) cont._globoStop();
+  const reducir = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let w = Math.max(280, cont.clientWidth || 600), h = Math.min(w, 520);
+  cont.querySelectorAll("svg,canvas,.gbusca,.gzoom,.ghint").forEach(s => s.remove());
   const tip = cont.querySelector(".gtip");
-  const svg = d3.select(cont).insert("svg", ".gtip").attr("viewBox", `0 0 ${w} ${h}`).attr("width", "100%")
-    .attr("role", "img").attr("aria-label", opts.aria);
-  const proj = d3.geoOrthographic().fitExtent([[6, 6], [w - 6, h - 6]], { type: "Sphere" }).rotate(COM.rot).clipAngle(90);
-  const path = d3.geoPath(proj);
+  const cv = document.createElement("canvas");
+  cv.className = "gcv"; cv.tabIndex = 0;
+  cv.setAttribute("role", "img"); cv.setAttribute("aria-label", opts.aria + ". Flechas para girar, más y menos para acercar o alejar.");
+  cont.insertBefore(cv, tip || null);
+  const ctx = cv.getContext("2d");
+  const proj = d3.geoOrthographic().clipAngle(90);
+  const path = d3.geoPath(proj, ctx);
+  let esc0 = 1;
+  const medir = () => {
+    w = Math.max(280, cont.clientWidth || w); h = Math.min(w, 520);
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    proj.fitExtent([[6, 6], [w - 6, h - 6]], { type: "Sphere" });
+    esc0 = proj.scale();
+  };
+  medir();
+  if (!(COM.k >= 1)) COM.k = 1;
+  const K_MAX = 14;
+
+  // colores: se leen una vez del tema
+  const col = (v, f) => d3.color(String(v || "").trim()) || d3.color(f);
+  const cBase = cssVar("--panel3"), cAcc = cssVar("--accent"), cPros = cssVar("--pvp3") || "#e3860f", cTxt = col(cssVar("--text"), "#888");
+  const alfa = a => cTxt.copy({ opacity: a }).formatRgb();
+  const cEsfera = d3.interpolateRgb(cssVar("--panel2"), cAcc)(.07), cPanel = cssVar("--panel");
+  const cEsferaLinea = alfa(.3), cGrat = alfa(.09), cPais = alfa(.55), cFront = alfa(.62), cSel = cTxt.formatRgb();
   const max = Math.max(1, ...[...valores.values()].map(v => v.v));
-  const cBase = cssVar("--panel3"), cAcc = cssVar("--accent"), cPros = cssVar("--pvp3") || "#e3860f";
   const escala = v => Math.sqrt(v / max);
-  const color = d => !d ? cssVar("--panel3") : d.tipo === "prospecto" ? d3.interpolateRgb(cBase, cPros)(.6)
+  const color = d => !d ? cBase : d.tipo === "prospecto" ? d3.interpolateRgb(cBase, cPros)(.6)
     : d3.interpolateRgb(cBase, cAcc)(.22 + .78 * escala(d.v));
-  svg.append("path").datum({ type: "Sphere" }).attr("class", "gsph").attr("d", path);
-  svg.append("path").datum(d3.geoGraticule10()).attr("class", "ggrat").attr("d", path);
+  const idDe = f => String(f.id) === "238" ? "032" : String(f.id);       // las Malvinas cuentan como Argentina
+  geo.forEach(f => { if (!f._b) f._b = d3.geoBounds(f); });
+  const ids = geo.map(idDe), fills = geo.map((f, i) => color(valores.get(ids[i])));
+  const grat = d3.geoGraticule10(), esfera = { type: "Sphere" };
+  const selId = () => opts.sel !== undefined ? opts.sel : COM.sel;
+  let hover = -1, ptsPant = [];
+
+  const dibujar = () => {
+    proj.rotate(COM.rot).scale(esc0 * COM.k);
+    ctx.clearRect(0, 0, w, h);
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.beginPath(); path(esfera); ctx.fillStyle = cEsfera; ctx.fill(); ctx.strokeStyle = cEsferaLinea; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.beginPath(); path(grat); ctx.strokeStyle = cGrat; ctx.lineWidth = .5; ctx.stroke();
+    ctx.strokeStyle = cPais; ctx.lineWidth = .7;
+    for (let i = 0; i < geo.length; i++){
+      ctx.beginPath(); path(geo[i]);
+      ctx.globalAlpha = i === hover ? .78 : 1;
+      ctx.fillStyle = fills[i]; ctx.fill(); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    if (cargarMundo.fronteras){ ctx.beginPath(); path(cargarMundo.fronteras); ctx.strokeStyle = cFront; ctx.lineWidth = .8; ctx.stroke(); }
+    const sId = selId();
+    if (sId){
+      ctx.strokeStyle = cSel; ctx.lineWidth = 2;
+      for (let i = 0; i < geo.length; i++) if (ids[i] === sId){ ctx.beginPath(); path(geo[i]); ctx.stroke(); }
+    }
+    // puntos: solo los del hemisferio visible
+    const cen = [-COM.rot[0], -COM.rot[1]], zr = 1 + .22 * Math.log(COM.k);
+    ptsPant = [];
+    for (const d of puntos){
+      if (d3.geoDistance(d.coord, cen) >= Math.PI / 2) continue;
+      const p = proj(d.coord), r = (3 + 5 * escala(d.v)) * zr;
+      ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.2832); ctx.fillStyle = color(d); ctx.fill();
+      ctx.strokeStyle = cPanel; ctx.lineWidth = 1; ctx.stroke();
+      ptsPant.push({ d, x: p[0], y: p[1], r });
+    }
+  };
+  let raf = 0;
+  const pedir = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; dibujar(); }); };
+
+  // qué hay bajo el cursor
+  const aCanvas = ev => { const b = cv.getBoundingClientRect(); return [(ev.clientX - b.left) * w / b.width, (ev.clientY - b.top) * h / b.height]; };
+  const bajoPunto = (x, y) => {
+    for (let i = ptsPant.length - 1; i >= 0; i--){ const q = ptsPant[i]; if (Math.hypot(q.x - x, q.y - y) <= q.r + 3) return q.d; }
+    return null;
+  };
+  const bajoPais = (x, y) => {
+    const c = proj.translate(), R = proj.scale();
+    if (Math.hypot(x - c[0], y - c[1]) > R) return -1;
+    const g = proj.invert([x, y]);
+    if (!g || !isFinite(g[0]) || !isFinite(g[1])) return -1;
+    for (let i = 0; i < geo.length; i++){
+      const b = geo[i]._b;
+      if (g[1] < b[0][1] || g[1] > b[1][1]) continue;
+      if (b[0][0] <= b[1][0] ? (g[0] < b[0][0] || g[0] > b[1][0]) : (g[0] < b[0][0] && g[0] > b[1][0])) continue;
+      if (d3.geoContains(geo[i], g)) return i;
+    }
+    return -1;
+  };
   const mostrar = (ev, txt) => {
     if (!tip) return;
     const b = cont.getBoundingClientRect();
     tip.innerHTML = txt; tip.style.left = (ev.clientX - b.left + 12) + "px"; tip.style.top = (ev.clientY - b.top + 12) + "px"; tip.style.opacity = 1;
   };
   const ocultar = () => { if (tip) tip.style.opacity = 0; };
-  // las Islas Malvinas (238 en el mapa) cuentan como Argentina (032)
-  const idDe = f => String(f.id) === "238" ? "032" : String(f.id);
-  svg.append("g").selectAll("path").data(geo).join("path")
-    .attr("class", f => "gpais" + (valores.has(idDe(f)) ? " con" : "") + ((opts.sel !== undefined ? opts.sel : COM.sel) === idDe(f) ? " sel" : ""))
-    .attr("d", path).attr("fill", f => color(valores.get(idDe(f))))
-    .on("mousemove", (ev, f) => {
-      if (String(f.id) === "238"){ mostrar(ev, "<b>Islas Malvinas</b><br>LAS MALVINAS SON ARGENTINAS"); return; }
-      const d = valores.get(idDe(f)); mostrar(ev, d ? d.label : esc((paisInfo(f.properties.name) || {}).es || f.properties.name));
-    })
-    .on("mouseleave", ocultar)
-    .on("click", (ev, f) => { if (valores.has(idDe(f))) opts.onSel(idDe(f)); });
-  // fronteras: una sola línea por frontera, encima de los colores
-  if (cargarMundo.fronteras) svg.append("path").datum(cargarMundo.fronteras).attr("class", "gfront").attr("d", path);
-  const pts = svg.append("g").selectAll("circle").data(puntos).join("circle").attr("class", "gpto")
-    .attr("r", d => 3 + 5 * escala(d.v)).attr("fill", d => color(d))
-    .on("mousemove", (ev, d) => mostrar(ev, d.label)).on("mouseleave", ocultar).on("click", (ev, d) => opts.onSel(d.id));
-  const ubicar = () => pts.each(function(d){
-    const vis = d3.geoDistance(d.coord, [-COM.rot[0], -COM.rot[1]]) < Math.PI / 2, p = proj(d.coord);
-    d3.select(this).attr("cx", p[0]).attr("cy", p[1]).style("display", vis ? null : "none");
+  const textoPais = i => {
+    if (String(geo[i].id) === "238") return "<b>Islas Malvinas</b><br>LAS MALVINAS SON ARGENTINAS";
+    const d = valores.get(ids[i]); return d ? d.label : esc((paisInfo(geo[i].properties.name) || {}).es || geo[i].properties.name);
+  };
+
+  // vuelo: gira y acerca a la vez, con un pequeño retroceso si el viaje es largo
+  let anim = 0;
+  const parar = () => { if (anim){ cancelAnimationFrame(anim); anim = 0; } };
+  const volar = (rot1, k1, ms) => {
+    parar();
+    const r0 = COM.rot.slice(), k0 = COM.k;
+    let dl = rot1[0] - r0[0]; dl = ((dl + 540) % 360 + 360) % 360 - 180;
+    const r1 = [r0[0] + dl, Math.max(-75, Math.min(75, rot1[1])), 0];
+    k1 = Math.max(1, Math.min(K_MAX, k1));
+    if (reducir || !ms){ COM.rot = r1; COM.k = k1; dibujar(); return; }
+    const dip = Math.min(.4, Math.hypot(dl, r1[1] - r0[1]) / 140), t0 = performance.now();
+    const paso = ahora => {
+      const u = Math.min(1, (ahora - t0) / ms), e = d3.easeCubicInOut(u);
+      COM.rot = [r0[0] + (r1[0] - r0[0]) * e, r0[1] + (r1[1] - r0[1]) * e, 0];
+      COM.k = Math.max(1, Math.exp(Math.log(k0) + (Math.log(k1) - Math.log(k0)) * e) * (1 - dip * Math.sin(Math.PI * e)));
+      dibujar();
+      if (u < 1) anim = requestAnimationFrame(paso); else { anim = 0; COM.rot = [((r1[0] + 540) % 360 + 360) % 360 - 180, r1[1], 0]; COM.k = k1; }
+    };
+    anim = requestAnimationFrame(paso);
+  };
+  const zoomA = f => volar(COM.rot.slice(), COM.k * f, 260);
+  const kPara = id => {
+    const i = ids.indexOf(id); if (i < 0) return 1;
+    const b = geo[i]._b; let dl = b[1][0] - b[0][0]; if (dl < 0) dl += 360;
+    const ext = Math.max(dl, b[1][1] - b[0][1]) * Math.PI / 180;
+    return Math.max(1.6, Math.min(6.5, .75 / Math.max(.02, ext)));
+  };
+
+  // arrastrar, pellizcar y tocar
+  const punteros = new Map(); let gesto = null;
+  cv.addEventListener("pointerdown", ev => {
+    try { cv.setPointerCapture(ev.pointerId); } catch (e) {} parar();
+    punteros.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    gesto = punteros.size === 2 ? { pinch: Math.hypot(...[...punteros.values()].reduce((a, p) => [a[0] - p.x, a[1] - p.y], [0, 0])), k: COM.k } : { x: ev.clientX, y: ev.clientY, mov: 0 };
+    cv.classList.add("arrastrando");
   });
-  ubicar();
-  const redibujar = () => { proj.rotate(COM.rot); svg.selectAll(".gsph,.ggrat,.gpais,.gfront").attr("d", path); ubicar(); };
-  svg.call(d3.drag().on("start", () => svg.classed("arrastrando", true)).on("end", () => svg.classed("arrastrando", false))
-    .on("drag", ev => { COM.rot = [COM.rot[0] + ev.dx * .35, Math.max(-75, Math.min(75, COM.rot[1] - ev.dy * .35)), 0]; redibujar(); }));
+  cv.addEventListener("pointermove", ev => {
+    const p = punteros.get(ev.pointerId);
+    if (p && gesto){
+      if (punteros.size === 2 && gesto.pinch){
+        p.x = ev.clientX; p.y = ev.clientY;
+        const v = [...punteros.values()], dist = Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y);
+        COM.k = Math.max(1, Math.min(K_MAX, gesto.k * dist / gesto.pinch)); pedir(); return;
+      }
+      const dx = ev.clientX - p.x, dy = ev.clientY - p.y; p.x = ev.clientX; p.y = ev.clientY;
+      if (gesto.mov !== undefined) gesto.mov += Math.abs(dx) + Math.abs(dy);
+      const s = .35 / COM.k;
+      COM.rot = [COM.rot[0] + dx * s, Math.max(-75, Math.min(75, COM.rot[1] - dy * s)), 0];
+      ocultar(); pedir(); return;
+    }
+    const [x, y] = aCanvas(ev), pt = bajoPunto(x, y), i = pt ? -1 : bajoPais(x, y);
+    if (pt){ mostrar(ev, pt.label); cv.style.cursor = "pointer"; }
+    else if (i >= 0){ mostrar(ev, textoPais(i)); cv.style.cursor = valores.has(ids[i]) ? "pointer" : "grab"; }
+    else { ocultar(); cv.style.cursor = ""; }
+    if (i !== hover){ hover = i; pedir(); }
+  });
+  const soltar = ev => {
+    const era = gesto; punteros.delete(ev.pointerId);
+    if (!punteros.size){
+      cv.classList.remove("arrastrando"); gesto = null;
+      if (era && era.mov !== undefined && era.mov < 6){
+        const [x, y] = aCanvas(ev), pt = bajoPunto(x, y);
+        if (pt) opts.onSel(pt.id); else { const i = bajoPais(x, y); if (i >= 0 && valores.has(ids[i])) opts.onSel(ids[i]); }
+      }
+    } else gesto = { x: ev.clientX, y: ev.clientY, mov: 99 };
+  };
+  cv.addEventListener("pointerup", soltar);
+  cv.addEventListener("pointercancel", soltar);
+  cv.addEventListener("pointerleave", () => { ocultar(); if (hover !== -1){ hover = -1; pedir(); } });
+  cv.addEventListener("dblclick", () => zoomA(1.8));
+  let aviso = null;
+  const pista = () => {
+    if (!aviso){ aviso = document.createElement("span"); aviso.className = "ghint"; aviso.textContent = "Ctrl + rueda para acercar"; cont.appendChild(aviso); }
+    aviso.classList.add("on"); clearTimeout(aviso._t); aviso._t = setTimeout(() => aviso.classList.remove("on"), 1300);
+  };
+  cv.addEventListener("wheel", ev => {
+    if (!(ev.ctrlKey || ev.metaKey)){ pista(); return; }     // la rueda sola sigue desplazando la página
+    ev.preventDefault(); parar();
+    COM.k = Math.max(1, Math.min(K_MAX, COM.k * Math.exp(-ev.deltaY * .0022))); pedir();
+  }, { passive: false });
+  cv.addEventListener("keydown", ev => {
+    const paso = 8 / COM.k, m = { ArrowLeft: [paso, 0], ArrowRight: [-paso, 0], ArrowUp: [0, paso], ArrowDown: [0, -paso] }[ev.key];
+    if (m){ ev.preventDefault(); COM.rot = [COM.rot[0] + m[0], Math.max(-75, Math.min(75, COM.rot[1] + m[1])), 0]; pedir(); }
+    else if (ev.key === "+" || ev.key === "="){ ev.preventDefault(); zoomA(1.5); }
+    else if (ev.key === "-"){ ev.preventDefault(); zoomA(1 / 1.5); }
+  });
+
+  // botones de zoom
+  const bz = document.createElement("div"); bz.className = "gzoom";
+  const ico = d => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + "</svg>";
+  bz.innerHTML = '<button type="button" data-z="in" aria-label="Acercar" title="Acercar">' + ico('<path d="M12 5v14M5 12h14"/>') + "</button>" +
+    '<button type="button" data-z="out" aria-label="Alejar" title="Alejar">' + ico('<path d="M5 12h14"/>') + "</button>" +
+    '<button type="button" data-z="reset" aria-label="Ver el mundo entero" title="Ver el mundo entero">' + ico('<circle cx="12" cy="12" r="8"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>') + "</button>";
+  bz.querySelectorAll("button").forEach(b => b.onclick = () => {
+    if (b.dataset.z === "in") zoomA(1.6); else if (b.dataset.z === "out") zoomA(1 / 1.6); else volar(COM.rot.slice(), 1, 450);
+  });
+  cont.appendChild(bz);
+
+  // buscador de país o empresa
+  const items = (opts.items || []).filter(x => x.label);
+  if (items.length){
+    items.forEach(x => { if (!x._k) x._k = normBusca(x.label + " " + (x.sub || "")); });
+    const idb = "gres" + Math.random().toString(36).slice(2, 7);
+    const bs = document.createElement("div"); bs.className = "gbusca";
+    bs.innerHTML = '<svg class="glupa" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>' +
+      '<input type="search" placeholder="Buscar un país o una empresa…" aria-label="Buscar un país o una empresa" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="' + idb + '" aria-autocomplete="list">' +
+      '<ul class="gres" id="' + idb + '" role="listbox" hidden></ul>';
+    cont.insertBefore(bs, cv);
+    const inp = bs.querySelector("input"), ul = bs.querySelector("ul");
+    let lista = [], act = -1;
+    const pintar = () => {
+      ul.hidden = !lista.length; inp.setAttribute("aria-expanded", String(!!lista.length));
+      ul.innerHTML = lista.map((x, i) => '<li role="option" id="' + idb + "-" + i + '" aria-selected="' + (i === act) + '" class="' + (i === act ? "on" : "") + '" data-i="' + i + '"><b>' + esc(x.label) + "</b><small>" + esc(x.tipo) + (x.sub ? " · " + esc(x.sub) : "") + "</small></li>").join("");
+      if (act >= 0) inp.setAttribute("aria-activedescendant", idb + "-" + act); else inp.removeAttribute("aria-activedescendant");
+    };
+    const buscar = () => {
+      const q = normBusca(inp.value);
+      if (!q){ lista = []; act = -1; pintar(); return; }
+      lista = items.filter(x => x._k.includes(q)).sort((a, b) => (b._k.startsWith(q) - a._k.startsWith(q)) || ((a.tipo === "País" ? 0 : 1) - (b.tipo === "País" ? 0 : 1))).slice(0, 8);
+      act = lista.length ? 0 : -1; pintar();
+    };
+    const elegir = i => { const x = lista[i]; if (!x) return; inp.value = ""; lista = []; pintar(); x.accion(); };
+    inp.addEventListener("input", buscar);
+    inp.addEventListener("keydown", ev => {
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp"){ ev.preventDefault(); if (lista.length){ act = (act + (ev.key === "ArrowDown" ? 1 : -1) + lista.length) % lista.length; pintar(); } }
+      else if (ev.key === "Enter"){ ev.preventDefault(); elegir(act >= 0 ? act : 0); }
+      else if (ev.key === "Escape"){ inp.value = ""; lista = []; pintar(); }
+    });
+    ul.addEventListener("pointerdown", ev => { const li = ev.target.closest("li"); if (li){ ev.preventDefault(); elegir(+li.dataset.i); } });
+    inp.addEventListener("blur", () => setTimeout(() => { lista = []; pintar(); }, 120));
+  }
+
+  let ro = null;
+  if (typeof ResizeObserver === "function"){
+    ro = new ResizeObserver(() => { if (!cont.isConnected) return; if (Math.abs(cont.clientWidth - w) > 2){ medir(); pedir(); } });
+    ro.observe(cont);
+  }
+  cont._globoStop = () => { parar(); if (raf) cancelAnimationFrame(raf); raf = 0; if (ro) ro.disconnect(); };
+  dibujar();
+  // si se deseleccionó el país, vuelve a la vista completa
+  const sAhora = selId();
+  if (!sAhora && COM.selPrev && COM.k > 1) setTimeout(() => volar(COM.rot.slice(), 1, 500), 0);
+  COM.selPrev = sAhora || null;
   return {
     girarA(coord){
-      const destino = [-coord[0], -coord[1], 0], desde = COM.rot.slice();
-      const reducir = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (reducir){ COM.rot = destino; redibujar(); return; }
-      const ip = d3.interpolate(desde, destino);
-      d3.transition().duration(750).tween("rot", () => t => { COM.rot = ip(t); redibujar(); });
+      const id = selId();
+      volar([-coord[0], -coord[1], 0], id ? kPara(id) : COM.k, 650);
     },
   };
 }
@@ -4675,12 +4893,17 @@ function renderComMapa(el, R, recs, aviso, hist, yA){
   const todos = el.querySelector("#comPaisesTodos");
   if (todos) todos.onclick = () => { COM.paisesTodos = !COM.paisesTodos; renderComMapa(el, R, recs, aviso, hist, yA); };
   const cont = el.querySelector("#comGlobo");
+  // buscador del globo: países y clientes (al elegir un cliente se abre su país)
+  const itemsBuscador = rank.map(x => ({ tipo: "País", label: x.es, sub: x.txt, accion: () => seleccionar(x.k) }));
+  for (const x of porPais.values()) for (const c of x.cli.values()) itemsBuscador.push({ tipo: "Cliente", label: c.n || "(sin dato)", sub: x.es, accion: () => seleccionar(x.id || "x:" + x.es) });
+  if (modo === "base") for (const x of base.values()) for (const n of x.prospectos) itemsBuscador.push({ tipo: "Prospecto", label: n, sub: x.es, accion: () => seleccionar(x.id || "x:" + x.es) });
   cargarMundo().then(() => {
     if (!cont.isConnected) return;
     const p = cont.querySelector("p"); if (p) p.remove();
     const globo = dibujarGlobo(cont, valores, puntos, {
       aria: `Globo con ${modo === "compra" ? "los países de los clientes que compraron" : "los países de la base de clientes"}`,
       onSel: seleccionar,
+      items: itemsBuscador,
     });
     if (globo && COM.girar){ globo.girarA(COM.girar); COM.girar = null; }
   }).catch(e => { cont.innerHTML = `<p class="empty">No pude cargar el mapa (${esc(errorCriollo(e))}). La lista de países sigue disponible.</p>`; });
@@ -4882,8 +5105,8 @@ function renderComMapaProv(el, hist, yA, aviso){
     b.onclick = () => { COMP.modo = b.dataset.pm; COMP.cli = null; redib(); }; });
   el.querySelectorAll("#pmMetrica button").forEach(b => { const on = b.dataset.px === met; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
     b.onclick = () => { COMP.metrica = b.dataset.px; redib(); }; });
-  const selPais = k => {
-    COMP.pais = k || null; COMP.exp = null; COMP.cli = null;
+  const selPais = (k, ek) => {
+    COMP.pais = k || null; COMP.exp = ek || null; COMP.cli = null;
     const p = k && PAISES.find(x => x[0] === k), f = k && cargarMundo.geo && cargarMundo.geo.find(x => String(x.id) === k);
     COM.girar = f && window.d3 ? d3.geoCentroid(f) : p && p[3] ? p[3] : null;
     redib();
@@ -4902,12 +5125,19 @@ function renderComMapaProv(el, hist, yA, aviso){
     const n = el.querySelector("#pmCalQ"); if (n){ n.focus(); try { n.setSelectionRange(pos, pos); } catch(e){} }
   };
   const cont = el.querySelector("#pmGlobo");
+  // buscador del globo: países y exportadores (al elegir un exportador se abre su país y se lo selecciona)
+  const itemsBuscador = [];
+  for (const x of P.values()){
+    if (x.k !== "sin") itemsBuscador.push({ tipo: "País", label: x.es, sub: fm(valorDe(x)) + " · " + pl(x.exps.size, "exportador", "exportadores"), accion: () => selPais(x.k) });
+    for (const e of x.exps.values()) itemsBuscador.push({ tipo: "Exportador", label: e.nom, sub: x.es, accion: () => selPais(x.k, e.k) });
+  }
   cargarMundo().then(() => {
     if (!cont.isConnected) return;
     const p = cont.querySelector("p"); if (p) p.remove();
     const globo = dibujarGlobo(cont, valores, puntos, {
       aria: "Globo con los países de los exportadores", sel: COMP.pais,
       onSel: k => selPais(k === COMP.pais ? null : k),
+      items: itemsBuscador,
     });
     if (globo && COM.girar){ globo.girarA(COM.girar); COM.girar = null; }
   }).catch(e => { cont.innerHTML = `<p class="empty">No pude cargar el mapa (${esc(errorCriollo(e))}). La lista de países sigue disponible.</p>`; });
