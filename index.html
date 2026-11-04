@@ -4725,10 +4725,11 @@ function renderComMapaProv(el, hist, yA, aviso){
     const calDe = p => { const g = grupoProducto(p || ""); return { tipo: g.g, nom: g.g === "Otros" || g.g === "Aceite y expeller" ? g.sub : g.sub + " · " + g.g }; };
     const agrupar = lista => { const M = new Map();
       for (const o of lista){
-        const c = calDe(o.r.product), x = M.get(c.nom) || { k: c.nom, nom: c.nom, tipo: c.tipo, tns: 0, usd: 0, tnsU: 0, cant: 0, clis: new Set(), ult: null, pmin: null, pmax: null, nombres: new Set(), ops: [] };
+        const c = calDe(o.r.product), x = M.get(c.nom) || { k: c.nom, nom: c.nom, tipo: c.tipo, tns: 0, usd: 0, tnsU: 0, cant: 0, clis: new Set(), ult: null, eta: null, pmin: null, pmax: null, nombres: new Set(), ops: [] };
         M.set(c.nom, x);
         x.tns += o.tns; x.usd += o.usd; if (o.usd > 0) x.tnsU += o.tns; x.cant++; x.clis.add(claveProv(o.cli)); x.nombres.add(o.r.product || "");
         if (o.f && (!x.ult || o.f > x.ult)) x.ult = o.f;
+        if (o.eta && (!x.eta || o.eta > x.eta)) x.eta = o.eta;
         if (o.usd > 0 && o.tns > 0){ const p = o.usd / o.tns; x.pmin = x.pmin == null ? p : Math.min(x.pmin, p); x.pmax = x.pmax == null ? p : Math.max(x.pmax, p); }
         x.ops.push(o);
       } return M; };
@@ -4744,17 +4745,18 @@ function renderComMapaProv(el, hist, yA, aviso){
     const filtro = `<div class="pmfiltro"><input type="search" id="pmCalQ" placeholder="Buscar calibre o tipo (ej. 38/42)" value="${esc(COMP.q || "")}" aria-label="Buscar calibre o tipo" autocomplete="off">` +
       (tipos.length > 1 ? `<div class="seg" id="pmTipos" role="group" aria-label="Tipo de producto"><button type="button" data-ptipo="" class="${COMP.tipo ? "" : "active"}" aria-pressed="${!COMP.tipo}">Todos</button>` +
         tipos.map(g => `<button type="button" data-ptipo="${esc(g)}" class="${COMP.tipo === g ? "active" : ""}" aria-pressed="${COMP.tipo === g}">${esc(g)}</button>`).join("") + "</div>" : "") + "</div>";
-    const tabla = tablaCorta(idt2("pmCal"), ["Calibre y tipo", "Tipo", "Cargas", "Toneladas", "Precio prom. /t", "Rango de precio /t", "Clientes", "Última ETD"],
-      lista.map(x => [lk("data-pp", x.k, x.nom) + (COMP.prod === x.k ? " ✓" : ""), esc(x.tipo), fmt0(x.cant), fmt1(x.tns), pp(x), rango(x), fmt0(x.clis.size), x.ult ? fFecha(x.ult) : "—"]), { max: 8, vacio: "Ningún calibre coincide con la búsqueda." });
+    const tabla = tablaCorta(idt2("pmCal"), ["Calibre y tipo", "Tipo", "Cargas", "Toneladas", "Precio prom. /t", "Rango de precio /t", "Clientes", "Última ETD", "Última ETA"],
+      lista.map(x => [lk("data-pp", x.k, x.nom) + (COMP.prod === x.k ? " ✓" : ""), esc(x.tipo), fmt0(x.cant), fmt1(x.tns), pp(x), rango(x), fmt0(x.clis.size), x.ult ? fFecha(x.ult) : "—", x.eta ? fFecha(x.eta) : "—"]), { max: 8, vacio: "Ningún calibre coincide con la búsqueda." });
     // compradores del calibre elegido
     const compradores = ops => { const C = new Map();
       for (const o of ops){
-        const kc = claveProv(o.cli), c = C.get(kc) || { k: kc, nom: o.cli || "(sin dato)", pais: o.paisCli, tns: 0, usd: 0, tnsU: 0, cant: 0, ult: null, exps: new Set() };
+        const kc = claveProv(o.cli), c = C.get(kc) || { k: kc, nom: o.cli || "(sin dato)", pais: o.paisCli, tns: 0, usd: 0, tnsU: 0, cant: 0, ult: null, eta: null, exps: new Set() };
         C.set(kc, c); c.tns += o.tns; c.usd += o.usd; if (o.usd > 0) c.tnsU += o.tns; c.cant++; c.exps.add(o.exp || "(sin dato)");
         if (o.f && (!c.ult || o.f > c.ult)) c.ult = o.f;
+        if (o.eta && (!c.eta || o.eta > c.eta)) c.eta = o.eta;
       } return C; };
-    const filasComp = (C, conExp) => [...C.values()].sort((a, b) => b.tns - a.tns).map(c => [esc(c.nom), esc(c.pais), ...(conExp ? [esc([...c.exps].join(", "))] : []), fmt0(c.cant), fmt1(c.tns), c.tnsU ? fmtUsd(c.usd / c.tnsU) : "—", c.ult ? fFecha(c.ult) : "—"]);
-    const cabComp = conExp => ["Cliente", "País", ...(conExp ? ["Exportador"] : []), "Cargas", "Toneladas", "Precio prom. /t", "Última compra (ETD)"];
+    const filasComp = (C, conExp) => [...C.values()].sort((a, b) => b.tns - a.tns).map(c => [esc(c.nom), esc(c.pais), ...(conExp ? [esc([...c.exps].join(", "))] : []), fmt0(c.cant), fmt1(c.tns), c.tnsU ? fmtUsd(c.usd / c.tnsU) : "—", c.ult ? fFecha(c.ult) : "—", c.eta ? fFecha(c.eta) : "—"]);
+    const cabComp = conExp => ["Cliente", "País", ...(conExp ? ["Exportador"] : []), "Cargas", "Toneladas", "Precio prom. /t", "Última ETD", "Última ETA"];
     let quien = "";
     const S = COMP.prod ? M.get(COMP.prod) : null;
     if (S){
@@ -5047,9 +5049,10 @@ function renderComProv(el, R, recs, hist, yA){
   const m = new Map();
   for (const r of R){
     const k = normEmpresa(r.exporter) || r.exporter || "(sin dato)";
-    const x = m.get(k) || { n: r.exporter || "(sin dato)", tns: 0, usd: 0, cargas: 0, ult: null };
+    const x = m.get(k) || { n: r.exporter || "(sin dato)", tns: 0, usd: 0, cargas: 0, ult: null, eta: null };
     x.tns += r.tns || 0; x.usd += r.usd || 0; x.cargas++;
     if (r.etd){ const d = fechaD(r.etd); if (!x.ult || d > x.ult) x.ult = d; }
+    if (r.eta){ const d = fechaD(r.eta); if (!x.eta || d > x.eta) x.eta = d; }
     m.set(k, x);
   }
   const prov = [...m.values()].sort((a, b) => b.tns - a.tns), totT = prov.reduce((s, x) => s + x.tns, 0);
@@ -5098,9 +5101,10 @@ function renderComProv(el, R, recs, hist, yA){
   const filasVer = (alcance === "base" ? filasProv : prov).filter(x => !qProv || normU(x.n).includes(qProv));
   const cm = new Map();
   if (UI.comProv) for (const r of R){
-    const k = claveProv(r.importer), x = cm.get(k) || { n: r.importer || "(sin dato)", pais: r.pais, tns: 0, usd: 0, cargas: 0, ult: null };
+    const k = claveProv(r.importer), x = cm.get(k) || { n: r.importer || "(sin dato)", pais: r.pais, tns: 0, usd: 0, cargas: 0, ult: null, eta: null };
     x.tns += r.tns || 0; x.usd += r.usd || 0; x.cargas++;
     if (r.etd){ const d = fechaD(r.etd); if (!x.ult || d > x.ult) x.ult = d; }
+    if (r.eta){ const d = fechaD(r.eta); if (!x.eta || d > x.eta) x.eta = d; }
     cm.set(k, x);
   }
   const clientesProv = [...cm.values()].sort((a, b) => b.tns - a.tns);
@@ -5118,12 +5122,12 @@ function renderComProv(el, R, recs, hist, yA){
         ${db.length && !UI.comProv ? `<button type="button" data-pa="base">Toda la base <b>${fmt0(filasProv.length)}</b></button>` : ""}
       </div>
       <input type="search" id="provBusca" placeholder="Buscar proveedor…" aria-label="Buscar proveedor" value="${esc(COM.provBusca || "")}"></div>
-    ${tablaCorta("comTProv", ["Proveedor", "País", "Cargas", "Toneladas", "% t", "Facturación", "Última carga", "BRC", "Ofrece"],
+    ${tablaCorta("comTProv", ["Proveedor", "País", "Cargas", "Toneladas", "% t", "Facturación", "Última ETD", "Última ETA", "BRC", "Ofrece"],
       filasVer.map(x => { const i = infoProv(x.n);
         return [esc(x.n) + (x.cargas ? "" : ` <span class="tag">${esc(x.estado || "sin cargas")}</span>`), i ? esc((paisInfo(i.pais) || {}).es || i.pais || "—") : "—", x.cargas ? fmt0(x.cargas) : "—", x.cargas ? fmt1(x.tns) : "—",
           x.cargas ? `${pctTxt(x.tns, totT)}${shareBar(x.tns, totT, "var(--pvp0)")}` : "—",
-          x.cargas ? fmtUsd(x.usd) : "—", fFecha(x.ult), i ? (i.brc ? "✓" : "—") : "—", i ? chips(i.caps) : `<span class="comsub">no está en la base</span>`]; }), { max: 10, vacio: "Ningún proveedor coincide con la búsqueda." })}
-    ${UI.comProv ? `<h3 class="subh" style="margin-top:22px">Clientes de este proveedor</h3>${tablaCorta("comTProvCli", ["Cliente", "País", "Cargas", "Toneladas", "Facturación", "Última carga"], clientesProv.map(x => [esc(x.n), esc((paisInfo(x.pais) || {}).es || "—"), fmt0(x.cargas), fmt1(x.tns), fmtUsd(x.usd), fFecha(x.ult)]), { max: 10 })}` : ""}
+          x.cargas ? fmtUsd(x.usd) : "—", fFecha(x.ult), fFecha(x.eta), i ? (i.brc ? "✓" : "—") : "—", i ? chips(i.caps) : `<span class="comsub">no está en la base</span>`]; }), { max: 10, vacio: "Ningún proveedor coincide con la búsqueda." })}
+    ${UI.comProv ? `<h3 class="subh" style="margin-top:22px">Clientes de este proveedor</h3>${tablaCorta("comTProvCli", ["Cliente", "País", "Cargas", "Toneladas", "Facturación", "Última ETD", "Última ETA"], clientesProv.map(x => [esc(x.n), esc((paisInfo(x.pais) || {}).es || "—"), fmt0(x.cargas), fmt1(x.tns), fmtUsd(x.usd), fFecha(x.ult), fFecha(x.eta)]), { max: 10 })}` : ""}
     ${sinOps.length ? `<details class="comdet2"><summary>${fmt0(sinOps.length)} proveedores de la base sin cargas en los últimos 24 meses</summary>
       <div class="tablewrap">${tablaHtml(["Proveedor", "País", "Estado", "BRC", "Ofrece"], sinOps.map(x => [esc(x.n), esc((paisInfo(x.pais) || {}).es || x.pais || "—"), esc(x.estado || "—"), x.brc ? "✓" : "—", chips(x.caps)]))}</div></details>` : ""}
     <div class="grid" style="margin:18px 0 0">
@@ -5250,6 +5254,7 @@ function abrirCliente(nombre){
   const sum = (arr, k) => arr.reduce((s, r) => s + (r[k] || 0), 0);
   const tns = sum(rs, "tns"), usd = sum(rs, "usd"), com = sum(rs, "comision");
   const ets = rs.map(r => r.etd).filter(Boolean).map(fechaD).sort((a, b) => a - b);
+  const etas = rs.map(r => r.eta).filter(Boolean).map(fechaD).sort((a, b) => a - b);
   const pais = (paisInfo(rs.find(r => r.pais) ? rs.find(r => r.pais).pais : "") || {}).es;
   document.getElementById("cliTitulo").textContent = nombre;
   document.getElementById("cliSub").textContent = [pais, `${años[0]}${años.length > 1 ? " a " + años[años.length - 1] : ""}`, "por ETD"].filter(Boolean).join(" · ");
@@ -5258,7 +5263,9 @@ function abrirCliente(nombre){
   const prods = [...prodTns.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
   const stats = [["Toneladas", fmt1(tns) + " t"], ["Facturación", fmtUsd(usd)], ["Comisión", fmtUsd(com)], ["Cargas", fmt0(rs.length)],
     ["Precio promedio", tns ? fmtUsd(usd / tns) + " /t" : "—"], ["Productos", fmt0(prods.length)],
-    ["Primera ETD", ets.length ? fFecha(ets[0]) : "—"], ["Última ETD", ets.length ? fFecha(ets[ets.length - 1]) : "—"]];
+    ["Primera ETD", ets.length ? fFecha(ets[0]) : "—"], ["Última ETD", ets.length ? fFecha(ets[ets.length - 1]) : "—"],
+    ["Primera ETA", etas.length ? fFecha(etas[0]) : "—"], ["Última ETA", etas.length ? fFecha(etas[etas.length - 1]) : "—"]];
+  document.getElementById("cliStats").style.gridTemplateColumns = "repeat(5,minmax(0,1fr))";
   document.getElementById("cliStats").innerHTML = stats.map(([l, v]) => `<div class="dps"><span>${l}</span><b>${esc(v)}</b></div>`).join("");
   // gráfico: barras apiladas por año, una serie por producto (los menores se agrupan)
   const TOP = 7, top = prods.slice(0, TOP), resto = prods.slice(TOP);
@@ -5420,10 +5427,10 @@ function renderMercado(recs, yA){
     const k = normEmpresa(n) || n;
     if (F.has(k)) return F.get(k);
     for (const [k2, x] of F) if (mismaEmpresa(k2, k) || mismaEmpresa(x.n, n)) return x;   // "Wehry" = "Wehry GmbH & Co. KG"
-    F.set(k, { n, etds: [], fechas: [], local: 0, cargas: 0 });
+    F.set(k, { n, etds: [], etas: [], fechas: [], local: 0, cargas: 0 });
     return F.get(k);
   };
-  for (const r of R){ const x = get(r.importer || "(sin dato)"); x.etds.push(r.etd); x.cargas++; if (esLocal(r)) x.local++; }
+  for (const r of R){ const x = get(r.importer || "(sin dato)"); x.etds.push(r.etd); if (r.eta) x.etas.push(r.eta); x.cargas++; if (esLocal(r)) x.local++; }
   for (const c of contr) get(c.importador || "(sin dato)").fechas.push(c.fecha);
   // último contrato: el más reciente de TODA la hoja ALL CONTRATOS para ese cliente,
   // sin importar año elegido, vista (maní / aceite) ni exportador excluido
@@ -5438,15 +5445,16 @@ function renderMercado(recs, yA){
     : (yA === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   const cada = d => d == null ? "—" : d < 1.5 ? "a diario" : `cada ${fmt0(Math.round(d))} días`;
   const filas = [...F.values()].sort((a, b) => b.cargas - a.cargas || b.fechas.length - a.fechas.length);
-  let h = `<table><tr><th>Cliente</th><th>Cargas</th><th>Cargas / mes</th><th>Frecuencia de carga</th><th>Última carga</th>
+  let h = `<table><tr><th>Cliente</th><th>Cargas</th><th>Cargas / mes</th><th>Frecuencia de carga</th><th>Última ETD</th><th>Última ETA</th>
     <th>Contratos</th><th>Frecuencia de contratos</th><th>Último contrato</th></tr>`;
   for (const x of filas){
     const ultC = x.etds.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
+    const ultEta = x.etas.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
     const ultK = x.ultK || x.fechas.reduce((m, f) => fechaNum(f) > fechaNum(m) ? f : m, null);
     const tipo = !sinPais && x.cargas ? (x.local === x.cargas ? `<span class="tag loc">Local</span>` : x.local ? `<span class="tag loc">Mixto</span>` : `<span class="tag exp">Export</span>`) : "";
     h += `<tr><td>${esc(x.n)}${tipo}</td><td>${x.cargas ? fmt0(x.cargas) : ""}</td>
       <td>${x.cargas ? (x.cargas / meses).toFixed(1).replace(".", ",") : ""}</td>
-      <td>${x.cargas ? cada(diasEntre(x.etds)) : ""}</td><td>${x.cargas ? fechaTxt(ultC) : ""}</td>
+      <td>${x.cargas ? cada(diasEntre(x.etds)) : ""}</td><td>${x.cargas ? fechaTxt(ultC) : ""}</td><td>${ultEta ? fechaTxt(ultEta) : ""}</td>
       <td>${x.fechas.length ? fmt0(x.fechas.length) : ""}</td><td>${x.fechas.length ? cada(diasEntre(x.fechas)) : ""}</td>
       <td${x.nTodos && x.nTodos !== x.fechas.length ? ` title="${x.nTodos} contrato(s) en toda la hoja ALL CONTRATOS"` : ""}>${ultK ? fechaTxt(ultK) : ""}</td></tr>`;
   }
@@ -5665,12 +5673,12 @@ function openPartnerDetail(name){
   const anos = Object.keys(g.porAno).sort();
   document.getElementById("detailSub").innerHTML =
     `Total histórico <b>${fmt1(g.total)} t</b> · ` + anos.map(y => `${y}: <b>${fmt1(g.porAno[y])} t</b>`).join(" · ");
-  let h = `<table><tr><th>Ref.</th><th>Producto</th><th>Destino</th><th>ETD</th><th>Tns</th><th>Facturación</th></tr>`;
+  let h = `<table><tr><th>Ref.</th><th>Producto</th><th>Destino</th><th>ETD</th><th>ETA</th><th>Tns</th><th>Facturación</th></tr>`;
   for (const r of rs){
     h += `<tr><td>${esc(r.negocio || "—")}</td><td>${esc(r.product)}</td><td>${esc(r.port || "—")}</td>
-      <td>${fmtDate(r.etd)}</td><td>${fmt1(r.tns)}</td><td>${fmtUsd(r.usd)}</td></tr>`;
+      <td>${fmtDate(r.etd)}</td><td>${fmtDate(r.eta)}</td><td>${fmt1(r.tns)}</td><td>${fmtUsd(r.usd)}</td></tr>`;
   }
-  h += `<tr class="total"><td>Total</td><td></td><td></td><td></td><td>${fmt1(g.total)}</td>
+  h += `<tr class="total"><td>Total</td><td></td><td></td><td></td><td></td><td>${fmt1(g.total)}</td>
         <td>${fmtUsd(rs.reduce((s, r) => s + r.usd, 0))}</td></tr></table>`;
   document.getElementById("detailTable").innerHTML = h;
   detailBg.classList.add("open");
@@ -6698,14 +6706,14 @@ function openDetail(monthIdx, year, group){
     return;
   }
   let tot = { tns: 0, usd: 0, com: 0 };
-  let html = "<table><tr><th>Negocio</th><th>Producto</th><th>ETD</th><th>Tns</th><th>USD</th><th>Comisión</th></tr>";
+  let html = "<table><tr><th>Negocio</th><th>Producto</th><th>ETD</th><th>ETA</th><th>Tns</th><th>USD</th><th>Comisión</th></tr>";
   for (const r of recs){
     tot.tns += r.tns; tot.usd += r.usd; tot.com += r.comision;
-    html += `<tr><td>${esc(r.negocio || "—")}</td><td>${esc(r.product)}</td><td>${fmtDate(r.etd)}</td>
+    html += `<tr><td>${esc(r.negocio || "—")}</td><td>${esc(r.product)}</td><td>${fmtDate(r.etd)}</td><td>${fmtDate(r.eta)}</td>
       <td>${fmt3(r.tns)}</td><td>${fmtUsd(r.usd)}</td><td>${fmtUsd(r.comision)}</td></tr>`;
   }
-  html += `<tr class="total"><td>Total</td><td></td><td></td><td>${fmt3(tot.tns)}</td><td>${fmtUsd(tot.usd)}</td><td>${fmtUsd(tot.com)}</td></tr>
-    <tr class="total"><td>Contenedores (est.)</td><td></td><td></td><td>~${fmt0(tot.tns / TNS_POR_CONTENEDOR)}</td><td></td><td></td></tr></table>`;
+  html += `<tr class="total"><td>Total</td><td></td><td></td><td></td><td>${fmt3(tot.tns)}</td><td>${fmtUsd(tot.usd)}</td><td>${fmtUsd(tot.com)}</td></tr>
+    <tr class="total"><td>Contenedores (est.)</td><td></td><td></td><td></td><td>~${fmt0(tot.tns / TNS_POR_CONTENEDOR)}</td><td></td><td></td></tr></table>`;
   document.getElementById("detailTable").innerHTML = html;
   detailBg.classList.add("open");
 }
@@ -7188,9 +7196,10 @@ function detProveedorHtml(recs, yA, MM, met, M, colorK){
     if (r.year !== yA || !(r.month <= MM)) continue;
     const p = paisDeProveedor(r.exporter), k = p ? p.es : "Sin país";
     const x = P.get(k) || { k, tns: 0, usd: 0, com: 0, n: 0, exps: new Map() }; P.set(k, x);
-    const ke = claveProv(r.exporter), e = x.exps.get(ke) || { nom: r.exporter || "(sin dato)", tns: 0, usd: 0, com: 0, n: 0, ult: null }; x.exps.set(ke, e);
+    const ke = claveProv(r.exporter), e = x.exps.get(ke) || { nom: r.exporter || "(sin dato)", tns: 0, usd: 0, com: 0, n: 0, ult: null, eta: null }; x.exps.set(ke, e);
     for (const o of [x, e]){ o.tns += r.tns || 0; o.usd += r.usd || 0; o.com += r.comision || 0; o.n++; }
     if (r.etd){ const d = fechaD(r.etd); if (!e.ult || d > e.ult) e.ult = d; }
+    if (r.eta){ const d = fechaD(r.eta); if (!e.eta || d > e.eta) e.eta = d; }
   }
   const val = o => met === "usd" ? o.usd : met === "tns" ? o.tns : o.com;
   const paises = [...P.values()].filter(x => x.n).sort((a, b) => val(b) - val(a));
@@ -7208,9 +7217,9 @@ function detProveedorHtml(recs, yA, MM, met, M, colorK){
   const filas = paises.map(x => {
     const abierto = DET_PROV_ABIERTOS.has(x.k);
     const exps = [...x.exps.values()].sort((a, b) => val(b) - val(a));
-    const tabla = `<div class="tablewrap"><table><tr><th>Empresa</th><th>${DEF[pri][0]}</th><th>% del país</th>${otras.map(k => `<th>${DEF[k][0]}</th>`).join("")}<th>Cargas</th><th>Comisión / t</th><th>Última ETD</th></tr>` +
-      exps.map(e => `<tr><td>${esc(e.nom)}</td><td><b>${DEF[pri][1](e)}</b></td><td>${pc(val(e), val(x))}</td>${otras.map(k => `<td>${DEF[k][1](e)}</td>`).join("")}<td>${fmt0(e.n)}</td><td>${ct(e.com, e.tns)}</td><td>${e.ult ? fFecha(e.ult) : "—"}</td></tr>`).join("") +
-      `<tr class="total"><td>Total ${esc(x.k)}</td><td>${DEF[pri][1](x)}</td><td>100%</td>${otras.map(k => `<td>${DEF[k][1](x)}</td>`).join("")}<td>${fmt0(x.n)}</td><td>${ct(x.com, x.tns)}</td><td></td></tr></table></div>`;
+    const tabla = `<div class="tablewrap"><table><tr><th>Empresa</th><th>${DEF[pri][0]}</th><th>% del país</th>${otras.map(k => `<th>${DEF[k][0]}</th>`).join("")}<th>Cargas</th><th>Comisión / t</th><th>Última ETD</th><th>Última ETA</th></tr>` +
+      exps.map(e => `<tr><td>${esc(e.nom)}</td><td><b>${DEF[pri][1](e)}</b></td><td>${pc(val(e), val(x))}</td>${otras.map(k => `<td>${DEF[k][1](e)}</td>`).join("")}<td>${fmt0(e.n)}</td><td>${ct(e.com, e.tns)}</td><td>${e.ult ? fFecha(e.ult) : "—"}</td><td>${e.eta ? fFecha(e.eta) : "—"}</td></tr>`).join("") +
+      `<tr class="total"><td>Total ${esc(x.k)}</td><td>${DEF[pri][1](x)}</td><td>100%</td>${otras.map(k => `<td>${DEF[k][1](x)}</td>`).join("")}<td>${fmt0(x.n)}</td><td>${ct(x.com, x.tns)}</td><td></td><td></td></tr></table></div>`;
     return `<div class="dpp"><button type="button" class="dpph" data-k="${esc(x.k)}" aria-expanded="${abierto}" style="--c:${colorK(x.k)}" title="Ver las empresas de este país">
         <i class="dot"></i><span class="dpn"><b>${esc(x.k)}</b><small>${pl(x.exps.size, "empresa")} · ${pl(x.n, "carga")}</small></span>
         <span class="dpm k"><b>${DEF[pri][1](x)}</b><small>${pc(val(x), T)} del total</small></span>
