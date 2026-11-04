@@ -378,6 +378,25 @@
   .dpchip{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:999px;padding:5px 12px;font-size:.8rem;cursor:pointer}
   .dpchip.on{background:var(--c);border-color:var(--c);color:#fff}
   .dpchart{position:relative;height:430px;margin:6px 0 18px}
+  .dprov{margin:0 0 18px}
+  .dprov[hidden]{display:none}
+  .dpsplit{display:flex;height:34px;border-radius:12px;overflow:hidden;gap:2px;margin:4px 0 14px}
+  .dpseg{border:0;padding:0;min-width:3px;background:var(--c);color:#fff;font:inherit;font-size:.78rem;font-weight:700;cursor:pointer;text-shadow:0 0 3px rgba(0,0,0,.45);transition:filter .15s}
+  .dpseg:hover{filter:brightness(1.12)}
+  .dpp{border-radius:16px;background:var(--panel2);margin-bottom:8px;overflow:hidden}
+  .dpph{width:100%;display:grid;grid-template-columns:14px minmax(0,1.6fr) repeat(4,minmax(0,1fr));gap:14px;align-items:center;text-align:left;background:transparent;border:0;padding:12px 16px;cursor:pointer;font:inherit;color:inherit;font-variant-numeric:tabular-nums}
+  .dpph:hover{background:var(--panel3)}
+  .dpph .dot{width:12px;height:12px;border-radius:50%;background:var(--c)}
+  .dpph b{font-weight:600}.dpph small{display:block;color:var(--faint);font-size:.74rem;font-weight:400}
+  .dpph .dpn b{font-size:.95rem}
+  .dpph .dpm{text-align:right;font-size:.88rem}
+  .dpph .dpm.k b{font-size:.98rem}
+  .dpd{padding:0 16px 14px}
+  .dpd[hidden]{display:none}
+  .dpd .tablewrap{margin-top:2px}
+  .dpph.cab{cursor:default;font-size:.72rem;color:var(--faint);padding:0 16px 4px;background:transparent}
+  .dpph.cab:hover{background:transparent}
+  @media(max-width:760px){.dpph{grid-template-columns:14px minmax(0,1fr) auto;gap:10px}.dpph .dpm.x{display:none}.dpph.cab{display:none}}
   .dpnota{margin-top:12px}
   #detTabla table{font-size:.8rem}
   #detTabla tr.dpdelta td{color:var(--muted);font-size:.76rem}
@@ -1687,6 +1706,7 @@
     <div class="dpbar"><span class="dpl">Ver por</span><div class="seg" id="detPor" role="group" aria-label="Desglose"></div><span class="dpchks"><label class="dpchk"><input type="checkbox" id="detTend"> Línea de tendencia</label><label class="dpcmp"><input type="checkbox" id="detCmp"> Comparar con el año anterior</label></span></div>
     <div class="dpchips" id="detChips" hidden></div>
     <div class="dpchart"><canvas id="detChart" role="img" aria-label="Evolución mensual"></canvas></div>
+    <div id="detProv" class="dprov" hidden></div>
     <div class="tablewrap" id="detTabla"></div>
     <p class="hint dpnota" id="detNota"></p>
   </div>
@@ -6933,17 +6953,27 @@ const DET = { m: "precio", por: "general", cmp: true, tend: true, sel: {} };
 const DET_METRICAS = {
   tns:    { label: "Toneladas",       f: v => fmt1(v) + " t",  fs: fmt1, por: ["general", "tipo", "calibre", "pais"] },
   usd:    { label: "Facturación",     f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre", "pais"] },
-  com:    { label: "Comisión",        f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre"] },
+  com:    { label: "Comisión",        f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "proveedor"] },
   etd:    { label: "Embarques",       f: v => fmt0(v) + (v === 1 ? " carga" : " cargas"), fs: fmt0, por: ["general", "tipo", "calibre"] },
   precio: { label: "Precio promedio", f: v => fmtUsd(v) + " /t", fs: fmt0, por: ["general", "tipo", "calibre"] },
 };
-const DET_POR = { general: "General", tipo: "Tipo", calibre: "Calibre", pais: "País" };
+const DET_POR = { general: "General", tipo: "Tipo", calibre: "Calibre", pais: "País", proveedor: "País proveedor" };
+const DET_PROV_ABIERTOS = new Set();
+/* "Cargas Brokerage 2026": así se llama la vista de comisión, en el Resumen y adentro */
+function tituloCargas(yA){
+  const biz = BUSINESSES.find(b => b.key === UI.biz);
+  return ("Cargas " + (UI.biz === TOTAL_KEY || !biz ? "" : biz.name)).trim() + " " + yA;
+}
 const detVacio = () => ({ tns: Array(12).fill(0), usd: Array(12).fill(0), com: Array(12).fill(0), n: Array(12).fill(0), tnsU: Array(12).fill(0) });
 function detClave(r, por){
   if (por === "tipo") return grupoProducto(r.product).g;
   if (por === "calibre"){
     const x = grupoProducto(r.product);
     return x.g === "Otros" || x.g === "Aceite y expeller" ? x.sub : x.sub + " · " + x.g;
+  }
+  if (por === "proveedor"){
+    const p = paisDeProveedor(r.exporter);
+    return p ? p.es : "Sin país";
   }
   if (por === "pais"){
     let p = "";
@@ -7054,13 +7084,47 @@ function cerrarDetalle(){
   document.getElementById("detBg").classList.remove("open");
   if (charts.detChart){ charts.detChart.destroy(); delete charts.detChart; }
 }
+function detProveedorHtml(recs, yA, MM, met, M, colorK){
+  const P = new Map();
+  for (const r of recs){
+    if (r.year !== yA || !(r.month <= MM)) continue;
+    const p = paisDeProveedor(r.exporter), k = p ? p.es : "Sin país";
+    const x = P.get(k) || { k, tns: 0, usd: 0, com: 0, n: 0, exps: new Map() }; P.set(k, x);
+    const ke = claveProv(r.exporter), e = x.exps.get(ke) || { nom: r.exporter || "(sin dato)", tns: 0, usd: 0, com: 0, n: 0, ult: null }; x.exps.set(ke, e);
+    for (const o of [x, e]){ o.tns += r.tns || 0; o.usd += r.usd || 0; o.com += r.comision || 0; o.n++; }
+    if (r.etd){ const d = fechaD(r.etd); if (!e.ult || d > e.ult) e.ult = d; }
+  }
+  const val = o => met === "usd" ? o.usd : met === "tns" ? o.tns : o.com;
+  const paises = [...P.values()].filter(x => x.n).sort((a, b) => val(b) - val(a));
+  if (!paises.length) return '<p class="empty">Sin cargas en el período.</p>';
+  const T = paises.reduce((s, x) => s + val(x), 0) || 1;
+  const pc = (v, t) => t ? (v / t * 100).toFixed(1).replace(".", ",") + "%" : "—";
+  const ct = (c, t) => t ? fmtUsd(c / t) : "—";
+  const dolar = v => fmtUsd(v);
+  const barra = `<div class="dpsplit" role="img" aria-label="${esc(M.label)} repartida entre los países de los proveedores">` + paises.filter(x => val(x) > 0).map(x =>
+    `<button type="button" class="dpseg" data-k="${esc(x.k)}" style="flex:${val(x)};--c:${colorK(x.k)}" title="${esc(x.k)} · ${esc(M.f(val(x)))} · ${pc(val(x), T)}">${val(x) / T >= 0.06 ? pc(val(x), T) : ""}</button>`).join("") + "</div>";
+  const cab = `<div class="dpph cab" aria-hidden="true"><span></span><span>País del proveedor</span><span class="dpm">Comisión</span><span class="dpm x">Toneladas</span><span class="dpm x">Facturación</span><span class="dpm x">Comisión / t</span></div>`;
+  const filas = paises.map(x => {
+    const abierto = DET_PROV_ABIERTOS.has(x.k);
+    const exps = [...x.exps.values()].sort((a, b) => val(b) - val(a));
+    const tabla = `<div class="tablewrap"><table><tr><th>Empresa</th><th>Comisión</th><th>% del país</th><th>Toneladas</th><th>Facturación</th><th>Cargas</th><th>Comisión / t</th><th>Última ETD</th></tr>` +
+      exps.map(e => `<tr><td>${esc(e.nom)}</td><td><b>${dolar(e.com)}</b></td><td>${pc(val(e), val(x))}</td><td>${fmt1(e.tns)} t</td><td>${dolar(e.usd)}</td><td>${fmt0(e.n)}</td><td>${ct(e.com, e.tns)}</td><td>${e.ult ? fFecha(e.ult) : "—"}</td></tr>`).join("") +
+      `<tr class="total"><td>Total ${esc(x.k)}</td><td>${dolar(x.com)}</td><td>100%</td><td>${fmt1(x.tns)} t</td><td>${dolar(x.usd)}</td><td>${fmt0(x.n)}</td><td>${ct(x.com, x.tns)}</td><td></td></tr></table></div>`;
+    return `<div class="dpp"><button type="button" class="dpph" data-k="${esc(x.k)}" aria-expanded="${abierto}" style="--c:${colorK(x.k)}" title="Ver las empresas de este país">
+        <i class="dot"></i><span class="dpn"><b>${esc(x.k)}</b><small>${pl(x.exps.size, "empresa")} · ${pl(x.n, "carga")}</small></span>
+        <span class="dpm k"><b>${dolar(x.com)}</b><small>${pc(val(x), T)} del total</small></span>
+        <span class="dpm x">${fmt1(x.tns)} t</span><span class="dpm x">${dolar(x.usd)}</span><span class="dpm x">${ct(x.com, x.tns)}</span></button>
+      <div class="dpd"${abierto ? "" : " hidden"}>${tabla}</div></div>`;
+  }).join("");
+  return barra + cab + filas;
+}
 function renderDetalle(){
   if (!DET_CTX) return;
   const { recs, yA, MM } = DET_CTX, M = DET_METRICAS[DET.m], por = DET.por, met = DET.m;
   const yB = DET_CTX.yB;   // solo hay comparación si el Resumen está en modo Comparar
   const biz = BUSINESSES.find(b => b.key === UI.biz), svc = subActual();
   const vista = UI.biz === TOTAL_KEY ? "Σ Total" : (svc ? svc.label : (biz ? biz.name : ""));
-  document.getElementById("detTitulo").textContent = `${M.label} · ${yA}`;
+  document.getElementById("detTitulo").textContent = met === "com" ? tituloCargas(yA) : `${M.label} · ${yA}`;
   document.getElementById("detSub").textContent = `${vista} · por mes de ETD${MM < 12 ? " · enero a " + MESES[MM - 1].toLowerCase() : ""}${yB != null ? " · comparado con " + yB : ""}`;
 
   const G = detAgrupar(recs, yA, MM, por), Gt = por === "general" ? G : detAgrupar(recs, yA, MM, "general");
@@ -7176,6 +7240,21 @@ function renderDetalle(){
     },
   });
 
+  // país proveedor: barra dividida 100% y, por país, sus exportadores con comisión y demás
+  const pv = document.getElementById("detProv");
+  if (por === "proveedor"){
+    const colorK = k => { const i = orden.findIndex(([kk]) => kk === k); return i >= 0 && i < 7 ? colorDe(k, i) : "#8e8e93"; };
+    pv.hidden = false; pv.innerHTML = detProveedorHtml(recs, yA, MM, met, M, colorK);
+    pv.querySelectorAll(".dpph[data-k]").forEach(b => b.onclick = () => {
+      const d = b.nextElementSibling, abre = d.hidden; d.hidden = !abre; b.setAttribute("aria-expanded", String(abre));
+      abre ? DET_PROV_ABIERTOS.add(b.dataset.k) : DET_PROV_ABIERTOS.delete(b.dataset.k);
+    });
+    pv.querySelectorAll(".dpseg").forEach(b => b.onclick = () => {
+      const h = [...pv.querySelectorAll(".dpph[data-k]")].find(x => x.dataset.k === b.dataset.k);
+      if (!h) return; if (h.nextElementSibling.hidden) h.click(); h.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  } else { pv.hidden = true; pv.innerHTML = ""; }
+
   // tabla
   const fila = (nombre, g, extraCls = "") => {
     const celdas = labels.map((_, m) => { const v = detValor(g, met, m); return `<td>${v != null && v > 0 ? M.fs(v) : ""}</td>`; }).join("");
@@ -7208,6 +7287,11 @@ function renderDetalle(){
   if (met === "usd" && totB){
     const e = detEfecto(tot, totB);
     if (e) notas.push(`Frente a ${yB}: ${detSigno(e.dif, fmtUsd)} en total → ${detSigno(e.vol, fmtUsd)} por volumen (toneladas) y ${detSigno(e.precio, fmtUsd)} por precio.`);
+  }
+  if (por === "proveedor"){
+    const sp = G.get("Sin país"), tt = detSuma(tot.tns);
+    notas.push(sp && tt ? `${(detSuma(sp.tns) / tt * 100).toFixed(1).replace(".", ",")}% de las toneladas es de exportadores sin país: o la columna Country está vacía en la hoja «Database suppliers», o no figuran ahí.` : "Todos los exportadores tienen país.");
+    notas.push("Tocá un país para ver sus empresas con la comisión y el resto del desglose.");
   }
   if (por === "pais"){
     const sp = G.get("Sin país"), tt = detSuma(tot.tns);
@@ -8181,7 +8265,7 @@ function renderZentra(c){
     return `<button type="button" class="zm" data-m="${k}" aria-pressed="${k === metrica}"><span class="zl">${mm.label}</span><span class="zv">${zBig(mm.f(v))}</span><span class="zmeta">${meta}</span>${dl}</button>`;
   }).join("");
   document.querySelectorAll("#zStrip .zm").forEach(btn => btn.onclick = () => { UI.zMetric = btn.dataset.m; saveUI(); render(); });
-  document.getElementById("zMainTitle").textContent = `${m.label} por mes de ETD · ${yA}`;
+  document.getElementById("zMainTitle").textContent = metrica === "com" ? tituloCargas(yA) : `${m.label} por mes de ETD · ${yA}`;
   mk("zChart", m.key, m.usd ? { usd: true } : (m.dots ? { dots: true } : {}));
   document.getElementById("zChart").setAttribute("aria-label", `${m.label} por mes de ETD, ${yA}${cmpYears.length ? " comparado con " + cmpYears.join(", ") : ""}`);
 
