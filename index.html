@@ -379,6 +379,11 @@
   .dpchip{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:999px;padding:5px 12px;font-size:.8rem;cursor:pointer}
   .dpchip.on{background:var(--c);border-color:var(--c);color:#fff}
   .dpchart{position:relative;height:430px;margin:6px 0 18px}
+  /* tablas dentro de tarjetas gris (panel2): la primera columna fija no debe quedar blanca */
+  .dpd table th,.dpd table td,.pmcal table th,.pmcal table td,.pgd table th,.pgd table td{background:transparent}
+  .dpd table th:first-child,.dpd table td:first-child,.pmcal table th:first-child,.pmcal table td:first-child,.pgd table th:first-child,.pgd table td:first-child{background:var(--panel2)}
+  .dpd tbody tr:hover td,.dpd tbody tr:hover td:first-child,.pmcal tbody tr:hover td,.pmcal tbody tr:hover td:first-child,.pgd tbody tr:hover td,.pgd tbody tr:hover td:first-child{background:var(--panel3)}
+  .dpd tr.total td,.dpd tr.total td:first-child,.pmcal tr.total td,.pmcal tr.total td:first-child,.pgd tr.total td,.pgd tr.total td:first-child{background:var(--panel2)}
   .dprov{margin:0 0 18px}
   .dprov[hidden]{display:none}
   .dpsplit{display:flex;height:34px;border-radius:12px;overflow:hidden;gap:2px;margin:4px 0 14px}
