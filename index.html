@@ -964,6 +964,13 @@
   .anualbusca input:focus{outline:2px solid var(--accent);outline-offset:1px}
   table.anual tr.tot td{font-weight:700;border-top:2px solid var(--border);background:var(--panel2)}
   table.anual tr.tot td.nom{background:var(--panel2)}
+  .pmfiltro{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:6px 0 10px}
+  .pmfiltro input{flex:1 1 220px;max-width:340px;padding:9px 14px;border-radius:99px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font:inherit;font-size:.88rem}
+  .pmfiltro input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .pmfiltro .seg{width:auto;margin:0}.pmfiltro .seg button{flex:none;padding:6px 14px;white-space:nowrap}
+  .pmcal{border-radius:16px;background:var(--panel2);padding:14px 16px 16px;margin:16px 0 4px}
+  .pmcal h3{margin-top:0}
+  .pmcal .tablewrap{margin-top:4px}
   .comleyenda{flex-direction:column;gap:6px}
   .comleyenda .comsub{margin:0;text-align:center}
   .gesc{display:inline-flex;align-items:center;gap:10px;font-size:.78rem;color:var(--muted)}
@@ -4626,7 +4633,7 @@ function renderComMapa(el, R, recs, aviso, hist, yA){
 /* ---------- globo de proveedores: país del exportador → exportadores → clientes y operaciones ----------
    Dos visuales: Embarcado (cargas por ETD) y Contratado (ALL CONTRATOS por fecha de contrato, con el saldo pendiente).
    El país del exportador sale de la database de proveedores. */
-const COMP = { modo: "emb", metrica: "tns", pais: null, exp: null, cli: null };
+const COMP = { modo: "emb", metrica: "tns", pais: null, exp: null, cli: null, q: "", tipo: null, prod: null };
 const PM_METRICAS = {
   emb: [["tns", "Toneladas"], ["usd", "Facturación"], ["exp", "Exportadores"]],
   con: [["tns", "Contratadas"], ["usd", "Valor"], ["pend", "Pendiente de embarcar"], ["exp", "Exportadores"]],
@@ -4710,6 +4717,60 @@ function renderComMapaProv(el, hist, yA, aviso){
     : caja("Contratadas", fmt1(o.tns) + " t", `${pl(o.cant, "contrato")}`) + caja("Valor", fmtUsd(o.usd), "total") + caja("Pendiente", fmt1(o.pend) + " t", "saldo por embarcar") + caja("Embarcado", pctEmb(o.tns, o.pend), "de lo contratado")) + `</div>`;
   const lk = (attr, k, txt) => `<button type="button" class="pmlink" ${attr}="${esc(k)}">${esc(txt)}</button>`;
 
+  /* Calibres y tipos vendidos en el país o exportador elegido, y quién los compró y a qué precio */
+  const bloqueCalibres = () => {
+    if (!emb || !X) return "";
+    const idt2 = s => s + "_" + modo;
+    const itemsPais = [...X.exps.values()].flatMap(e => e.ops), items = E ? E.ops : itemsPais;
+    const calDe = p => { const g = grupoProducto(p || ""); return { tipo: g.g, nom: g.g === "Otros" || g.g === "Aceite y expeller" ? g.sub : g.sub + " · " + g.g }; };
+    const agrupar = lista => { const M = new Map();
+      for (const o of lista){
+        const c = calDe(o.r.product), x = M.get(c.nom) || { k: c.nom, nom: c.nom, tipo: c.tipo, tns: 0, usd: 0, tnsU: 0, cant: 0, clis: new Set(), ult: null, pmin: null, pmax: null, nombres: new Set(), ops: [] };
+        M.set(c.nom, x);
+        x.tns += o.tns; x.usd += o.usd; if (o.usd > 0) x.tnsU += o.tns; x.cant++; x.clis.add(claveProv(o.cli)); x.nombres.add(o.r.product || "");
+        if (o.f && (!x.ult || o.f > x.ult)) x.ult = o.f;
+        if (o.usd > 0 && o.tns > 0){ const p = o.usd / o.tns; x.pmin = x.pmin == null ? p : Math.min(x.pmin, p); x.pmax = x.pmax == null ? p : Math.max(x.pmax, p); }
+        x.ops.push(o);
+      } return M; };
+    const M = agrupar(items), MP = E ? agrupar(itemsPais) : M;
+    if (COMP.prod && !M.has(COMP.prod)) COMP.prod = null;
+    const tipos = ["Raw", "Blanched", "Roasted", "BF", "Otros", "Aceite y expeller"].filter(g => [...M.values()].some(x => x.tipo === g));
+    if (COMP.tipo && !tipos.includes(COMP.tipo)) COMP.tipo = null;
+    const q = sinTildes(COMP.q || "").trim();
+    const lista = [...M.values()].filter(x => (!COMP.tipo || x.tipo === COMP.tipo) && (!q || sinTildes(x.nom + " " + x.tipo + " " + [...x.nombres].join(" ")).includes(q))).sort((a, b) => b.tns - a.tns);
+    const pp = x => x.tnsU ? fmtUsd(x.usd / x.tnsU) : "—";
+    const rango = x => x.pmin == null ? "—" : Math.round(x.pmin) === Math.round(x.pmax) ? fmtUsd(x.pmin) : fmtUsd(x.pmin) + " – " + fmtUsd(x.pmax);
+    const alcance = E ? E.nom : X.es;
+    const filtro = `<div class="pmfiltro"><input type="search" id="pmCalQ" placeholder="Buscar calibre o tipo (ej. 38/42)" value="${esc(COMP.q || "")}" aria-label="Buscar calibre o tipo" autocomplete="off">` +
+      (tipos.length > 1 ? `<div class="seg" id="pmTipos" role="group" aria-label="Tipo de producto"><button type="button" data-ptipo="" class="${COMP.tipo ? "" : "active"}" aria-pressed="${!COMP.tipo}">Todos</button>` +
+        tipos.map(g => `<button type="button" data-ptipo="${esc(g)}" class="${COMP.tipo === g ? "active" : ""}" aria-pressed="${COMP.tipo === g}">${esc(g)}</button>`).join("") + "</div>" : "") + "</div>";
+    const tabla = tablaCorta(idt2("pmCal"), ["Calibre y tipo", "Tipo", "Cargas", "Toneladas", "Precio prom. /t", "Rango de precio /t", "Clientes", "Última ETD"],
+      lista.map(x => [lk("data-pp", x.k, x.nom) + (COMP.prod === x.k ? " ✓" : ""), esc(x.tipo), fmt0(x.cant), fmt1(x.tns), pp(x), rango(x), fmt0(x.clis.size), x.ult ? fFecha(x.ult) : "—"]), { max: 8, vacio: "Ningún calibre coincide con la búsqueda." });
+    // compradores del calibre elegido
+    const compradores = ops => { const C = new Map();
+      for (const o of ops){
+        const kc = claveProv(o.cli), c = C.get(kc) || { k: kc, nom: o.cli || "(sin dato)", pais: o.paisCli, tns: 0, usd: 0, tnsU: 0, cant: 0, ult: null, exps: new Set() };
+        C.set(kc, c); c.tns += o.tns; c.usd += o.usd; if (o.usd > 0) c.tnsU += o.tns; c.cant++; c.exps.add(o.exp || "(sin dato)");
+        if (o.f && (!c.ult || o.f > c.ult)) c.ult = o.f;
+      } return C; };
+    const filasComp = (C, conExp) => [...C.values()].sort((a, b) => b.tns - a.tns).map(c => [esc(c.nom), esc(c.pais), ...(conExp ? [esc([...c.exps].join(", "))] : []), fmt0(c.cant), fmt1(c.tns), c.tnsU ? fmtUsd(c.usd / c.tnsU) : "—", c.ult ? fFecha(c.ult) : "—"]);
+    const cabComp = conExp => ["Cliente", "País", ...(conExp ? ["Exportador"] : []), "Cargas", "Toneladas", "Precio prom. /t", "Última compra (ETD)"];
+    let quien = "";
+    const S = COMP.prod ? M.get(COMP.prod) : null;
+    if (S){
+      const C = compradores(S.ops);
+      quien = `<h3 class="subh" style="margin-top:16px">Quién compró ${esc(S.nom)} de ${esc(alcance)} <button type="button" class="pmlink" data-pp="${esc(S.k)}">× quitar</button> <span class="comsub">· ${pl(C.size, "cliente")}</span></h3>` +
+        tablaCorta(idt2("pmQuien"), cabComp(!E), filasComp(C, !E), { max: 10 });
+      if (E){
+        const SP = MP.get(S.k), CP = SP ? compradores(SP.ops) : new Map(), otros = new Map([...CP].filter(([k]) => !C.has(k)));
+        quien += `<p class="comsub">Precio promedio de ${esc(E.nom)}: <b>${pp(S)}</b> /t · en todo ${esc(X.es)}: <b>${SP ? pp(SP) : "—"}</b> /t (${SP ? rango(SP) : "—"})</p>` +
+          `<h3 class="subh" style="margin-top:16px">Compraron ${esc(S.nom)} en ${esc(X.es)} pero no de ${esc(E.nom)} <span class="comsub">· ${pl(otros.size, "cliente")} · posibles clientes para ofrecerle</span></h3>` +
+          tablaCorta(idt2("pmOtros"), cabComp(true), filasComp(otros, true), { max: 10, vacio: "Todos los que compraron este calibre en el país ya le compraron a este exportador." });
+      }
+    }
+    return `<div class="pmcal"><h3 class="subh">Calibres y tipos vendidos de ${esc(alcance)} <span class="comsub">· tocá uno para ver quién lo compró</span></h3>${filtro}${tabla}${quien}</div>`;
+  };
+
   let lado;
   if (!X){
     lado = `<p class="comhint">Tocá un país en el globo o en la lista para ver sus exportadores.</p>
@@ -4723,8 +4784,8 @@ function renderComMapaProv(el, hist, yA, aviso){
     if (!E){
       const exps = [...X.exps.values()].sort((a, b) => b.tns - a.tns);
       const nota = e => X.k === "sin" ? ` <span class="tag">${motivoSinPais(e.nom)}</span>` : "";
-      lado = crumb + stats(X) + (X.k === "sin" ? `<p class="comsub">Estos exportadores no tienen país: o la columna <b>Country</b> está vacía en la hoja «Database suppliers», o el exportador no está en esa hoja. Completá eso y se ubican solos.</p>` : "") +
-        `<h3 class="subh">Exportadores de ${esc(X.es)} <span class="comsub">· tocá uno para ver con quién operó</span></h3>` +
+      lado = crumb + stats(X) + (X.k === "sin" ? `<p class="comsub">Estos exportadores no tienen país: o la columna <b>Country</b> está vacía en la hoja «Database suppliers», o el exportador no está en esa hoja. Completá eso y se ubican solos.</p>` : "") + bloqueCalibres() +
+        `<h3 class="subh" style="margin-top:20px">Exportadores de ${esc(X.es)} <span class="comsub">· tocá uno para ver con quién operó</span></h3>` +
         tablaCorta(idt("pmExp"), emb ? ["Exportador", "Toneladas", "% del país", "Facturación", "Comisión", "Cargas", "Última ETD", "Última ETA"] : ["Exportador", "Contratadas (t)", "% del país", "Valor", "Pendiente (t)", "Clientes", "Contratos", "Último contrato"],
           exps.map(e => emb
             ? [lk("data-pe", e.k, e.nom) + nota(e), fmt1(e.tns), pctTxt(e.tns, X.tns), fmtUsd(e.usd), fmtUsd(e.com), fmt0(e.cant), e.ult ? fFecha(e.ult) : "—", e.eta ? fFecha(e.eta) : "—"]
@@ -4735,8 +4796,8 @@ function renderComMapaProv(el, hist, yA, aviso){
       const fila = o => emb
         ? [esc(o.r.negocio || "—"), esc(o.r.importer || "—"), esc(o.r.product || "—"), esc(o.r.port || "—"), o.f ? fFecha(o.f) : "—", o.eta ? fFecha(o.eta) : "—", fmt1(o.tns), fmtUsd(o.usd), fmtUsd(o.com)]
         : [esc(o.r.contrato || "—"), o.f ? fFecha(o.f) : "—", esc(o.r.importador || "—"), esc(o.r.producto || "—"), fmt1(o.tns), fmt1(o.pend), pctEmb(o.tns, o.pend), fmtUsd(o.usd)];
-      lado = crumb + stats(E) +
-        `<h3 class="subh">Clientes de ${esc(E.nom)} <span class="comsub">· tocá uno para filtrar las operaciones</span></h3>` +
+      lado = crumb + stats(E) + bloqueCalibres() +
+        `<h3 class="subh" style="margin-top:20px">Clientes de ${esc(E.nom)} <span class="comsub">· tocá uno para filtrar las operaciones</span></h3>` +
         tablaCorta(idt("pmCli"), emb ? ["Cliente", "País", "Cargas", "Toneladas", "Facturación", "Comisión", "Última ETD", "Última ETA"] : ["Cliente", "País", "Contratos", "Contratadas (t)", "Pendiente (t)", "% embarcado", "Valor", "Último contrato"],
           clis.map(c => emb
             ? [lk("data-pc", c.k, c.nom) + (COMP.cli === c.k ? " ✓" : ""), esc(c.pais), fmt0(c.cant), fmt1(c.tns), fmtUsd(c.usd), fmtUsd(c.com), c.ult ? fFecha(c.ult) : "—", c.eta ? fFecha(c.eta) : "—"]
@@ -4775,6 +4836,13 @@ function renderComMapaProv(el, hist, yA, aviso){
   });
   el.querySelectorAll("[data-pe]").forEach(b => b.onclick = () => { COMP.exp = b.dataset.pe; COMP.cli = null; redib(); });
   el.querySelectorAll("[data-pc]").forEach(b => b.onclick = () => { COMP.cli = COMP.cli === b.dataset.pc ? null : b.dataset.pc; redib(); });
+  el.querySelectorAll("[data-pp]").forEach(b => b.onclick = () => { COMP.prod = COMP.prod === b.dataset.pp ? null : b.dataset.pp; redib(); });
+  el.querySelectorAll("#pmTipos button").forEach(b => b.onclick = () => { COMP.tipo = b.dataset.ptipo || null; redib(); });
+  const bqc = el.querySelector("#pmCalQ");
+  if (bqc) bqc.oninput = () => {
+    COMP.q = bqc.value; const pos = bqc.selectionStart; redib();
+    const n = el.querySelector("#pmCalQ"); if (n){ n.focus(); try { n.setSelectionRange(pos, pos); } catch(e){} }
+  };
   const cont = el.querySelector("#pmGlobo");
   cargarMundo().then(() => {
     if (!cont.isConnected) return;
