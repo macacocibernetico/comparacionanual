@@ -1244,6 +1244,34 @@
     #yearPills::-webkit-scrollbar{display:none}
     #yearPills .pill{flex:none}
   }
+
+  /* Resumen compacto: el dato primero, los controles después */
+  .ztitle{flex-direction:row;align-items:baseline;flex-wrap:wrap;gap:4px 16px;margin:2px 0 8px}
+  .ztitle h2{font-size:1.6rem;font-weight:500;letter-spacing:-.03em;line-height:1.15;text-wrap:initial}
+  .zsub{font-size:.84rem}
+  .yearbtn,.scopechip{display:none}
+  .yearbtn,.scopechip{align-items:center;gap:8px;border-radius:99px;font-weight:500;white-space:nowrap}
+  .yearbtn::after,.scopechip::after{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.65;flex:none}
+  @media(min-width:721px){
+    #grpYear .grow{position:relative}
+    .yearbtn{display:inline-flex;padding:7px 14px;background:var(--panel2);font-size:.84rem}
+    #yearPills{display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:40;background:var(--panel);border-radius:20px;padding:10px;
+      box-shadow:var(--shadow-lg),inset 0 0 0 1px var(--border2);flex-wrap:wrap;width:max-content;max-width:min(92vw,520px)}
+    #yearPills.open{display:flex}
+  }
+  @media(max-width:720px){
+    .scopechip{display:inline-flex;min-height:44px;padding:0 16px;background:var(--panel2);font-size:.9rem;align-self:flex-start}
+    /* el chip de alcance ya dice negocio y año: el título queda para lectores de pantalla y el subtítulo se omite */
+    .ztitle{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+    #zMainSub{display:none}
+    .sheet .group{margin-bottom:10px}
+    /* los años dentro de la hoja: en filas que se acomodan, con el activo bien marcado */
+    .sheet #yearPills{flex-wrap:wrap;overflow:visible;gap:8px}
+    .sheet #yearPills .pill{width:auto;flex:0 0 auto;min-height:44px;padding:10px 18px;text-align:center;border-radius:9999px}
+    .sheet #yearPills .pill.active{background:var(--text);color:var(--bg);font-weight:600}
+    .sheet #yearPills .pill.cmp{box-shadow:inset 0 0 0 1.5px var(--accent)}
+    .sheet .tabs{flex-wrap:wrap}
+  }
 </style>
 </head>
 <body>
@@ -1262,6 +1290,7 @@
   <div class="ztitle" id="zTitle"><div class="ztitle-row"><h2 id="zH1">Dashboard</h2><span class="zbadge" id="zBadge" hidden>Datos de ejemplo</span></div><p class="zsub" id="zSub"></p></div>
 
   <div class="toolbar" role="group" aria-label="Controles del dashboard">
+    <button class="scopechip" id="btnScope" type="button" aria-controls="sheet" title="Negocio, año y vista"></button>
     <div class="group" id="grpBiz">
       <span class="glabel" id="lblGrpBiz">Negocio</span>
       <div class="grow"><div class="tabs" id="tabs" role="tablist" aria-labelledby="lblGrpBiz"></div></div>
@@ -1281,7 +1310,7 @@
 
     <div class="group" id="grpYear">
       <span class="glabel" id="lblGrpYear">Año</span>
-      <div class="grow"><div class="yearpills" id="yearPills" role="group" aria-labelledby="lblGrpYear"></div></div>
+      <div class="grow"><button class="yearbtn" id="btnYear" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="yearPills"></button><div class="yearpills" id="yearPills" role="group" aria-labelledby="lblGrpYear"></div></div>
     </div>
 
     <div class="group" id="grpFilterM">
@@ -1351,7 +1380,7 @@
 <div id="dashView">
   <section id="zOverview" class="zgrid" aria-label="Resumen del período">
     <article class="card zmain" id="zMain">
-      <div class="zhead"><h2 id="zMainTitle">Resumen</h2><p class="csub">Tocá una métrica para cambiar el gráfico, y una barra para ver sus cargas.</p></div>
+      <div class="zhead"><h2 id="zMainTitle">Resumen</h2><p class="csub" id="zMainSub">Tocá una métrica para cambiar el gráfico, y una barra para ver sus cargas.</p></div>
       <button type="button" class="zdetbtn" id="zDet">Ver detalle ↗</button>
       <div class="zstrip" id="zStrip" role="group" aria-label="Métrica del gráfico"></div>
       <div class="chartbox"><canvas id="zChart" role="img" aria-label="Gráfico mensual del período elegido"></canvas></div>
@@ -3090,8 +3119,11 @@ function makeChart(id, series, opts = {}){
       datasets: series.map(s => {
         const esBase = s.year === baseYear;
         const fill = esBase ? barGradient(s.color) : hatchPattern(s.color);
+        // año en curso: del mes actual en adelante la barra es provisoria (en curso o programada)
+        const hoyY = new Date().getFullYear(), hoyM = new Date().getMonth();
+        const abierto = s.year === hoyY && esBase ? hatchPattern(s.color) : null;
         return {
-          label: s.label, data: s.data, backgroundColor: fill, _fill: fill, _color: String(s.color).slice(0, 7), _cap: esBase && !stacked,
+          label: s.label, data: s.data, backgroundColor: abierto ? (ctx => ctx.dataIndex >= hoyM ? abierto : (typeof fill === "function" ? fill(ctx) : fill)) : fill, _fill: fill, _color: String(s.color).slice(0, 7), _cap: esBase && !stacked,
           borderColor: esBase ? "transparent" : hexA(s.color, .6), borderWidth: esBase ? 0 : 1,
           borderRadius: 8, borderSkipped: false, maxBarThickness: 46,
           ...(s.stack ? { stack: s.stack } : {}),
@@ -7161,8 +7193,9 @@ const detPoco = (g, m) => g.tnsU[m] < 2 * TNS_POR_CONTENEDOR;   // menos de ~2 c
 const detSigno = (v, f) => (v >= 0 ? "+" : "−") + f(Math.abs(v));
 const detPct = v => v == null || !isFinite(v) ? "—" : (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1).replace(".", ",") + "%";
 
+function detCerrados(MM){ return DET_CTX && DET_CTX.yA === new Date().getFullYear() ? Math.min(MM, Math.max(1, new Date().getMonth())) : MM; }
 function detStats(met, g, gB, MM, yB){
-  const val = Array.from({ length: MM }, (_, m) => detValor(g, met, m));
+  const val = Array.from({ length: detCerrados(MM) }, (_, m) => detValor(g, met, m));
   const conDato = val.map((v, i) => v != null && v > 0 ? i : -1).filter(i => i >= 0);
   const mejor = (cmp, solidos) => {
     let pool = conDato;
@@ -7313,7 +7346,7 @@ function renderDetalle(){
       pointRadius: 4, pointHoverRadius: 6, pointBorderWidth: 2, pointBorderColor: color,
       pointBackgroundColor: data.map((v, m) => poco[m] ? panel : color), ...extra };
   };
-  const y2 = (met === "com" || met === "etd") && por === "general";
+  const y2 = met === "etd" && por === "general";   // la línea de % sobre la facturación se sacó: confundía (el dato sigue en la tarjeta de arriba)
   if (por === "general"){
     if (lineas){
       ds.push(linea("Total " + yA, tot, cs("--text") || "#1d1d1f", { _y: yA, borderWidth: 3.2 }));
@@ -7408,8 +7441,9 @@ function renderDetalle(){
     if (met !== "etd"){
       const v = labels.map((_, m) => detValor(tot, met, m));
       const prev = m => { for (let i = m - 1; i >= 0; i--) if (v[i] != null && v[i] > 0) return v[i]; return null; };
-      filas += `<tr class="dpdelta"><td>Δ vs mes anterior</td>${v.map((x, m) => { const p = prev(m); return `<td>${x != null && x > 0 && p ? detSigno(x - p, M.fs) : ""}</td>`; }).join("")}<td></td></tr>`;
-      filas += `<tr class="dpdelta"><td>Δ %</td>${v.map((x, m) => { const p = prev(m); return `<td>${x != null && x > 0 && p ? detPct((x - p) / p * 100) : ""}</td>`; }).join("")}<td></td></tr>`;
+      const cerr = detCerrados(MM);
+      filas += `<tr class="dpdelta"><td>Δ vs mes anterior</td>${v.map((x, m) => { const p = prev(m); return `<td>${m < cerr && x != null && x > 0 && p ? detSigno(x - p, M.fs) : ""}</td>`; }).join("")}<td></td></tr>`;
+      filas += `<tr class="dpdelta"><td>Δ %</td>${v.map((x, m) => { const p = prev(m); return `<td>${m < cerr && x != null && x > 0 && p ? detPct((x - p) / p * 100) : ""}</td>`; }).join("")}<td></td></tr>`;
     }
   } else {
     orden.forEach(([k, g]) => { filas += fila(k, g); });
@@ -7436,6 +7470,7 @@ function renderDetalle(){
     notas.push(sp && tt ? `${(detSuma(sp.tns) / tt * 100).toFixed(1).replace(".", ",")}% de las toneladas no tiene país (el importador no está en la base de clientes).` : "Todas las cargas tienen país.");
   }
   if (apilado && orden.length > 8) notas.push("Se muestran los 7 principales; el resto va junto. La tabla de abajo tiene todos.");
+  if (yA === new Date().getFullYear() && detCerrados(MM) < MM) notas.push("Los meses en curso o programados no entran en el promedio, el mejor mes ni las variaciones contra el mes anterior.");
   notas.push("Tocá una barra o un punto del año actual para ver las cargas de ese mes.");
   document.getElementById("detNota").innerHTML = notas.map(esc).join("<br>");
 }
@@ -7527,16 +7562,16 @@ function aplicarPlegado(){
 /* Ventanas: cada pestaña muestra solo sus secciones (en vez de una página larga con scroll).
    Una ventana aparece únicamente si alguna de sus secciones existe en la vista actual. */
 const VENTANAS = [
-  { key: "res",  label: "Resumen",            icon: "▦", ids: ["kpis", "zOverview", "cardTns", "cardUsd", "cardCom", "cardEtd", "bizCard"] },
-  { key: "ae",   label: "Aceite vs Expeller", icon: "💧", ids: ["oilexpCard"], destacado: true },
-  { key: "foco", label: "FOCO",               icon: "🏢", ids: ["focusCard"], destacado: true },
-  { key: "evo",  label: "Evolución",          icon: "📈", ids: ["rollCard", "compareCard"] },
-  { key: "prod", label: "Productos",          icon: "📦", ids: ["prodCard"] },
-  { key: "anual", label: "Análisis por año",   icon: "🗓", ids: ["anualCard"] },
-  { key: "cons", label: "Consolidación",      icon: "🧩", ids: ["consSection", "gruposCard"] },
-  { key: "cli",  label: "Panel comercial",    icon: "🌍", ids: ["comCard"], destacado: true },
-  { key: "mkt",  label: "Mercado y empresas", icon: "🏪", ids: ["mktCard", "partnerCard"] },
-  { key: "con",  label: "Contratos",          icon: "📄", ids: ["contractsCard", "pipeCard"] }
+  { key: "res",  label: "Resumen",            icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"9\" rx=\"1.5\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"5\" rx=\"1.5\"/><rect x=\"14\" y=\"12\" width=\"7\" height=\"9\" rx=\"1.5\"/><rect x=\"3\" y=\"16\" width=\"7\" height=\"5\" rx=\"1.5\"/></svg>", ids: ["kpis", "zOverview", "cardTns", "cardUsd", "cardCom", "cardEtd", "bizCard"] },
+  { key: "ae",   label: "Aceite vs Expeller", icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z\"/></svg>", ids: ["oilexpCard"], destacado: true },
+  { key: "foco", label: "FOCO",               icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16\"/><path d=\"M14 10h5a1 1 0 0 1 1 1v10M3 21h18M8 8h2M8 12h2M8 16h2\"/></svg>", ids: ["focusCard"], destacado: true },
+  { key: "evo",  label: "Evolución",          icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 17l6-6 4 4 8-8\"/><path d=\"M15 7h6v6\"/></svg>", ids: ["rollCard", "compareCard"] },
+  { key: "prod", label: "Productos",          icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 8 12 3 3 8v8l9 5 9-5z\"/><path d=\"m3 8 9 5 9-5M12 13v8\"/></svg>", ids: ["prodCard"] },
+  { key: "anual", label: "Análisis por año",   icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2.5\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/></svg>", ids: ["anualCard"] },
+  { key: "cons", label: "Consolidación",      icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 7l8-4 8 4-8 4z\"/><path d=\"M4 12l8 4 8-4M4 17l8 4 8-4\"/></svg>", ids: ["consSection", "gruposCard"] },
+  { key: "cli",  label: "Panel comercial",    icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18\"/></svg>", ids: ["comCard"], destacado: true },
+  { key: "mkt",  label: "Mercado y empresas", icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 9l1.5-5h15L21 9\"/><path d=\"M4 9v11h16V9\"/><path d=\"M3 9c0 2 3 2 3 0 0 2 3 2 3 0 0 2 3 2 3 0 0 2 3 2 3 0 0 2 3 2 3 0\"/></svg>", ids: ["mktCard", "partnerCard"] },
+  { key: "con",  label: "Contratos",          icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z\"/><path d=\"M14 3v6h6M8 13h8M8 17h5\"/></svg>", ids: ["contractsCard", "pipeCard"] }
 ];
 function ventanaVisible(v){
   return v.ids.some(id => { const el = document.getElementById(id); return el && el.style.display !== "none"; });
@@ -7696,7 +7731,9 @@ function render(){
   if (involvesCurrent){
     const mesesCur = recs.filter(r => r.year === nowY).map(r => r.month);
     ultimoCargado = mesesCur.length ? Math.max(...mesesCur) : 12;
-    cutoff = UI.hastaMes >= 1 && UI.hastaMes <= 12 ? UI.hastaMes : ultimoCargado;
+    // por defecto se compara hasta el último mes cerrado (los meses en curso o programados no entran)
+    const mesCerrado = Math.max(1, new Date().getMonth());
+    cutoff = UI.hastaMes >= 1 && UI.hastaMes <= 12 ? UI.hastaMes : Math.min(ultimoCargado, mesCerrado);
     ytd = cutoff < 12;
   }
   const MM = ytd ? cutoff : 12;
@@ -7765,7 +7802,7 @@ function render(){
   mk("chUsd", "usd", { usd: true });
   mk("chCom", "com", { usd: true });
   mk("chEtd", "etdCount", { dots: true });
-  renderZentra({ a, b, yA, yB, cmpYears, MM, ytd, SP, aN, aC, mk, biz });
+  renderZentra({ a, b, yA, yB, cmpYears, MM, ytd, SP, aN, aC, mk, biz, recs });
   renderRolling(recs);
   renderBizChart(a, yA);
   renderProductTable(a, yA);
@@ -7898,8 +7935,15 @@ function renderControls(){
     + (comparing
       ? `<span class="pillhint">${cmp.length ? "tocá un año para sumarlo o quitarlo" : "elegí uno o más años para comparar"}</span>`
       : "");
+  const btnYear = document.getElementById("btnYear");
+  if (btnYear){
+    btnYear.textContent = comparing && cmp.length ? UI.year + " vs " + cmp.join(", ") : String(UI.year);
+    btnYear.setAttribute("aria-label", "Año: " + btnYear.textContent);
+    btnYear.onclick = e => { e.stopPropagation(); const ab = !pills.classList.contains("open"); pills.classList.toggle("open", ab); btnYear.setAttribute("aria-expanded", String(ab)); };
+  }
   pills.querySelectorAll(".pill").forEach(p => {
     p.onclick = () => {
+      if (!comparing){ pills.classList.remove("open"); if (btnYear) btnYear.setAttribute("aria-expanded", "false"); }
       const v = p.dataset.y;
       UI.cmpTouched = true;
       if (v === "all"){
@@ -8234,11 +8278,13 @@ function layoutForViewport(){
     if (dest){ mode === "mobile" ? dest.appendChild(btnFilter) : dest.prepend(btnFilter); }
     grpFilterM.classList.toggle("on", mode === "mobile" && btnFilter.style.display !== "none");
   }
+  const grpBiz = document.getElementById("grpBiz"), grpMode = document.getElementById("grpMode"), grpYear = document.getElementById("grpYear");
   if (mode === "mobile"){
-    [grpView, grpData].forEach(g => { if (g){ g.classList.add("slot"); slots.appendChild(g); } });
+    [grpBiz, grpMode, grpYear, grpView, grpData].forEach(g => { if (g){ g.classList.add("slot"); slots.appendChild(g); } });
     if (themeRow) slots.appendChild(themeRow);
   } else {
     closeSheet();
+    [grpBiz, grpMode, grpYear].forEach(g => { if (g){ g.classList.remove("slot"); (toolbar.insertBefore && grpFilterM ? toolbar.insertBefore(g, grpFilterM) : toolbar.appendChild(g)); } });
     [grpView, grpData].forEach(g => { if (g){ g.classList.remove("slot"); toolbar.appendChild(g); } });
     if (themeRow) document.querySelector(".topbar .right").appendChild(themeRow);
   }
@@ -8258,6 +8304,11 @@ function closeSheet(){
   if (bm) bm.setAttribute("aria-expanded", "false");
 }
 document.getElementById("btnMenu").onclick = openSheet;
+document.getElementById("btnScope").onclick = openSheet;
+/* el selector de año se cierra al tocar afuera o con Escape */
+function cerrarAnios(){ const p = document.getElementById("yearPills"), b = document.getElementById("btnYear"); if (p) p.classList.remove("open"); if (b) b.setAttribute("aria-expanded", "false"); }
+document.addEventListener("click", e => { if (!e.target.closest("#grpYear")) cerrarAnios(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") cerrarAnios(); });
 document.getElementById("sheetClose").onclick = closeSheet;
 document.getElementById("sheetBg").onclick = closeSheet;
 if (typeof matchMedia === "function"){
@@ -8383,26 +8434,36 @@ function zInit(){
 }
 function renderZentra(c){
   zInit();
-  const { a, b, yA, yB, cmpYears, MM, ytd, SP, aN, aC, mk, biz } = c;
+  const { a, b, yA, yB, cmpYears, MM, ytd, SP, aN, aC, mk, biz, recs } = c;
   const metrica = Z_METRICAS[UI.zMetric] ? UI.zMetric : "tns";
   const m = Z_METRICAS[metrica];
   const nombre = zTitulo(biz);
+  const anioHoy = new Date().getFullYear(), mesHoy = new Date().getMonth() + 1;
+  const h1 = document.getElementById("zH1"); if (h1) h1.textContent = nombre + " · " + yA + (cmpYears.length ? " vs " + yB : "");
+  const sc = document.getElementById("btnScope"); if (sc) sc.textContent = nombre + " · " + yA;
+  // contra el año anterior, mes a mes equivalente (solo meses cerrados) aunque no se esté en "Comparar"
+  const cierre = yA === anioHoy ? Math.max(1, mesHoy - 1) : 12;
+  const PREV = !b && recs && recs.some(r => r.year === yA - 1) ? { mes: cierre, cur: aggregate(recs, yA, cierre), prev: aggregate(recs, yA - 1, cierre) } : null;
   const sub = document.getElementById("zSub");
   if (sub) sub.textContent = `Volumen, facturación y comisiones por mes de embarque · ${cmpYears.length ? `${yA} comparado con ${cmpYears.join(", ")}` : yA}${ytd ? ` · hasta ${MESES[MM - 1].toLowerCase()} de cada año` : ""}`;
 
   // franja de métricas
   document.getElementById("zStrip").innerHTML = Object.entries(Z_METRICAS).map(([k, mm]) => {
-    const v = zTot(a, k), p = b ? zDelta(v, zTot(b, k)) : null;
+    const v = zTot(a, k);
+    let p = b ? zDelta(v, zTot(b, k)) : null, ref = yB, hasta = ytd ? " a " + MESES[MM - 1].toLowerCase() : "";
+    if (p == null && PREV){ p = zDelta(zTot(PREV.cur, k), zTot(PREV.prev, k)); ref = yA - 1; hasta = PREV.mes < 12 ? " a " + MESES[PREV.mes - 1].toLowerCase() : ""; }
     let meta;
     if (UI.split && aN && aC && SP && k !== "etd") meta = `${esc(SP.a.name)} <b>${mm.f(zTot(aN, k))}</b> · ${esc(SP.b.name)} <b>${mm.f(zTot(aC, k))}</b>`;
     else if (k === "tns") meta = `≈ ${fmt0(a.contEst)} contenedores (est.)`;
     else if (k === "usd") meta = a.totTns ? `${fmtUsd(a.totUsd / a.totTns)} /t promedio` : "&nbsp;";
     else if (k === "com") meta = a.totUsd ? `${(a.totCom / a.totUsd * 100).toFixed(2).replace(".", ",")}% de la facturación` : "&nbsp;";
     else meta = "cargas con ETD en el período";
-    const dl = p == null ? "" : `<span class="zd ${p >= 0 ? "up" : "down"}">${p >= 0 ? "▲" : "▼"} ${zPct(Math.abs(p))} vs ${yB}</span>`;
+    const dl = p == null ? "" : `<span class="zd ${p >= 0 ? "up" : "down"}">${p >= 0 ? "▲" : "▼"} ${zPct(Math.abs(p))} vs ${ref}${hasta}</span>`;
     return `<button type="button" class="zm" data-m="${k}" aria-pressed="${k === metrica}"><span class="zl">${mm.label}</span><span class="zv">${zBig(mm.f(v))}</span><span class="zmeta">${meta}</span>${dl}</button>`;
   }).join("");
   document.querySelectorAll("#zStrip .zm").forEach(btn => btn.onclick = () => { UI.zMetric = btn.dataset.m; saveUI(); render(); });
+  const zms = document.getElementById("zMainSub");
+  if (zms) zms.textContent = "Tocá una métrica para cambiar el gráfico, y una barra para ver sus cargas." + (yA === anioHoy ? " Las barras rayadas son meses en curso o programados." : "");
   document.getElementById("zMainTitle").textContent = metrica === "com" ? tituloCargas(yA) : `${m.label} por mes de ETD · ${yA}`;
   mk("zChart", m.key, m.usd ? { usd: true } : (m.dots ? { dots: true } : {}));
   document.getElementById("zChart").setAttribute("aria-label", `${m.label} por mes de ETD, ${yA}${cmpYears.length ? " comparado con " + cmpYears.join(", ") : ""}`);
