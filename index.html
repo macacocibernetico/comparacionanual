@@ -1037,6 +1037,11 @@
   .listamas .vermas2{margin:8px 0 0}
   .comhint{color:var(--faint);font-size:.84rem;background:var(--panel2);border-radius:12px;padding:10px 14px;margin:0}
   .comdet{background:var(--panel2);border-radius:16px;padding:14px 16px}
+  /* la tabla de clientes del país vive sobre gris: sin celdas blancas ni primera columna más clara */
+  .comdet table th,.comdet table td{background:transparent}
+  .comdet table th:first-child,.comdet table td:first-child{background:var(--panel2)}
+  .comdet tbody tr:hover td,.comdet tbody tr:hover td:first-child{background:var(--panel3)}
+  .comdet tr.total td,.comdet tr.total td:first-child{background:var(--panel2)}
   .comdeth{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   .comdeth h4{margin:0}
   .comcerrar{width:28px;height:28px;padding:0;border-radius:99px;font-size:1.1rem;line-height:1;background:var(--panel);color:var(--muted);border:none;cursor:pointer}
