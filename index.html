@@ -4750,8 +4750,8 @@ function renderComMapaProv(el, hist, yA, aviso){
     const filtro = `<div class="pmfiltro"><input type="search" id="pmCalQ" placeholder="Buscar calibre o tipo (ej. 38/42)" value="${esc(COMP.q || "")}" aria-label="Buscar calibre o tipo" autocomplete="off">` +
       (tipos.length > 1 ? `<div class="seg" id="pmTipos" role="group" aria-label="Tipo de producto"><button type="button" data-ptipo="" class="${COMP.tipo ? "" : "active"}" aria-pressed="${!COMP.tipo}">Todos</button>` +
         tipos.map(g => `<button type="button" data-ptipo="${esc(g)}" class="${COMP.tipo === g ? "active" : ""}" aria-pressed="${COMP.tipo === g}">${esc(g)}</button>`).join("") + "</div>" : "") + "</div>";
-    const tabla = tablaCorta(idt2("pmCal"), ["Calibre y tipo", "Tipo", "Cargas", "Toneladas", "Precio prom. /t", "Rango de precio /t", "Clientes", "Última ETD", "Última ETA"],
-      lista.map(x => [lk("data-pp", x.k, x.nom) + (COMP.prod === x.k ? " ✓" : ""), esc(x.tipo), fmt0(x.cant), fmt1(x.tns), pp(x), rango(x), fmt0(x.clis.size), x.ult ? fFecha(x.ult) : "—", x.eta ? fFecha(x.eta) : "—"]), { max: 8, vacio: "Ningún calibre coincide con la búsqueda." });
+    const tabla = tablaCorta(idt2("pmCal"), ["Calibre y tipo", "Cargas", "Toneladas", "Precio prom. /t", "Rango de precio /t", "Clientes", "Última ETD", "Última ETA"],
+      lista.map(x => [lk("data-pp", x.k, x.nom) + (COMP.prod === x.k ? " ✓" : ""), fmt0(x.cant), fmt1(x.tns), pp(x), rango(x), fmt0(x.clis.size), x.ult ? fFecha(x.ult) : "—", x.eta ? fFecha(x.eta) : "—"]), { max: 8, vacio: "Ningún calibre coincide con la búsqueda." });
     // compradores del calibre elegido
     const compradores = ops => { const C = new Map();
       for (const o of ops){
