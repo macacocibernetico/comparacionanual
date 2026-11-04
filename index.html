@@ -359,7 +359,7 @@
   .modal.wide{width:min(780px,96vw)}
   .modal.dpanel{width:min(1120px,97vw);max-height:92vh}
   .dphead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-  .dpx{border:0;background:var(--panel2);color:var(--muted);width:34px;height:34px;border-radius:50%;font-size:15px;cursor:pointer;flex:none}
+  .dpx{border:0;background:var(--panel2);color:var(--muted);width:34px;height:34px;border-radius:50%;font-size:15px;line-height:1;padding:0;display:grid;place-items:center;cursor:pointer;flex:none}
   .dpx:hover{color:var(--text)}
   .dpstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:6px 0 16px}
   .dps{background:var(--panel2);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
@@ -367,11 +367,12 @@
   .dps b{font-size:1.35rem;font-weight:600;letter-spacing:-.02em;overflow-wrap:anywhere}
   .dps small{font-size:.74rem;color:var(--muted)}
   .dpbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
-  .modal .dpbar .seg{width:auto;margin:0}.dpbar .seg button{flex:none;padding:7px 18px}
+  .modal .dpbar .seg{width:auto;margin:0}.dpbar .seg button{flex:none;padding:7px 18px;white-space:nowrap}
   .dpl{font-size:.8rem;color:var(--muted)}
   .dpchks{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap}
-  .dpcmp,.dpchk{display:flex;align-items:center;gap:7px;margin:0;font-size:.82rem;color:var(--muted);cursor:pointer}
-  .dpcmp input,.dpchk input{width:auto}
+  .dpcmp,.dpchk{display:flex;align-items:center;gap:8px;margin:0;font-size:.86rem;line-height:1.2;color:var(--text);cursor:pointer;white-space:nowrap}
+  .dpcmp input,.dpchk input{width:16px;height:16px;margin:0;flex:none;accent-color:var(--accent)}
+  .dpnota{font-size:.82rem;line-height:1.6;color:var(--muted)}
   .dpchips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;align-items:center}
   .dpchips[hidden]{display:none}
   .dpchl{font-size:.8rem;color:var(--muted)}
@@ -382,7 +383,7 @@
   .dprov[hidden]{display:none}
   .dpsplit{display:flex;height:34px;border-radius:12px;overflow:hidden;gap:2px;margin:4px 0 14px}
   .dpseg{border:0;padding:0;min-width:3px;background:var(--c);color:#fff;font:inherit;font-size:.78rem;font-weight:700;cursor:pointer;text-shadow:0 0 3px rgba(0,0,0,.45);transition:filter .15s}
-  .dpseg:hover{filter:brightness(1.12)}
+  .dpseg:hover,.dpseg:focus-visible{background:var(--c);color:#fff;filter:brightness(1.14)}
   .dpp{border-radius:16px;background:var(--panel2);margin-bottom:8px;overflow:hidden}
   .dpph{width:100%;display:grid;grid-template-columns:14px minmax(0,1.6fr) repeat(4,minmax(0,1fr));gap:14px;align-items:center;text-align:left;background:transparent;border:0;padding:12px 16px;cursor:pointer;font:inherit;color:inherit;font-variant-numeric:tabular-nums}
   .dpph:hover{background:var(--panel3)}
@@ -6970,8 +6971,8 @@ function renderProductCompare(a, b, yA, yB){
 let DET_CTX = null;
 const DET = { m: "precio", por: "general", cmp: true, tend: true, sel: {} };
 const DET_METRICAS = {
-  tns:    { label: "Toneladas",       f: v => fmt1(v) + " t",  fs: fmt1, por: ["general", "tipo", "calibre", "proveedor", "pais"] },
-  usd:    { label: "Facturación",     f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre", "proveedor", "pais"] },
+  tns:    { label: "Toneladas",       f: v => fmt1(v) + " t",  fs: fmt1, por: ["general", "tipo", "calibre", "proveedor"] },
+  usd:    { label: "Facturación",     f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "calibre", "proveedor"] },
   com:    { label: "Comisión",        f: fmtUsd,               fs: fmt0, por: ["general", "tipo", "proveedor"] },
   etd:    { label: "Embarques",       f: v => fmt0(v) + (v === 1 ? " carga" : " cargas"), fs: fmt0, por: ["general", "tipo", "calibre"] },
   precio: { label: "Precio promedio", f: v => fmtUsd(v) + " /t", fs: fmt0, por: ["general", "tipo", "calibre"] },
@@ -7259,7 +7260,11 @@ function renderDetalle(){
       interaction: { mode: "index", intersect: false },
       onClick: (e, els) => { if (els && els.length && ds[els[0].datasetIndex]._y === yA) openDetail(els[0].index, yA); },
       plugins: {
-        legend: { labels: { color: cs("--muted"), boxWidth: 12, boxHeight: 10, useBorderRadius: true, borderRadius: 3, filter: (it, data) => !data.datasets[it.datasetIndex]._oculta } },
+        legend: { labels: { color: cs("--muted"), boxWidth: 12, boxHeight: 10, useBorderRadius: true, borderRadius: 3, filter: (it, data) => !data.datasets[it.datasetIndex]._oculta,
+          generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).map(it => {
+            const d = ch.data.datasets[it.datasetIndex];
+            if (d && d.borderDash){ it.lineDash = []; it.lineWidth = 0; it.fillStyle = d.borderColor; it.strokeStyle = d.borderColor; }
+            return it; }) } },
         tooltip: { filter: c => !c.dataset._oculta && c.parsed.y != null && (c.parsed.y !== 0 || !apilado), callbacks: {
           label: c => ` ${c.dataset.label}: ${c.dataset._f ? c.dataset._f(c.parsed.y) : yFmt(c.parsed.y)}`,
           footer: items => apilado && items.length > 1 ? "Total: " + yFmt(items.reduce((s, c) => s + (c.parsed.y || 0), 0)) : "" } },
