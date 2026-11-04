@@ -810,6 +810,9 @@
   #prodCard .pgm{margin-top:10px}
   #prodCard .pgchart{position:relative;height:280px;margin:6px 0 14px}
   #prodCard .pgchart.pgbig{height:360px;margin:8px 0 22px}
+  #prodCard .pgrow{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);gap:18px;align-items:center;margin:8px 0 22px}
+  #prodCard .pgrow .pgchart.pgbig{margin:0}
+  @media(max-width:860px){#prodCard .pgrow{grid-template-columns:minmax(0,1fr)}}
   #prodCard .pgtop{display:flex;align-items:baseline;gap:10px;font-size:15px}
   #prodCard .pgtop span{color:var(--muted);font-size:13px}
   #prodCard #prodViz{display:none}
@@ -6797,7 +6800,7 @@ function barrasMensuales(id, series, f){
 }
 function renderProductGrupos(a, usd, yA){
   const el = document.getElementById("prodGrupos"); if (!el) return;
-  ["pgcTop"].concat([...Array(8).keys()].map(i => "pgc" + i)).forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
+  ["pgcTop", "pgcPie"].concat([...Array(8).keys()].map(i => "pgc" + i)).forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
   const tot = usd ? a.prodUsd : a.prodTotals, porMes = usd ? a.productsUsd : a.products;
   const f = usd ? fmtUsd : (x => fmt1(x) + " t"), fm = usd ? fmtUsd : fmt1;
   const cnt = a.prodCount || {}, G = new Map();
@@ -6838,9 +6841,28 @@ function renderProductGrupos(a, usd, yA){
       </button>
       <div class="pgd"${abierto ? "" : " hidden"}><div class="pgchart"><canvas id="pgc${i}"></canvas></div>${det}${tabla}</div></div>`;
   }).join("");
-  el.innerHTML = `<div class="pgtop"><b>Evolución mensual por tipo</b><span>${yA}</span></div><div class="pgchart pgbig"><canvas id="pgcTop"></canvas></div>` +
+  el.innerHTML = `<div class="pgtop"><b>Evolución mensual por tipo</b><span>${yA}</span></div><div class="pgrow"><div class="pgchart pgbig"><canvas id="pgcTop" role="img" aria-label="Evolución mensual por tipo"></canvas></div><div class="pgchart pgbig"><canvas id="pgcPie" role="img" aria-label="Participación de cada tipo sobre el 100%"></canvas></div></div>` +
     `<div class="pvtop"><span class="pvsum"><b>Por tipo de producto</b> · tocá uno para ver su composición por calibre y el detalle mensual</span></div>${filas}`;
   barrasMensuales("pgcTop", lista.map(x => ({ label: x.g, data: x.meses, color: GRUPO_COLOR[x.g] || "#8e8e93" })), f);
+  // torta: el 100% repartido entre los tipos, con el porcentaje escrito sobre cada porción
+  const conV = lista.filter(x => x.v > 0), pct1 = v => (v / total * 100).toFixed(1).replace(".", ",") + "%";
+  const pctTorta = { id: "pctTorta", afterDatasetsDraw(chart){
+    const { ctx } = chart; ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    chart.getDatasetMeta(0).data.forEach((arc, i) => {
+      const v = conV[i].v; if (v / total < 0.04) return;
+      const p = arc.tooltipPosition();
+      ctx.font = "700 13px -apple-system, 'Segoe UI', system-ui, sans-serif";
+      ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 3; ctx.fillStyle = "#fff";
+      const txt = pct1(v); ctx.strokeText(txt, p.x, p.y); ctx.fillText(txt, p.x, p.y);
+    }); ctx.restore(); } };
+  charts.pgcPie = new Chart(document.getElementById("pgcPie"), {
+    type: "pie",
+    data: { labels: conV.map(x => x.g), datasets: [{ data: conV.map(x => x.v), backgroundColor: conV.map(x => GRUPO_COLOR[x.g] || "#8e8e93"), borderColor: cssVar("--panel"), borderWidth: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: paintedFromCache ? 0 : 450, easing: "easeOutQuart" },
+      plugins: { legend: { position: "bottom", labels: { color: cssVar("--muted"), boxWidth: 12, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${f(c.parsed)} · ${pct1(c.parsed)}` } } } },
+    plugins: [pctTorta],
+  });
   const dibujar = i => { if (i < 8) barrasMensuales("pgc" + i, grafGrupo.get(i), f); };
   el.querySelectorAll(".pvr").forEach(r => {
     const i = +r.dataset.i;
