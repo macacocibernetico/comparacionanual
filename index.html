@@ -923,6 +923,8 @@
   .comgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start}
   @media(max-width:900px){ .comgrid{grid-template-columns:minmax(0,1fr)} }
   .globo{position:relative;max-width:560px;margin:0 auto;touch-action:none}
+  .destgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+  .destgrid .chartbox{height:380px;width:100%;max-width:480px;margin:0 auto}
   .globo canvas{display:block;width:100%;height:auto;cursor:grab;user-select:none;border-radius:50%}
   .globo canvas.arrastrando{cursor:grabbing}
   .globo canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -1540,52 +1542,6 @@
       <div class="tablewrap" id="prodTable"></div>
       </div>
     </div>
-    <div class="card wide" id="consSection">
-      <h2 class="clickhead">Consolidación — producto, mes y destino <span id="lblConsYear" class="meta">2026</span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Usa la fecha de <b>Consolidación</b>, no la de ETD.</p>
-      <div class="cardbody">
-      <div class="consbar">
-        <div class="seg" id="consMetric" role="group" aria-label="Métrica de la sección Consolidación">
-          <button type="button" data-cm="tns" title="Ver toneladas">Toneladas</button>
-          <button type="button" data-cm="usd" title="Ver facturación en dólares">Facturación USD</button>
-        </div>
-        <div class="rangebox">
-          <label for="consFrom">Meses</label>
-          <select id="consFrom" aria-label="Mes desde"></select>
-          <span class="rdash">→</span>
-          <select id="consTo" aria-label="Mes hasta"></select>
-          <button type="button" id="consAll" class="mini" title="Ver los 12 meses">Todo el año</button>
-          <button type="button" id="consYtd" class="mini" title="Desde enero hasta el último mes con datos">Hasta hoy</button>
-        </div>
-      </div>
-      <div class="chartbox tall" style="margin-bottom:22px"><canvas id="chConsProd" aria-label="Toneladas por producto y mes según consolidación" role="img"></canvas></div>
-      <h3 class="subhead" id="consH1">Detalle mensual por producto</h3>
-      <div class="tablewrap" id="consTable"></div>
-      <h3 class="subhead" id="consH2">Toneladas de cada producto por destino</h3>
-      <div class="tablewrap" id="portTable"></div>
-      <h3 class="subhead">Participación de cada destino</h3>
-      <div class="chartbox" id="portChartBox"><canvas id="chPort" aria-label="Toneladas por destino" role="img"></canvas></div>
-    </div>
-    </div>
-
-    <div class="card wide" id="gruposCard" style="display:none">
-      <h2 class="clickhead">Grupos comerciales — <span id="lblGruposYear" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
-      <p class="csub">Blancheados por región y pastas/roasted por packing. Usa <b>Consolidación</b> y el rango de meses de arriba.</p>
-      <div class="cardbody">
-      <div class="consbar">
-        <div class="rangebox">
-          <label for="gruposFrom">Meses</label>
-          <select id="gruposFrom" aria-label="Mes desde"></select>
-          <span class="rdash">→</span>
-          <select id="gruposTo" aria-label="Mes hasta"></select>
-          <button type="button" id="gruposAll" class="mini" title="Ver los 12 meses">Todo el año</button>
-          <button type="button" id="gruposYtd" class="mini" title="Desde enero hasta el último mes con datos">Hasta hoy</button>
-        </div>
-      </div>
-      <div class="tablewrap" id="gruposTable"></div>
-    </div>
-    </div>
-
     <div class="card wide" id="anualCard" style="display:none">
       <h2 class="clickhead">Análisis por año <span id="lblAnual" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub" id="anualSub"></p>
@@ -1611,6 +1567,64 @@
       <div class="listamas" id="anualMas"></div>
       </div>
     </div>
+    <div class="card wide" id="consSection">
+      <h2 class="clickhead">Producto, mes y destino <span id="lblConsYear" class="meta">2026</span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub" id="consSub"></p>
+      <div class="cardbody">
+      <div class="consbar">
+        <div class="seg" id="consFecha" role="group" aria-label="Fecha que define el mes">
+          <button type="button" data-af="etd" title="El mes sale de la fecha de ETD">Por ETD</button>
+          <button type="button" data-af="cons" title="El mes sale de la fecha de consolidación">Por consolidación</button>
+        </div>
+        <div class="seg" id="consDest" role="group" aria-label="Agrupar los destinos">
+          <button type="button" data-cd="pais" title="Juntar los puertos de cada país">Por país</button>
+          <button type="button" data-cd="puerto" title="Ver cada puerto por separado">Por puerto</button>
+        </div>
+        <div class="seg" id="consMetric" role="group" aria-label="Métrica de la sección Consolidación">
+          <button type="button" data-cm="tns" title="Ver toneladas">Toneladas</button>
+          <button type="button" data-cm="usd" title="Ver facturación en dólares">Facturación USD</button>
+        </div>
+        <div class="rangebox">
+          <label for="consFrom">Meses</label>
+          <select id="consFrom" aria-label="Mes desde"></select>
+          <span class="rdash">→</span>
+          <select id="consTo" aria-label="Mes hasta"></select>
+          <button type="button" id="consAll" class="mini" title="Ver los 12 meses">Todo el año</button>
+          <button type="button" id="consYtd" class="mini" title="Desde enero hasta el último mes con datos">Hasta hoy</button>
+        </div>
+      </div>
+      <div class="chartbox tall" style="margin-bottom:22px"><canvas id="chConsProd" aria-label="Toneladas por producto y mes según consolidación" role="img"></canvas></div>
+      <h3 class="subhead" id="consH1">Detalle mensual por producto</h3>
+      <div class="tablewrap" id="consTable"></div>
+      <h3 class="subhead" id="consH2">Toneladas de cada producto por destino</h3>
+      <div class="tablewrap" id="portTable"></div>
+      <h3 class="subhead" id="consH3">Participación de cada destino</h3>
+      <div class="destgrid">
+        <div class="chartbox" id="portChartBox"><canvas id="chPort" aria-label="Participación de cada destino sobre el 100%" role="img"></canvas></div>
+        <div class="destcol"><div class="tablewrap" id="destTable"></div></div>
+      </div>
+      <p class="comsub" id="destNota"></p>
+    </div>
+    </div>
+
+    <div class="card wide" id="gruposCard" style="display:none">
+      <h2 class="clickhead">Grupos comerciales — <span id="lblGruposYear" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
+      <p class="csub">Blancheados por región y pastas/roasted por packing. Usa <b>Consolidación</b> y el rango de meses de arriba.</p>
+      <div class="cardbody">
+      <div class="consbar">
+        <div class="rangebox">
+          <label for="gruposFrom">Meses</label>
+          <select id="gruposFrom" aria-label="Mes desde"></select>
+          <span class="rdash">→</span>
+          <select id="gruposTo" aria-label="Mes hasta"></select>
+          <button type="button" id="gruposAll" class="mini" title="Ver los 12 meses">Todo el año</button>
+          <button type="button" id="gruposYtd" class="mini" title="Desde enero hasta el último mes con datos">Hasta hoy</button>
+        </div>
+      </div>
+      <div class="tablewrap" id="gruposTable"></div>
+    </div>
+    </div>
+
     <div class="card wide" id="mktCard" style="display:none">
       <h2 class="clickhead">Mercado, clientes y frecuencia <span id="lblMkt" class="meta"></span><span class="caret" aria-hidden="true">▾</span></h2>
       <p class="csub">Local = importador con Country <b>ARGENTINA</b> en la database de clientes; cualquier otro país o Country vacío es exportación. Cargas por <b>ETD</b> (hoja ALL), contratos por su <b>Fecha</b>.</p>
@@ -3570,9 +3584,102 @@ function consMonthIdx(maxMonth){
   return out;
 }
 
+/* País de destino de cada puerto: se busca el nombre del puerto (o del país) dentro del texto de la planilla. */
+const PUERTO_PAIS = [
+  ["Estados Unidos", ["estados unidos", "usa", "norfolk", "new york", "nueva york", "newark", "houston", "savannah", "charleston", "baltimore", "oakland", "los angeles", "long beach", "miami", "philadelphia", "filadelfia", "seattle", "tacoma", "new orleans", "jacksonville", "boston", "wilmington", "port everglades", "san francisco", "chicago"]],
+  ["Canadá", ["canada", "toronto", "montreal", "vancouver", "halifax", "prince rupert"]],
+  ["México", ["mexico", "veracruz", "manzanillo", "altamira", "lazaro cardenas", "ensenada"]],
+  ["Brasil", ["brasil", "brazil", "santos", "paranagua", "itajai", "rio de janeiro", "rio grande", "navegantes", "suape", "salvador", "vitoria"]],
+  ["Chile", ["chile", "valparaiso", "san antonio", "san vicente", "iquique", "arica", "coquimbo"]],
+  ["Colombia", ["colombia", "cartagena", "buenaventura", "barranquilla", "santa marta"]],
+  ["Perú", ["peru", "callao", "paita"]],
+  ["Ecuador", ["ecuador", "guayaquil", "manta", "esmeraldas"]],
+  ["Venezuela", ["venezuela", "la guaira", "puerto cabello"]],
+  ["Uruguay", ["uruguay", "montevideo", "nueva palmira", "fray bentos"]],
+  ["Bolivia", ["bolivia", "santa cruz de la sierra"]],
+  ["Paraguay", ["paraguay", "asuncion", "villeta"]],
+  ["Panamá", ["panama", "colon", "balboa", "manzanillo panama"]],
+  ["Costa Rica", ["costa rica", "limon", "moin", "caldera"]],
+  ["Guatemala", ["guatemala", "santo tomas", "puerto quetzal"]],
+  ["República Dominicana", ["republica dominicana", "caucedo", "rio haina", "haina"]],
+  ["Cuba", ["cuba", "mariel", "habana"]],
+  ["Italia", ["italia", "italy", "livorno", "napoli", "naples", "genova", "genoa", "la spezia", "gioia tauro", "salerno", "trieste", "venecia", "venice", "vado", "ravenna", "civitavecchia", "taranto", "ancona"]],
+  ["España", ["espana", "spain", "valencia", "barcelona", "bilbao", "algeciras", "tarragona", "vigo", "santander", "sevilla", "malaga", "gijon", "las palmas", "huelva"]],
+  ["Portugal", ["portugal", "lisboa", "lisbon", "leixoes", "sines", "setubal", "porto"]],
+  ["Bélgica", ["belgica", "belgium", "antwerp", "antwerpen", "amberes", "anvers", "zeebrugge", "gent", "ghent"]],
+  ["Países Bajos", ["paises bajos", "holanda", "netherlands", "rotterdam", "amsterdam", "vlissingen"]],
+  ["Alemania", ["alemania", "germany", "hamburgo", "hamburg", "bremerhaven", "bremen", "duisburg", "lubeck"]],
+  ["Francia", ["francia", "france", "le havre", "marsella", "marseille", "fos", "dunkerque", "dunkirk", "rouen", "nantes", "bordeaux", "saint nazaire", "la rochelle"]],
+  ["Reino Unido", ["reino unido", "united kingdom", "uk", "felixstowe", "southampton", "london", "londres", "liverpool", "tilbury", "immingham", "teesport", "grimsby"]],
+  ["Irlanda", ["irlanda", "ireland", "dublin", "cork"]],
+  ["Polonia", ["polonia", "poland", "gdansk", "gdynia", "szczecin"]],
+  ["Dinamarca", ["dinamarca", "denmark", "aarhus", "copenhague", "copenhagen"]],
+  ["Suecia", ["suecia", "sweden", "goteborg", "gotemburgo", "gothenburg", "estocolmo", "stockholm", "malmo"]],
+  ["Finlandia", ["finlandia", "finland", "helsinki", "kotka", "hamina"]],
+  ["Noruega", ["noruega", "norway", "oslo", "bergen"]],
+  ["Letonia", ["letonia", "latvia", "riga", "ventspils"]],
+  ["Estonia", ["estonia", "tallinn"]],
+  ["Lituania", ["lituania", "lithuania", "klaipeda"]],
+  ["Rumania", ["rumania", "romania", "constanza", "constanta"]],
+  ["Grecia", ["grecia", "greece", "pireo", "piraeus", "salonica", "thessaloniki"]],
+  ["Eslovenia", ["eslovenia", "slovenia", "koper"]],
+  ["Croacia", ["croacia", "croatia", "rijeka"]],
+  ["Bulgaria", ["bulgaria", "varna", "burgas"]],
+  ["Turquía", ["turquia", "turkey", "mersin", "istanbul", "estambul", "izmir", "iskenderun", "ambarli", "gemlik"]],
+  ["Rusia", ["rusia", "russia", "san petersburgo", "st petersburg", "saint petersburg", "novorossiysk", "vladivostok"]],
+  ["Ucrania", ["ucrania", "ukraine", "odessa", "odesa", "chornomorsk"]],
+  ["China", ["china", "qingdao", "shanghai", "ningbo", "tianjin", "xingang", "dalian", "guangzhou", "shenzhen", "yantian", "xiamen", "nansha", "huangpu", "fuzhou", "lianyungang", "nanjing", "zhangjiagang", "shekou", "chiwan", "zhuhai"]],
+  ["Hong Kong", ["hong kong", "hongkong"]],
+  ["Taiwán", ["taiwan", "kaohsiung", "keelung", "taichung"]],
+  ["Japón", ["japon", "japan", "tokyo", "tokio", "yokohama", "osaka", "kobe", "nagoya", "hakata", "moji"]],
+  ["Corea del Sur", ["corea", "korea", "busan", "pusan", "incheon", "gwangyang"]],
+  ["Vietnam", ["vietnam", "viet nam", "ho chi minh", "saigon", "cat lai", "hai phong", "haiphong", "da nang", "cai mep", "vung tau"]],
+  ["Filipinas", ["filipinas", "philippines", "manila", "cebu", "davao", "subic", "batangas"]],
+  ["Indonesia", ["indonesia", "jakarta", "surabaya", "belawan", "semarang", "tanjung priok", "makassar"]],
+  ["Malasia", ["malasia", "malaysia", "port klang", "klang", "penang", "pasir gudang", "tanjung pelepas", "johor"]],
+  ["Singapur", ["singapur", "singapore"]],
+  ["Tailandia", ["tailandia", "thailand", "laem chabang", "bangkok", "songkhla"]],
+  ["India", ["india", "nhava sheva", "jawaharlal", "mumbai", "bombay", "chennai", "mundra", "kolkata", "calcutta", "cochin", "kochi", "tuticorin", "visakhapatnam", "pipavav"]],
+  ["Pakistán", ["pakistan", "karachi", "qasim"]],
+  ["Bangladés", ["bangladesh", "chittagong", "chattogram"]],
+  ["Sri Lanka", ["sri lanka", "colombo"]],
+  ["Emiratos Árabes", ["emiratos", "uae", "jebel ali", "dubai", "abu dhabi", "sharjah"]],
+  ["Arabia Saudita", ["arabia saudita", "saudi", "jeddah", "yeda", "dammam", "riyadh"]],
+  ["Israel", ["israel", "haifa", "ashdod"]],
+  ["Egipto", ["egipto", "egypt", "alexandria", "alejandria", "damietta", "port said", "sokhna", "el dekheila"]],
+  ["Jordania", ["jordania", "jordan", "aqaba"]],
+  ["Líbano", ["libano", "lebanon", "beirut", "beirout"]],
+  ["Irán", ["iran", "bandar abbas"]],
+  ["Kuwait", ["kuwait"]],
+  ["Sudáfrica", ["sudafrica", "south africa", "durban", "cape town", "ciudad del cabo", "port elizabeth", "coega"]],
+  ["Marruecos", ["marruecos", "morocco", "casablanca", "tanger", "tangier"]],
+  ["Argelia", ["argelia", "algeria", "argel", "algiers", "oran"]],
+  ["Túnez", ["tunez", "tunisia", "rades"]],
+  ["Nigeria", ["nigeria", "lagos", "apapa", "tin can"]],
+  ["Ghana", ["ghana", "tema"]],
+  ["Kenia", ["kenia", "kenya", "mombasa"]],
+  ["Tanzania", ["tanzania", "dar es salaam"]],
+  ["Australia", ["australia", "melbourne", "sydney", "brisbane", "fremantle", "adelaide", "botany"]],
+  ["Nueva Zelanda", ["nueva zelanda", "new zealand", "auckland", "tauranga", "lyttelton"]],
+  ["Argentina", ["argentina", "buenos aires", "rosario", "zarate", "campana", "bahia blanca", "el espinillal", "cordoba", "ushuaia"]],
+];
+const PUERTO_PAIS_RE = PUERTO_PAIS.map(([pais, kws]) => [pais, new RegExp("(^|[^a-z])(" + kws.join("|") + ")([^a-z]|$)")]);
+const _paisPuertoCache = new Map();
+function paisDePuerto(port){
+  const raw = String(port || "").trim();
+  if (!raw || raw === "(sin destino)") return "Sin destino";
+  if (_paisPuertoCache.has(raw)) return _paisPuertoCache.get(raw);
+  const p = normHeader(raw);
+  const hit = PUERTO_PAIS_RE.find(([, re]) => re.test(p));
+  const out = hit ? hit[0] : "Sin ubicar";
+  _paisPuertoCache.set(raw, out);
+  return out;
+}
+const capPuerto = p => { const s = String(p || "").trim().toLowerCase(); return s ? s.replace(/(^|[\s\-\/(])([a-zñáéíóúü])/g, (m, a, b) => a + b.toUpperCase()) : "(sin destino)"; };
+
 /* ================= Vista por CONSOLIDACIÓN =================
    Agrupa por la fecha de Consolidación (no ETD): producto × mes y producto × destino. */
-function aggregateByConsolidacion(recs, year, maxMonth = 12, minMonth = 1){
+function aggregateByConsolidacion(recs, year, maxMonth = 12, minMonth = 1, base = "cons", destFn = null){
   const byMonth = () => Array(12).fill(0);
   const out = { products: {}, prodTotals: {}, months: byMonth(), total: 0,
                 ports: {}, portTotals: {}, n: 0,
@@ -3580,9 +3687,9 @@ function aggregateByConsolidacion(recs, year, maxMonth = 12, minMonth = 1){
                 uProducts: {}, uProdTotals: {}, uMonths: byMonth(), uTotal: 0,
                 uPorts: {}, uPortTotals: {} };
   for (const r of recs){
-    const c = r.consolidacion;
+    const c = base === "cons" ? r.consolidacion : r.etd;
     if (!c || c.y !== year || c.mo > maxMonth || c.mo < minMonth) continue;
-    const m = c.mo - 1, p = r.product, pt = r.port || "(sin destino)";
+    const m = c.mo - 1, p = r.product, pt = destFn ? destFn(r) : (r.port || "(sin destino)");
     if (!out.products[p]) out.products[p] = byMonth();
     out.products[p][m] += r.tns;
     out.prodTotals[p] = (out.prodTotals[p] || 0) + r.tns;
@@ -3617,8 +3724,21 @@ function renderConsolidacion(recs, year, maxMonth){
   sect.style.display = "";
   const RG = consRange(maxMonth);
   const MI = consMonthIdx(maxMonth);            // índices de mes visibles
-  const a = aggregateByConsolidacion(recs, year, RG.to, RG.from);
+  const base = UI.anualFecha === "cons" ? "cons" : "etd";
+  const baseTxt = base === "cons" ? "consolidación" : "ETD";
+  const porPuerto = UI.consDest === "puerto";
+  const destFn = porPuerto ? (r => capPuerto(r.port)) : (r => paisDePuerto(r.port));
+  const a = aggregateByConsolidacion(recs, year, RG.to, RG.from, base, destFn);
   document.getElementById("lblConsYear").textContent = year;
+  document.getElementById("consSub").innerHTML = `Cada carga entra en el mes de su fecha de <b>${baseTxt}</b>. Se elige arriba, en este mismo bloque.`;
+  document.querySelectorAll("#consFecha button").forEach(b => {
+    const on = b.dataset.af === base; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI.anualFecha = b.dataset.af; saveUI(); render(); };
+  });
+  document.querySelectorAll("#consDest button").forEach(b => {
+    const on = b.dataset.cd === (porPuerto ? "puerto" : "pais"); b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { UI.consDest = b.dataset.cd; saveUI(); render(); };
+  });
 
   // selector de meses de la sección
   wireRange("consFrom", "consTo", "consAll", "consYtd", RG, recs, year);
@@ -3647,7 +3767,8 @@ function renderConsolidacion(recs, year, maxMonth){
   const ports = Object.keys(V.portTotals).sort((x, y) => V.portTotals[y] - V.portTotals[x]);
   const rangoTxt = (RG.from === 1 && RG.to === 12) ? "" : ` · ${MESES[RG.from - 1]} a ${MESES[RG.to - 1]}`;
   document.getElementById("consH1").textContent = (usd ? "Facturación mensual por producto" : "Detalle mensual por producto") + rangoTxt;
-  document.getElementById("consH2").textContent = (usd ? "Facturación de cada producto por destino" : "Toneladas de cada producto por destino") + rangoTxt;
+  document.getElementById("consH2").textContent = (usd ? "Facturación de cada producto por " : "Toneladas de cada producto por ") + (porPuerto ? "puerto de destino" : "país de destino") + rangoTxt;
+  document.getElementById("consH3").textContent = (porPuerto ? "Participación de cada puerto de destino" : "Participación de cada país de destino") + rangoTxt;
 
   // gráfico apilado producto × mes
   if (charts.chConsProd){ charts.chConsProd.destroy(); delete charts.chConsProd; }
@@ -3672,8 +3793,10 @@ function renderConsolidacion(recs, year, maxMonth){
   // tabla producto × mes
   const consEl = document.getElementById("consTable");
   if (!prods.length){
-    consEl.innerHTML = '<p class="empty">No hay cargas con fecha de consolidación en ' + (MI.length === 12 ? year : MESES[RG.from-1] + '–' + MESES[RG.to-1] + ' de ' + year) + '.</p>';
+    consEl.innerHTML = '<p class="empty">No hay cargas con fecha de ' + baseTxt + ' en ' + (MI.length === 12 ? year : MESES[RG.from-1] + '–' + MESES[RG.to-1] + ' de ' + year) + '.</p>';
     document.getElementById("portTable").innerHTML = "";
+    document.getElementById("destTable").innerHTML = "";
+    document.getElementById("destNota").textContent = "";
     document.getElementById("portChartBox").style.display = "none";
     if (charts.chPort){ charts.chPort.destroy(); delete charts.chPort; }
     return;
@@ -3702,21 +3825,62 @@ function renderConsolidacion(recs, year, maxMonth){
         `<td style="color:var(--faint)">100%</td></tr></table>`;
   document.getElementById("portTable").innerHTML = ph;
 
-  // barras horizontales por destino
+  // destinos: torta con el 100% y tabla con precio promedio, clientes y producto principal
+  const D = new Map();
+  for (const r of recs){
+    const c = base === "cons" ? r.consolidacion : r.etd;
+    if (!c || c.y !== year || c.mo > RG.to || c.mo < RG.from) continue;
+    const k = destFn(r);
+    const x = D.get(k) || { k, tns: 0, usd: 0, tnsU: 0, n: 0, clis: new Set(), ult: null, prods: new Map(), puertos: new Set() };
+    x.tns += r.tns || 0; x.usd += r.usd || 0; if (r.usd > 0) x.tnsU += r.tns || 0; x.n++;
+    x.clis.add(claveProv(r.importer)); x.puertos.add(capPuerto(r.port));
+    const f = new Date(c.y, c.mo - 1, c.d || 1); if (!x.ult || f > x.ult) x.ult = f;
+    x.prods.set(r.product, (x.prods.get(r.product) || 0) + (r.tns || 0));
+    D.set(k, x);
+  }
+  const dest = [...D.values()].sort((p, q) => usd ? q.usd - p.usd : q.tns - p.tns);
+  const val = x => usd ? x.usd : x.tns;
+  const totD = dest.reduce((s, x) => s + val(x), 0) || 1;
+  const pct1 = v => (v / totD * 100).toFixed(1).replace(".", ",") + "%";
+  const colorDe = i => PALETTE[i % PALETTE.length];
+  // torta: los 8 principales y el resto junto
+  const TOP = 8, topD = dest.slice(0, TOP), restoD = dest.slice(TOP);
+  const sli = topD.map((x, i) => ({ nom: x.k, v: val(x), col: colorDe(i) }));
+  if (restoD.length) sli.push({ nom: "Otros (" + restoD.length + ")", v: restoD.reduce((s, x) => s + val(x), 0), col: "#8e8e93" });
   if (charts.chPort){ charts.chPort.destroy(); delete charts.chPort; }
+  const pctTorta = { id: "pctDest", afterDatasetsDraw(chart){
+    const { ctx } = chart; ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    chart.getDatasetMeta(0).data.forEach((arc, i) => {
+      if (!sli[i] || sli[i].v / totD < 0.05) return;
+      const p = arc.tooltipPosition(); ctx.font = "700 12.5px -apple-system, 'Segoe UI', system-ui, sans-serif";
+      ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 3; ctx.fillStyle = "#fff";
+      const txt = pct1(sli[i].v); ctx.strokeText(txt, p.x, p.y); ctx.fillText(txt, p.x, p.y);
+    }); ctx.restore(); } };
   charts.chPort = new Chart(document.getElementById("chPort"), {
-    type: "bar",
-    data: { labels: ports, datasets: [{ data: ports.map(x => V.portTotals[x]),
-      backgroundColor: ports.map((_, i) => PALETTE[i % PALETTE.length]), borderRadius: 6, borderSkipped: false, maxBarThickness: 30 }] },
-    options: {
-      indexAxis: "y", responsive: true, maintainAspectRatio: false,
-      animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
-      plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: c => ` ${fmtV(c.parsed.x)} · ${V.total ? (c.parsed.x / V.total * 100).toFixed(1).replace(".", ",") : 0}%` } } },
-      scales: { x: { beginAtZero: true, ticks: { color: cssVar("--tick") }, grid: { color: cssVar("--grid") } },
-                y: { ticks: { color: cssVar("--tick") }, grid: { display: false } } },
-    },
+    type: "pie",
+    data: { labels: sli.map(s => s.nom), datasets: [{ data: sli.map(s => s.v), backgroundColor: sli.map(s => s.col), borderColor: cssVar("--panel"), borderWidth: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, animation: { duration: paintedFromCache ? 0 : 500, easing: "easeOutQuart" },
+      plugins: { legend: { position: "bottom", labels: { color: cssVar("--muted"), boxWidth: 12, boxHeight: 10, useBorderRadius: true, borderRadius: 3 } },
+        tooltip: { callbacks: { label: c => " " + c.label + ": " + fmtV(c.parsed) + " · " + pct1(c.parsed) } } } },
+    plugins: [pctTorta],
   });
+  // tabla: toneladas, % del total, facturación, precio promedio y demás
+  const tD = dest.reduce((o, x) => ({ tns: o.tns + x.tns, usd: o.usd + x.usd, tnsU: o.tnsU + x.tnsU, n: o.n + x.n }), { tns: 0, usd: 0, tnsU: 0, n: 0 });
+  const todosClis = new Set(); dest.forEach(x => x.clis.forEach(c => todosClis.add(c)));
+  let dh = "<table><tr><th>" + (porPuerto ? "Puerto" : "País") + "</th><th>Toneladas</th><th>% del total</th><th>Facturación</th><th>US$/t prom.</th><th>Cargas</th><th>Clientes</th><th>Producto principal</th>" + (porPuerto ? "" : "<th>Puertos</th>") + "<th title=\"Última fecha de " + baseTxt + "\">Última carga</th></tr>";
+  dest.forEach((x, i) => {
+    const prin = [...x.prods.entries()].sort((p, q) => q[1] - p[1])[0];
+    const pts = [...x.puertos].sort();
+    dh += '<tr><td><span style="color:' + (i < TOP ? colorDe(i) : "#8e8e93") + '">■</span> ' + esc(x.k) + "</td><td>" + fmt1(x.tns) + "</td><td>" + pct1(val(x)) + "</td><td>" + fmtUsd(x.usd) + "</td><td><b>" +
+      (x.tnsU ? fmtUsd(x.usd / x.tnsU) : "—") + "</b></td><td>" + fmt0(x.n) + "</td><td>" + fmt0(x.clis.size) + "</td><td style=\"white-space:normal;min-width:120px\">" + (prin ? esc(prin[0]) : "—") + "</td>" +
+      (porPuerto ? "" : '<td style="white-space:normal;min-width:110px" title="' + esc(pts.join(", ")) + '">' + esc(pts.slice(0, 2).join(", ")) + (pts.length > 2 ? " +" + (pts.length - 2) : "") + "</td>") +
+      "<td>" + (x.ult ? fFecha(x.ult) : "—") + "</td></tr>";
+  });
+  dh += '<tr class="total"><td>Total</td><td>' + fmt1(tD.tns) + "</td><td>100%</td><td>" + fmtUsd(tD.usd) + "</td><td>" + (tD.tnsU ? fmtUsd(tD.usd / tD.tnsU) : "—") + "</td><td>" + fmt0(tD.n) + "</td><td>" + fmt0(todosClis.size) + "</td><td></td>" + (porPuerto ? "" : "<td></td>") + "<td></td></tr></table>";
+  document.getElementById("destTable").innerHTML = dh;
+  const sinU = [...new Set(recs.filter(r => { const c = base === "cons" ? r.consolidacion : r.etd; return c && c.y === year && c.mo <= RG.to && c.mo >= RG.from && paisDePuerto(r.port) === "Sin ubicar"; }).map(r => capPuerto(r.port)))];
+  document.getElementById("destNota").innerHTML = "US$/t = facturación ÷ toneladas de las cargas que ya tienen USD cargado." +
+    (!porPuerto && sinU.length ? " Puertos sin país asignado (figuran como «Sin ubicar»): <b>" + esc(sinU.join(", ")) + "</b>." : "");
 }
 
 /* ================= Grupos comerciales de AXT =================
@@ -5468,7 +5632,7 @@ function renderAnual(recs){
   card.style.display = "";
   document.querySelectorAll("#anualFecha button").forEach(b => {
     const on = b.dataset.af === (cons ? "cons" : "etd"); b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
-    b.onclick = () => { UI.anualFecha = b.dataset.af; saveUI(); renderAnual(recs); };
+    b.onclick = () => { UI.anualFecha = b.dataset.af; saveUI(); render(); };
   });
   const sinFecha = (recs || []).length - R.length;
   const años = [...new Set(R.map(r => r.year))].sort((a, b) => a - b);
@@ -7802,8 +7966,7 @@ const VENTANAS = [
   { key: "foco", label: "FOCO",               icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16\"/><path d=\"M14 10h5a1 1 0 0 1 1 1v10M3 21h18M8 8h2M8 12h2M8 16h2\"/></svg>", ids: ["focusCard"], destacado: true },
   { key: "evo",  label: "Evolución",          icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 17l6-6 4 4 8-8\"/><path d=\"M15 7h6v6\"/></svg>", ids: ["rollCard", "compareCard"] },
   { key: "prod", label: "Productos",          icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 8 12 3 3 8v8l9 5 9-5z\"/><path d=\"m3 8 9 5 9-5M12 13v8\"/></svg>", ids: ["prodCard"] },
-  { key: "anual", label: "Análisis por año",   icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2.5\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/></svg>", ids: ["anualCard"] },
-  { key: "cons", label: "Consolidación",      icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 7l8-4 8 4-8 4z\"/><path d=\"M4 12l8 4 8-4M4 17l8 4 8-4\"/></svg>", ids: ["consSection", "gruposCard"] },
+  { key: "anual", label: "Análisis",   icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"2.5\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/></svg>", ids: ["anualCard", "consSection", "gruposCard"] },
   { key: "cli",  label: "Panel comercial",    icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18\"/></svg>", ids: ["comCard"], destacado: true },
   { key: "mkt",  label: "Mercado y empresas", icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 9l1.5-5h15L21 9\"/><path d=\"M4 9v11h16V9\"/><path d=\"M3 9c0 2 3 2 3 0 0 2 3 2 3 0 0 2 3 2 3 0 0 2 3 2 3 0 0 2 3 2 3 0\"/></svg>", ids: ["mktCard", "partnerCard"] },
   { key: "con",  label: "Contratos",          icon: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z\"/><path d=\"M14 3v6h6M8 13h8M8 17h5\"/></svg>", ids: ["contractsCard", "pipeCard"] }
@@ -7822,6 +7985,7 @@ function renderSecNav(){
     todos.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove("fuera"); });
     return;
   }
+  if (UI.ventana === "cons") UI.ventana = "anual";      // "Consolidación" ahora vive dentro de "Análisis"
   if (!vis.some(v => v.key === UI.ventana)) UI.ventana = vis[0].key;
   const activa = vis.find(v => v.key === UI.ventana);
   const etiqueta = v => v.key === "foco" ? (focusName || v.label) : v.label;
