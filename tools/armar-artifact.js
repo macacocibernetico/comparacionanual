@@ -20,6 +20,7 @@ const DATOS = path.resolve(ROOT, process.argv[2] || "datos-artifact/datos");
 const OUT = path.join(ROOT, "artifact");
 
 let html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8").replace(/\r\n/g, "\n");
+const VIVO_JS = fs.readFileSync(path.join(__dirname, "artifact-vivo.js"), "utf8");   // lectura en vivo con el conector de Google Drive
 const avisos = [];
 function reemplazar(desde, hacia, { opcional = false, todas = false } = {}){
   if (!html.includes(desde)){
@@ -36,7 +37,8 @@ reemplazar(`async function fetchCsvText(url){
   const text = await res.text();
   if (text.trim().startsWith("<")) throw new Error("La planilla no es pública. Compartila como 'Cualquier persona con el enlace: Lector'.");
   return text;
-}`, `/* ===== Modo Artifact: los datos salen de una copia publicada junto a la página ===== */
+}`, VIVO_JS + `
+/* ===== Modo Artifact: datos en vivo con el conector de Google Drive y, de respaldo, una copia publicada junto a la página ===== */
 const ARTIFACT = { manifest: null };
 /* misma clave que tools/bajar-datos.js */
 function claveFuente(url){
@@ -47,7 +49,15 @@ function claveFuente(url){
   const hoja = p.get("sheet") ? "sheet:" + p.get("sheet") : "gid:" + p.get("gid");
   return id + "|" + fmt + "|" + hoja + "|h" + p.get("headers");
 }
+/* Primero en vivo (Google Drive del usuario). Si no se puede, la copia publicada junto a la página. */
 async function fetchCsvText(url){
+  if (await vivoListo()){
+    try { const t = await vivoLeer(url); VIVO.ok++; VIVO.ts = Date.now(); return t; }
+    catch(e){ VIVO.fallo++; VIVO.error = vivoMotivo(e); }
+  }
+  return await fetchCopia(url);
+}
+async function fetchCopia(url){
   const archivo = ARTIFACT.manifest && ARTIFACT.manifest.files[claveFuente(url)];
   if (!archivo) throw new Error("HTTP 404");
   const res = await fetch(ARTIFACT.base + archivo);
@@ -83,6 +93,10 @@ function fechaCopia(){
   const d = new Date(t);
   return d.toLocaleDateString("es-AR") + " " + d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 }
+function textoFuente(){
+  if (vivoActivo()) return "datos en vivo de Google Sheets (" + vivoHora() + ")";
+  return "copia de datos del " + fechaCopia() + (VIVO.error ? " · no pude leer en vivo: " + VIVO.error : "");
+}
 /* Guarda un archivo generado por la página (las descargas directas no andan en un Artifact) */
 async function guardarArchivo(data, nombre){
   try {
@@ -117,7 +131,7 @@ reemplazar('doc.save(`${bizName}_Contratos_${D.modo}.pdf`);', 'await guardarArch
 
 /* 4 · textos del Artifact */
 reemplazar(`actualizado \${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}\``,
-           `copia de datos del \${fechaCopia()}\``);
+           `\${textoFuente()}\``);
 reemplazar("Los demás negocios quedan vacíos hasta que conectes su planilla. Para ver tus números reales, tocá <b>⚙️ Configurar</b> arriba a la derecha y pegá el enlace de tu planilla de Google Sheets.",
            '" + (ARTIFACT.error ? "<b>No pude leer la copia de los datos reales</b> (" + esc(ARTIFACT.error) + "). Recargá la página con Ctrl+F5; si sigue igual, avisale a Claude este mensaje." : "Los datos reales los carga Claude desde tus planillas: pedile “cargá los datos”.") + "', { opcional: true });
 reemplazar("Datos de ejemplo — todavía no hay planillas conectadas", "Datos de ejemplo — todavía no se cargaron los datos reales", { opcional: true });
@@ -125,18 +139,16 @@ reemplazar("Este negocio todavía no tiene planilla conectada.<br>Tocá <b>⚙�
            "Este negocio todavía no tiene datos cargados.<br>Pedile a Claude que los cargue desde su planilla.", { opcional: true });
 /* 4a · ↻ Actualizar: vuelve a leer la copia publicada (que se renueva sola a las 18:00) y dice de cuándo es */
 reemplazar(`function textoFrescura(){ return "Actualizado " + new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }); }`,
-           `function textoFrescura(){ return "Datos del " + fechaCopia(); }`);
+           `function textoFrescura(){ return vivoActivo() ? "En vivo · " + vivoHora() : "Copia del " + fechaCopia(); }`);
 reemplazar(`document.getElementById("btnReload").onclick = () => { closeSheet(); init({ force: true }); };`,
-`document.getElementById("btnReload").title = "Vuelve a leer la copia de datos. La copia se renueva sola todos los días a las 18:00.";
+`document.getElementById("btnReload").title = "Vuelve a leer tus planillas de Google Sheets ahora mismo.";
 document.getElementById("btnReload").onclick = async () => {
   closeSheet();
-  const antes = ARTIFACT.manifest && ARTIFACT.manifest.generatedAt;
-  await cargarDatosArtifact();
-  const despues = ARTIFACT.manifest && ARTIFACT.manifest.generatedAt;
+  vivoReiniciar();
   await init({ force: true });
-  try { aviso(despues && despues !== antes ? "Datos nuevos cargados (" + fechaCopia() + ")" : "Ya tenés la última copia (" + fechaCopia() + "). Se renueva sola a las 18:00."); } catch(e){}
+  try { aviso(vivoActivo() ? "Datos en vivo de Google Sheets (" + vivoHora() + ")" : "Usé la " + textoFuente()); } catch(e){}
 };`);
-reemplazar(`\\n\\nTocá para volver a leer las planillas.`, `\\n\\nTocá para volver a leer la copia. Se renueva sola todos los días a las 18:00.`, { opcional: true });
+reemplazar(`\\n\\nTocá para volver a leer las planillas.`, `\\n\\nTocá para volver a leer tus planillas ahora mismo.`, { opcional: true });
 reemplazar(`  const res = await fetch(ARTIFACT.base + archivo);`, `  const res = await fetch(ARTIFACT.base + archivo, { cache: "no-store" });`);
 /* 4b · vista inicial del Artifact: Brokerage Maní, el año en curso solo, sin comparar (se aplica en cada apertura) */
 reemplazar(`  if (!ui.filter || !ui.filter.mode) ui.filter = { mode: "todos", sel: null };`,
