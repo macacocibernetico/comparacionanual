@@ -2457,6 +2457,10 @@ function buildRecords(rows, cfg, bizKey){
     const ix = findInMap(h, hmap); if (ix !== undefined){ paisIdx = ix; break; }
   }
   const etaIdx = findInMap("ETA", hmap);
+  // precio por tonelada que ya trae la planilla (AXT: "Precio final x tn"); sirve para promediar precios
+  let ptIdx;
+  for (const h of ["Precio final x tn", "Precio final por tn", "Precio x tn", "Precio por tn"]){ ptIdx = findInMap(h, hmap); if (ptIdx !== undefined) break; }
+  const sepPt = forced || detectDecimalSep(colValues(ptIdx !== undefined ? ptIdx : -1));
   const recs = [];
   recs.paisCol = paisIdx >= 0;
   for (let i = headerRowIdx + 1; i < rows.length; i++){
@@ -2481,6 +2485,7 @@ function buildRecords(rows, cfg, bizKey){
       etd,
       consolidacion: cons,
       eta: etaIdx !== undefined ? parseDate(r[etaIdx], cfg.DATE_FORMAT) : null,
+      precioTn: ptIdx !== undefined ? parseNumber(r[ptIdx], sepPt) : 0,
       port: String(r[C.port] ?? "").trim() || "(sin destino)",
       packing: String(r[C.packing] ?? "").trim(),
       cobro: parseDate(r[C.cobro], cfg.DATE_FORMAT) || parseDate(r[C.cobroEst], cfg.DATE_FORMAT),
@@ -3831,8 +3836,11 @@ function renderConsolidacion(recs, year, maxMonth){
     const c = base === "cons" ? r.consolidacion : r.etd;
     if (!c || c.y !== year || c.mo > RG.to || c.mo < RG.from) continue;
     const k = destFn(r);
-    const x = D.get(k) || { k, tns: 0, usd: 0, tnsU: 0, n: 0, clis: new Set(), ult: null, prods: new Map(), puertos: new Set() };
+    const x = D.get(k) || { k, tns: 0, usd: 0, tnsU: 0, pSum: 0, pT: 0, n: 0, clis: new Set(), ult: null, prods: new Map(), puertos: new Set() };
     x.tns += r.tns || 0; x.usd += r.usd || 0; if (r.usd > 0) x.tnsU += r.tns || 0; x.n++;
+    // precio de la carga: "Precio final x tn" de la planilla; si no está, facturación ÷ toneladas
+    const pr = r.precioTn > 0 ? r.precioTn : (r.usd > 0 && r.tns > 0 ? r.usd / r.tns : 0);
+    if (pr > 0 && r.tns > 0){ x.pSum += pr * r.tns; x.pT += r.tns; }
     x.clis.add(claveProv(r.importer)); x.puertos.add(capPuerto(r.port));
     const f = new Date(c.y, c.mo - 1, c.d || 1); if (!x.ult || f > x.ult) x.ult = f;
     x.prods.set(r.product, (x.prods.get(r.product) || 0) + (r.tns || 0));
@@ -3865,21 +3873,21 @@ function renderConsolidacion(recs, year, maxMonth){
     plugins: [pctTorta],
   });
   // tabla: toneladas, % del total, facturación, precio promedio y demás
-  const tD = dest.reduce((o, x) => ({ tns: o.tns + x.tns, usd: o.usd + x.usd, tnsU: o.tnsU + x.tnsU, n: o.n + x.n }), { tns: 0, usd: 0, tnsU: 0, n: 0 });
+  const tD = dest.reduce((o, x) => ({ tns: o.tns + x.tns, usd: o.usd + x.usd, pSum: o.pSum + x.pSum, pT: o.pT + x.pT, n: o.n + x.n }), { tns: 0, usd: 0, pSum: 0, pT: 0, n: 0 });
   const todosClis = new Set(); dest.forEach(x => x.clis.forEach(c => todosClis.add(c)));
-  let dh = "<table><tr><th>" + (porPuerto ? "Puerto" : "País") + "</th><th>Toneladas</th><th>% del total</th><th>Facturación</th><th>US$/t prom.</th><th>Cargas</th><th>Clientes</th><th>Producto principal</th>" + (porPuerto ? "" : "<th>Puertos</th>") + "<th title=\"Última fecha de " + baseTxt + "\">Última carga</th></tr>";
+  let dh = "<table><tr><th>" + (porPuerto ? "Puerto" : "País") + "</th><th>Toneladas</th><th>% del total</th><th>Facturación</th><th title=\"Promedio del «Precio final x tn» de la planilla, ponderado por toneladas\">US$/t prom.</th><th>Cargas</th><th>Clientes</th><th>Producto principal</th>" + (porPuerto ? "" : "<th>Puertos</th>") + "<th title=\"Última fecha de " + baseTxt + "\">Última carga</th></tr>";
   dest.forEach((x, i) => {
     const prin = [...x.prods.entries()].sort((p, q) => q[1] - p[1])[0];
     const pts = [...x.puertos].sort();
     dh += '<tr><td><span style="color:' + (i < TOP ? colorDe(i) : "#8e8e93") + '">■</span> ' + esc(x.k) + "</td><td>" + fmt1(x.tns) + "</td><td>" + pct1(val(x)) + "</td><td>" + fmtUsd(x.usd) + "</td><td><b>" +
-      (x.tnsU ? fmtUsd(x.usd / x.tnsU) : "—") + "</b></td><td>" + fmt0(x.n) + "</td><td>" + fmt0(x.clis.size) + "</td><td style=\"white-space:normal;min-width:120px\">" + (prin ? esc(prin[0]) : "—") + "</td>" +
+      (x.pT ? fmtUsd(x.pSum / x.pT) : "—") + "</b></td><td>" + fmt0(x.n) + "</td><td>" + fmt0(x.clis.size) + "</td><td style=\"white-space:normal;min-width:120px\">" + (prin ? esc(prin[0]) : "—") + "</td>" +
       (porPuerto ? "" : '<td style="white-space:normal;min-width:110px" title="' + esc(pts.join(", ")) + '">' + esc(pts.slice(0, 2).join(", ")) + (pts.length > 2 ? " +" + (pts.length - 2) : "") + "</td>") +
       "<td>" + (x.ult ? fFecha(x.ult) : "—") + "</td></tr>";
   });
-  dh += '<tr class="total"><td>Total</td><td>' + fmt1(tD.tns) + "</td><td>100%</td><td>" + fmtUsd(tD.usd) + "</td><td>" + (tD.tnsU ? fmtUsd(tD.usd / tD.tnsU) : "—") + "</td><td>" + fmt0(tD.n) + "</td><td>" + fmt0(todosClis.size) + "</td><td></td>" + (porPuerto ? "" : "<td></td>") + "<td></td></tr></table>";
+  dh += '<tr class="total"><td>Total</td><td>' + fmt1(tD.tns) + "</td><td>100%</td><td>" + fmtUsd(tD.usd) + "</td><td>" + (tD.pT ? fmtUsd(tD.pSum / tD.pT) : "—") + "</td><td>" + fmt0(tD.n) + "</td><td>" + fmt0(todosClis.size) + "</td><td></td>" + (porPuerto ? "" : "<td></td>") + "<td></td></tr></table>";
   document.getElementById("destTable").innerHTML = dh;
   const sinU = [...new Set(recs.filter(r => { const c = base === "cons" ? r.consolidacion : r.etd; return c && c.y === year && c.mo <= RG.to && c.mo >= RG.from && paisDePuerto(r.port) === "Sin ubicar"; }).map(r => capPuerto(r.port)))];
-  document.getElementById("destNota").innerHTML = "US$/t = facturación ÷ toneladas de las cargas que ya tienen USD cargado." +
+  document.getElementById("destNota").innerHTML = "US$/t = promedio del «Precio final x tn» de la planilla, ponderado por las toneladas de cada carga." +
     (!porPuerto && sinU.length ? " Puertos sin país asignado (figuran como «Sin ubicar»): <b>" + esc(sinU.join(", ")) + "</b>." : "");
 }
 
