@@ -3158,11 +3158,11 @@ function makeChart(id, series, opts = {}){
       datasets: series.map(s => {
         const esBase = s.year === baseYear;
         const fill = esBase ? barGradient(s.color) : hatchPattern(s.color);
-        // año en curso: del mes actual en adelante la barra es provisoria (en curso o programada)
+        // año en curso: el mes actual ya tiene cargas reales y se ve sólido; solo se rayan los meses que todavía no empezaron (programados)
         const hoyY = new Date().getFullYear(), hoyM = new Date().getMonth();
         const abierto = s.year === hoyY && esBase ? hatchPattern(s.color) : null;
         return {
-          label: s.label, data: s.data, backgroundColor: abierto ? (ctx => ctx.dataIndex >= hoyM ? abierto : (typeof fill === "function" ? fill(ctx) : fill)) : fill, _fill: fill, _color: String(s.color).slice(0, 7), _cap: esBase && !stacked,
+          label: s.label, data: s.data, backgroundColor: abierto ? (ctx => ctx.dataIndex > hoyM ? abierto : (typeof fill === "function" ? fill(ctx) : fill)) : fill, _fill: fill, _color: String(s.color).slice(0, 7), _cap: esBase && !stacked,
           borderColor: esBase ? "transparent" : hexA(s.color, .6), borderWidth: esBase ? 0 : 1,
           borderRadius: 8, borderSkipped: false, maxBarThickness: 46,
           ...(s.stack ? { stack: s.stack } : {}),
@@ -8870,7 +8870,7 @@ function renderZentra(c){
   }).join("");
   document.querySelectorAll("#zStrip .zm").forEach(btn => btn.onclick = () => { UI.zMetric = btn.dataset.m; saveUI(); render(); });
   const zms = document.getElementById("zMainSub");
-  if (zms) zms.textContent = "Tocá una métrica para cambiar el gráfico, y una barra para ver sus cargas." + (yA === anioHoy ? " Las barras rayadas son meses en curso o programados." : "");
+  if (zms) zms.textContent = "Tocá una métrica para cambiar el gráfico, y una barra para ver sus cargas." + (yA === anioHoy ? " Las barras rayadas son meses que todavía no empezaron (cargas programadas)." : "");
   document.getElementById("zMainTitle").textContent = metrica === "com" ? tituloCargas(yA) : `${m.label} por mes de ETD · ${yA}`;
   mk("zChart", m.key, m.usd ? { usd: true } : (m.dots ? { dots: true } : {}));
   document.getElementById("zChart").setAttribute("aria-label", `${m.label} por mes de ETD, ${yA}${cmpYears.length ? " comparado con " + cmpYears.join(", ") : ""}`);
