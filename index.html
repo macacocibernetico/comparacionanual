@@ -440,6 +440,8 @@
   .checklist label{display:flex;align-items:center;gap:10px;font-size:.86rem;color:var(--text);cursor:pointer;padding:7px 9px;border-radius:9px;transition:background .2s var(--ease)}
   .checklist label:hover{background:var(--panel2)}
   .checklist input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+  .checklist .chkfam{grid-column:1/-1;font-size:.74rem;font-weight:600;color:var(--muted);padding:10px 9px 2px;border-top:1px solid var(--border)}
+  .checklist .chkfam:first-child{border-top:0;padding-top:2px}
   #btnFilter.filtering{background:var(--accent-soft);color:var(--accent)}
   #btnSplit.active{background:var(--text);color:var(--bg);font-weight:600}
 
@@ -872,6 +874,23 @@
   .pvv b{font-weight:600;font-size:.95rem}.pvv small{font-size:.76rem;color:var(--faint)}
   .pvd{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding:2px 16px 16px}
   .pvd[hidden]{display:none}
+  /* familias de producto: fila de familia que despliega sus productos */
+  tr.famrow{cursor:pointer}
+  tr.famrow td{font-weight:600}
+  tr.famrow:hover td,tr.famrow:hover td:first-child{background:var(--accent-soft)}
+  tr.famrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .famcaret{display:inline-block;width:1em;color:var(--faint);font-size:.8em}
+  .famdot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:7px;vertical-align:0}
+  .famn{font-weight:500;color:var(--faint);font-size:.72rem;margin-left:2px}
+  tr.famchild td{color:var(--muted);font-weight:400;font-size:.8rem}
+  tr.famchild td:first-child{padding-left:40px}
+  tr.famchild td b{font-weight:500}
+  .pvfam{display:flex;flex-direction:column;gap:2px;padding:2px 16px 14px 60px}
+  .pvfam[hidden]{display:none}
+  .pvp{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(70px,1fr) minmax(120px,200px) auto;gap:14px;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:.86rem}
+  .pvpn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pvp .pvbar i{width:auto}
+  @media(max-width:720px){.pvfam{padding-left:16px}.pvp{grid-template-columns:minmax(0,1fr) auto}.pvp .pvbar{grid-column:1/-1;order:5}.pvp .pvspark{display:none}}
   #prodGrupos{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
   #prodGrupos:empty{display:none;margin:0}
   .pgd{display:flex;flex-direction:column;gap:2px;padding:2px 16px 14px 60px}
@@ -1875,6 +1894,8 @@
       <input id="cfgExcluir" placeholder="Latinut S.A.">
       <label for="cfgAlias">Empresas que son la misma <span style="color:var(--faint);font-weight:400">— una por línea: Nombre que se muestra = otro nombre</span></label>
       <textarea id="cfgAlias" rows="2" placeholder="Empresa X = Empresa X S.A. = Empresa X Argentina"></textarea>
+      <label for="cfgProdAlias">Unificar productos <span style="color:var(--faint);font-weight:400">— una línea por grupo: Nombre final = variante 1 = variante 2</span></label>
+      <textarea id="cfgProdAlias" rows="2" placeholder="Split Blanched = Split blancheado = Split blanched peanuts"></textarea>
       <label for="cfgFocusExporter">Exportador con vista propia <span style="color:var(--faint);font-weight:400">— se le arma una sección aparte</span></label>
       <input id="cfgFocusExporter" placeholder="NEWSAN SA">
       <div class="row">
@@ -1974,6 +1995,7 @@ const SHEET_DEFAULTS = {
   FOCUS_EXPORTER: "NEWSAN SA",                     // exportador con vista propia (Brokerage)
   EXCLUDE_EXPORTERS: "",                           // exportadores que no se cuentan (separados por coma)
   ALIAS_EMPRESAS: "",                              // empresas que son la misma: una por línea, "Nombre que se muestra = otro nombre"
+  PRODUCT_ALIAS: "",                               // productos que son el mismo: una línea por grupo, "Nombre final = variante 1 = variante 2"
   CONTRACTS_SHEET: "ALL CONTRATOS",                // pestaña de contratos (Brokerage)
   CONTRACTS_GID: "",
   OPEN_SHEET: "Contratos Abiertos",
@@ -2168,6 +2190,60 @@ function isNOP(product){
 function isOil(product){ return /\b(oil|aceite)\b/i.test(String(product)); }
 function isExpeller(product){ return /expeller/i.test(String(product)); }
 function isOilOrExpeller(product){ return isOil(product) || isExpeller(product); }
+
+/* ---------- Nombres de producto unificados ----------
+   Se aplican al leer las planillas (cargas, contratos y contratos abiertos), así todo el dashboard
+   ve un solo nombre por producto. Reglas fijas + la lista editable "Unificar productos" (PRODUCT_ALIAS). */
+const _capTipo = w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+function normalizarProductoBase(nombre){
+  let s = String(nombre ?? "").replace(/\s+/g, " ").trim();
+  if (!s) return s;
+  // aceite: "Peanut Oil" / "PEANUT OIL" → "Peanut oil"
+  s = s.replace(/\bpeanut\s+oil\b/ig, "Peanut oil");
+  // "Split blanched peanuts" → "Split Blanched"
+  if (/^split\s+blanched(\s+peanuts?)?$/i.test(s)) return "Split Blanched";
+  // con calibre (38/42, 50/60…): calibre + tipo + resto + grado + BF, sin la palabra "peanuts"
+  const cal = s.match(/\b\d{2,3}\/\d{2,3}\b/);
+  if (cal){
+    const ws = s.replace(cal[0], " ").replace(/\bgrade\s*(\d)\b/ig, "G$1").split(" ").filter(Boolean);
+    const tipo = [], grado = [], bf = [], resto = [];
+    for (const w of ws){
+      if (/^peanuts?$/i.test(w)) continue;
+      if (/^(raw|blanched|roasted)$/i.test(w)) tipo.push(_capTipo(w));
+      else if (/^g\d$/i.test(w)) grado.push(w.toUpperCase());
+      else if (/^bf$/i.test(w)) bf.push("BF");
+      else resto.push(w);
+    }
+    return [cal[0], ...tipo, ...resto, ...grado, ...bf].join(" ");
+  }
+  return s;
+}
+/* "Unificar productos": una línea por grupo, "Nombre final = variante 1 = variante 2" (sin importar mayúsculas) */
+const _claveProd = s => normalizarProductoBase(s).toLowerCase();
+function aliasProductosDe(cfg){
+  const t = String((cfg && cfg.PRODUCT_ALIAS) || "").trim();
+  if (!t) return null;
+  if (aliasProductosDe.texto !== t){
+    aliasProductosDe.texto = t;
+    const m = new Map();
+    t.split(/\n|;/).map(l => l.split("=").map(x => x.replace(/\s+/g, " ").trim()).filter(Boolean)).filter(g => g.length >= 2)
+      .forEach(g => g.forEach(v => { const k = _claveProd(v); if (k && !m.has(k)) m.set(k, g[0]); }));
+    aliasProductosDe.mapa = m;
+  }
+  return aliasProductosDe.mapa;
+}
+function normalizarProducto(nombre, cfg){
+  const s = normalizarProductoBase(nombre);
+  if (!s) return s;
+  const m = aliasProductosDe(cfg);
+  return (m && m.get(s.toLowerCase())) || s;
+}
+/* Los datos que vienen de la caché del navegador se leyeron con versiones anteriores: se normalizan igual */
+function normalizarDatosCargados(){
+  for (const [k, arr] of Object.entries(DATA || {})) if (Array.isArray(arr)) arr.forEach(r => { if (r && r.product) r.product = normalizarProducto(r.product, CONFIG[k]); });
+  for (const [k, arr] of Object.entries(CONTRACTS || {})) if (Array.isArray(arr)) arr.forEach(c => { if (c && c.producto) c.producto = normalizarProducto(c.producto, CONFIG[k]); });
+  for (const [k, o] of Object.entries(OPEN || {})) if (o && Array.isArray(o.filas)) o.filas.forEach(f => { if (f && f.producto) f.producto = normalizarProducto(f.producto, CONFIG[k]); });
+}
 
 /* Configuración del desglose disponible en cada negocio.
    Cada uno define su propio criterio; nunca se cruza entre negocios ni al Total. */
@@ -2468,7 +2544,7 @@ function buildRecords(rows, cfg, bizKey){
     const etd = parseDate(r[C.etd], cfg.DATE_FORMAT);   // el mes/año lo define ETD
     const cons = parseDate(r[C.consolidacion], cfg.DATE_FORMAT);
     const tns = parseNumber(r[C.tns], sepTns);
-    const product = String(r[C.product] ?? "").trim();
+    const product = normalizarProducto(r[C.product], cfg);
     if (!etd && !cons && !tns && !product) continue;
     if (!etd && !cons) continue;   // sin ninguna fecha no se puede ubicar en el tiempo
     const com = comIdx < 0 ? 0 : (cfg.COMISION.mode === "porTon"
@@ -3466,7 +3542,7 @@ function buildContracts(rows, cfg){
       fecha, fechaOrd: fecha ? fecha.y * 10000 + fecha.mo * 100 + (fecha.d || 0) : 0,
       contrato, exportador: canonEmpresa(txt(r, "exportador"), alias) || "(sin dato)",
       importador: canonEmpresa(txt(r, "importador"), alias) || "(sin dato)",
-      producto: txt(r, "producto"), tipo: txt(r, "tipo"),
+      producto: normalizarProducto(txt(r, "producto"), cfg), tipo: txt(r, "tipo"),
       toneladas: tns, precio: num(r, "precio"), total: num(r, "total"),
       packaging: txt(r, "packaging"), incoterm: txt(r, "incoterm"), pago: txt(r, "pago"),
       comision: num(r, "comision"), pagosUsa: num(r, "pagosUsa"),
@@ -3528,7 +3604,7 @@ function buildOpenContracts(rows, cfg){
       contrato: contrato || "(sin número)",
       exportador: canonEmpresa(txt(r, C.exportador), alias) || "(sin dato)",
       importador: canonEmpresa(txt(r, C.importador), alias) || "(sin dato)",
-      producto: txt(r, C.producto),
+      producto: normalizarProducto(txt(r, C.producto), cfg),
       prompt: txt(r, C.prompt),
       toneladas: C.toneladas >= 0 ? parseNumber(r[C.toneladas], sepT) : 0,
       saldo: C.saldo >= 0 ? parseNumber(r[C.saldo], sepT) : 0,
@@ -4102,7 +4178,7 @@ function colorTexto(el){ const m = getComputedStyle(el).color.match(/[\d.]+/g); 
 async function copiarTabla(tabla, btn){
   const esc = x => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const conEstilo = tabla.classList.contains("anual");   // colores y negritas tal como se ven en pantalla
-  const limpio = td => td.innerText.replace(/[\t\n\r]+/g, " ").replace(/^■\s*/, "").trim();
+  const limpio = td => td.innerText.replace(/[\t\n\r]+/g, " ").replace(/^[■▸▾]\s*/, "").trim();
   // grilla con colspan/rowspan expandidos: cada columna queda en su lugar al pegar
   const trs = [...tabla.querySelectorAll("tr")], grilla = trs.map(() => []);
   trs.forEach((tr, i) => {
@@ -5178,7 +5254,7 @@ function renderComMapaProv(el, hist, yA, aviso){
     if (!emb || !X) return "";
     const idt2 = s => s + "_" + modo;
     const itemsPais = [...X.exps.values()].flatMap(e => e.ops), items = E ? E.ops : itemsPais;
-    const calDe = p => { const g = grupoProducto(p || ""); return { tipo: g.g, nom: g.g === "Otros" || g.g === "Aceite y expeller" ? g.sub : g.sub + " · " + g.g }; };
+    const calDe = p => ({ tipo: grupoProducto(p || "").g, nom: calibreDe(p) });
     const agrupar = lista => { const M = new Map();
       for (const o of lista){
         const c = calDe(o.r.product), x = M.get(c.nom) || { k: c.nom, nom: c.nom, tipo: c.tipo, tns: 0, usd: 0, tnsU: 0, cant: 0, clis: new Set(), ult: null, eta: null, pmin: null, pmax: null, nombres: new Set(), ops: [] };
@@ -5191,7 +5267,7 @@ function renderComMapaProv(el, hist, yA, aviso){
       } return M; };
     const M = agrupar(items), MP = E ? agrupar(itemsPais) : M;
     if (COMP.prod && !M.has(COMP.prod)) COMP.prod = null;
-    const tipos = ["Raw", "Blanched", "Roasted", "BF", "Otros", "Aceite y expeller"].filter(g => [...M.values()].some(x => x.tipo === g));
+    const tipos = FAMILIAS.filter(g => [...M.values()].some(x => x.tipo === g));
     if (COMP.tipo && !tipos.includes(COMP.tipo)) COMP.tipo = null;
     const q = sinTildes(COMP.q || "").trim();
     const lista = [...M.values()].filter(x => (!COMP.tipo || x.tipo === COMP.tipo) && (!q || sinTildes(x.nom + " " + x.tipo + " " + [...x.nombres].join(" ")).includes(q))).sort((a, b) => b.tns - a.tns);
@@ -5674,6 +5750,26 @@ function renderAnual(recs){
       vis.map(f => `<tr><td class="nom" title="${esc(f.n)}">${esc(f.n)}</td>${celdas(f.por, f.tns, f.usd)}</tr>`).join("") +
       `<tr class="tot"><td class="nom">TOTAL</td>${celdas(totPor, tT, tU)}</tr></tbody></table>`;
   };
+  // productos: una fila por familia (con totales por año) que despliega sus productos, en el orden elegido arriba
+  const tablaFamilias = filas => {
+    const porNom = new Map(filas.map(f => [f.n, f]));
+    const fams = familiasDe(filas.map(f => f.n), n => orden === "usd" ? porNom.get(n).usd : porNom.get(n).tns);
+    if (orden === "nom"){
+      fams.sort((x, y) => (x.g === "Otros") - (y.g === "Otros") || x.g.localeCompare(y.g, "es", { sensitivity: "base" }));
+      fams.forEach(F => F.prods.sort((x, y) => x.localeCompare(y, "es", { sensitivity: "base" })));
+    }
+    const totPor = {}; let tT = 0, tU = 0;
+    for (const f of filas){ tT += f.tns; tU += f.usd; for (const y in f.por){ const o = totPor[y] || (totPor[y] = { tns: 0, usd: 0 }); o.tns += f.por[y].tns; o.usd += f.por[y].usd; } }
+    let h = `<table class="anual famtable" data-ord="1"><thead><tr><th class="nom" rowspan="2">PRODUCTO</th>${años.map((y, i) => `<th class="gy y${i % 5}" colspan="2">${y}</th>`).join("")}<th class="gy yt" colspan="2">Total</th></tr>
+      <tr>${años.map((y, i) => `<th class="gy y${i % 5}">Tns</th><th class="y${i % 5}">Facturado</th>`).join("")}<th class="gy yt">Tns</th><th class="yt">Facturado</th></tr></thead><tbody>`;
+    for (const F of fams){
+      const por = {}; let ft = 0, fu = 0;
+      for (const n of F.prods){ const f = porNom.get(n); ft += f.tns; fu += f.usd; for (const y in f.por){ const o = por[y] || (por[y] = { tns: 0, usd: 0 }); o.tns += f.por[y].tns; o.usd += f.por[y].usd; } }
+      h += `<tr ${famAttrs("anual", F.g)}>${famCelda("anual", F.g, F.prods.length, "nom")}${celdas(por, ft, fu)}</tr>`;
+      for (const n of F.prods){ const f = porNom.get(n); h += `<tr ${famHijoAttrs("anual", F.g)}><td class="nom" title="${esc(f.n)}">${esc(f.n)}</td>${celdas(f.por, f.tns, f.usd)}</tr>`; }
+    }
+    return h + `<tr class="tot"><td class="nom">TOTAL</td>${celdas(totPor, tT, tU)}</tr></tbody></table>`;
+  };
   // versión compacta: una fila por cliente, solo toneladas por año; tocar una fila abre su historial
   const tablaMin = filas => `<table class="anual min"><thead><tr><th class="nom">Cliente</th>${años.map(y => `<th>${y}</th>`).join("")}<th>Total (t)</th><th>Facturado</th></tr></thead><tbody>` +
     filas.map(f => `<tr data-cli="${esc(f.n)}" tabindex="0" role="button" title="Ver el historial de ${esc(f.n)}"><td class="nom cli">${esc(f.n)}</td>${años.map(y => { const v = (f.por[y] || {}).tns; return `<td class="${v ? "" : "cero"}">${v ? fmt0(v) : "·"}</td>`; }).join("")}<td class="tt">${fmt0(f.tns)}</td><td>${fmtUsd(f.usd)}</td></tr>`).join("") + "</tbody></table>";
@@ -5698,7 +5794,8 @@ function renderAnual(recs){
   } else {
     const prods = agrupar(r => r.product || "(sin producto)");
     document.getElementById("anualTitProd").textContent = `Análisis por producto · ${rango}${conCons ? " · por " + (cons ? "consolidación" : "ETD") : ""}`;
-    document.getElementById("anualProd").innerHTML = tabla("PRODUCTO", prods);
+    document.getElementById("anualProd").innerHTML = tablaFamilias(prods);
+    cablearFamilias(document.getElementById("anualProd"), "anual");
     document.getElementById("anualCli").innerHTML = tabla("CLIENTE", clis, todos ? 0 : LIM);
     mas.innerHTML = nota + (clis.length > LIM ? `<button type="button" class="vermas2" id="anualVerMas">${todos ? "Ver menos" : `Ver los ${fmt0(clis.length)} clientes`}</button>` : "");
   }
@@ -7302,57 +7399,121 @@ function renderProductChart(a, yA){
 function renderProductViz(prods, porMes, tot, f, mesTot, yA){
   const el = document.getElementById("prodViz"); if (!el) return;
   if (!prods.length){ el.innerHTML = '<p class="empty">Sin productos en el período.</p>'; return; }
-  const N = 8, todos = !!UI.prodTodos, lista = todos ? prods : prods.slice(0, N);
-  const total = prods.reduce((s, p) => s + (tot[p] || 0), 0) || 1, max = Math.max(1, ...prods.map(p => tot[p] || 0));
+  // una fila por familia; al tocarla se ven sus productos con su evolución mensual
+  const fams = familiasDe(prods, p => tot[p]).map(F => {
+    const meses = Array(12).fill(0);
+    F.prods.forEach(p => (porMes[p] || []).forEach((v, m) => { meses[m] += v; }));
+    return { ...F, meses };
+  });
+  const total = prods.reduce((s, p) => s + (tot[p] || 0), 0) || 1, max = Math.max(1, ...fams.map(F => F.v));
   const mxMes = Math.max(1, ...mesTot);
   const meses = `<div class="pvmes" aria-hidden="true">${mesTot.map((v, m) =>
     `<div title="${MESES[m]}: ${v ? f(v) : "sin cargas"}"><i style="height:${v ? Math.max(6, v / mxMes * 100) : 0}%"></i><span>${MESES[m]}</span></div>`).join("")}</div>`;
-  const filas = lista.map((p, i) => {
-    const arr = porMes[p] || Array(12).fill(0), mx = Math.max(1, ...arr), pico = arr.indexOf(Math.max(...arr));
-    const share = (tot[p] || 0) / total * 100;
-    const spark = arr.map((v, m) => `<i class="pvm${m === pico && v > 0 ? " pk" : ""}" style="height:${v > 0 ? Math.max(10, v / mx * 100) : 0}%" title="${MESES[m]}: ${v ? f(v) : "sin cargas"}"></i>`).join("");
-    const det = arr.map((v, m) => `<span class="pvc${v ? "" : " nul"}"><b>${MESES[m]}</b>${v ? f(v) : "—"}</span>`).join("");
-    return `<div class="pvr" style="--w:${((tot[p] || 0) / max * 100).toFixed(1)}%;--pvc:var(--pvp${i % 5})">
-      <button type="button" class="pvh" aria-expanded="false" title="Ver mes por mes">
+  const spark = arr => { const mx = Math.max(1, ...arr), pico = arr.indexOf(Math.max(...arr));
+    return arr.map((v, m) => `<i class="pvm${m === pico && v > 0 ? " pk" : ""}" style="height:${v > 0 ? Math.max(10, v / mx * 100) : 0}%" title="${MESES[m]}: ${v ? f(v) : "sin cargas"}"></i>`).join(""); };
+  const filas = fams.map((F, i) => {
+    const ab = famAbierta("viz", F.g), col = GRUPO_COLOR[F.g] || "#8e8e93";
+    const fmax = Math.max(1, ...F.prods.map(p => tot[p] || 0));
+    const det = F.prods.map(p => { const v = tot[p] || 0, arr = porMes[p] || Array(12).fill(0);
+      return `<div class="pvp"><span class="pvpn" title="${esc(p)}">${esc(p)}</span><span class="pvbar"><i style="width:${(v / fmax * 100).toFixed(1)}%"></i></span>` +
+        `<span class="pvspark" aria-hidden="true">${spark(arr)}</span><span class="pvv"><b>${f(v)}</b><small>${F.v ? (v / F.v * 100).toFixed(1).replace(".", ",") : "0"}% de ${esc(F.g)}</small></span></div>`; }).join("");
+    return `<div class="pvr" data-fam="${esc(F.g)}" style="--w:${(F.v / max * 100).toFixed(1)}%;--pvc:${col}">
+      <button type="button" class="pvh" aria-expanded="${ab}" title="Ver los productos de ${esc(F.g)}">
         <span class="pvrk">${i + 1}</span>
-        <span class="pvn"><b>${esc(p)}</b><span class="pvbar"><i></i></span></span>
-        <span class="pvspark" aria-hidden="true">${spark}</span>
-        <span class="pvv"><b>${f(tot[p] || 0)}</b><small>${share.toFixed(1).replace(".", ",")}%</small></span>
+        <span class="pvn"><b><span class="famcaret" aria-hidden="true">${ab ? "▾" : "▸"}</span> ${esc(F.g)} <small class="famn">${F.prods.length}</small></b><span class="pvbar"><i></i></span></span>
+        <span class="pvspark" aria-hidden="true">${spark(F.meses)}</span>
+        <span class="pvv"><b>${f(F.v)}</b><small>${(F.v / total * 100).toFixed(1).replace(".", ",")}%</small></span>
       </button>
-      <div class="pvd" hidden>${det}</div></div>`;
+      <div class="pvfam"${ab ? "" : " hidden"}>${det}</div></div>`;
   }).join("");
-  el.innerHTML = `<div class="pvtop"><span class="pvsum"><b>${fmt0(prods.length)}</b> productos · <b>${f(total)}</b> en ${yA}</span></div>${meses}${filas}` +
-    (prods.length > N ? `<button type="button" class="pvmore">${todos ? "Ver solo los 8 principales" : `Ver los ${fmt0(prods.length)} productos`}</button>` : "");
-  el.querySelectorAll(".pvh").forEach(b => b.onclick = () => {
-    const d = b.nextElementSibling, abre = d.hidden;
+  el.innerHTML = `<div class="pvtop"><span class="pvsum"><b>${fmt0(prods.length)}</b> productos en <b>${fmt0(fams.length)}</b> familias · <b>${f(total)}</b> en ${yA}</span></div>${meses}${filas}`;
+  el.querySelectorAll(".pvr[data-fam] > .pvh").forEach(b => b.onclick = () => {
+    const g = b.parentElement.dataset.fam, d = b.nextElementSibling, abre = d.hidden, k = "viz|" + g;
     d.hidden = !abre; b.setAttribute("aria-expanded", String(abre));
+    abre ? FAM_ABIERTAS.add(k) : FAM_ABIERTAS.delete(k);
+    const c = b.querySelector(".famcaret"); if (c) c.textContent = abre ? "▾" : "▸";
   });
-  const mas = el.querySelector(".pvmore");
-  if (mas) mas.onclick = () => { UI.prodTodos = !UI.prodTodos; saveUI(); renderProductViz(prods, porMes, tot, f, mesTot, yA); };
 }
 
-/* Productos agrupados por tipo (Raw, Blanched, Roasted, BF) y su composición por calibre o grado.
-   BF manda: si el nombre lo tiene, es BF aunque diga Raw o Blanched. Lo que no dice ningún tipo
-   (Sortex solo, Ungraded Raw, In shell, Loose grain, otros productos) va a "Otros". */
-const _sinTilde = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+/* Familias de producto. Se revisan en este orden (la primera que coincide manda):
+   BF (cualquier Bird Food) → Aceite / Expeller / Harina / Peanut paste → Split Blanched / Split Raw → Roasted →
+   Ungraded / Sortex / In shell / Loose grain → Blanched → Raw → Otros.
+   sub = detalle dentro de la familia: calibre (+grado) en Raw y Blanched, grado en Split Blanched, el nombre en el resto. */
+const _sinTilde = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const FAM_UNG = "Ungraded / Sortex / In shell / Loose grain";
+const FAMILIAS = ["Raw", "Blanched", "Split Blanched", "Split Raw", "Roasted", "BF", FAM_UNG, "Peanut paste", "Harina", "Aceite", "Expeller", "Otros"];
+/* familias cuyo detalle es un calibre o grado (el resto muestra el nombre del producto) */
+const GRUPOS_CON_CALIBRE = new Set(["Raw", "Blanched", "Split Blanched"]);
+const GRUPOS_SIN_CALIBRE = new Set(FAMILIAS.filter(g => !GRUPOS_CON_CALIBRE.has(g)));
 function grupoProducto(nombre){
-  const s = _sinTilde(nombre);
+  const s = _sinTilde(nombre), nom = String(nombre ?? "").trim();
+  const blanch = /blanch|blanqu/.test(s), raw = /\braw\b|crudo/.test(s), split = /\bsplit\b/.test(s);
   let g;
-  if (isOilOrExpeller(nombre)) g = "Aceite y expeller";
-  else if (/\bbf\b|bird ?food/.test(s)) g = "BF";
-  else if (/blanch|blanqu/.test(s)) g = "Blanched";
+  if (/\bbf\b|bird ?food/.test(s)) g = "BF";
+  else if (isExpeller(nombre)) g = "Expeller";
+  else if (isOil(nombre)) g = "Aceite";
+  else if (/\b(flour|harina|meal)\b/.test(s)) g = "Harina";
+  else if (/paste|pasta|butter|mantequilla/.test(s)) g = "Peanut paste";
+  else if (split && blanch) g = "Split Blanched";
+  else if (split && raw) g = "Split Raw";
   else if (/roast|tostad/.test(s)) g = "Roasted";
-  else if (/\braw\b|crudo/.test(s) && !/ungraded|in ?shell|loose/.test(s)) g = "Raw";
+  else if (/ungraded|sortex|in ?shell|loose/.test(s)) g = FAM_UNG;
+  else if (blanch) g = "Blanched";
+  else if (raw) g = "Raw";
   else g = "Otros";
-  if (g === "Otros" || g === "Aceite y expeller") return { g, sub: String(nombre).trim() };
-  const sub = String(nombre)
-    .replace(/\b(bf|bird ?food|blanch\w*|blanqu\w*|roast\w*|tostad\w*|raw|crud[oa]s?|peanuts?)\b/gi, " ")
+  if (g === "Split Blanched"){
+    const gr = s.match(/\bg(\d)\b|\bgrade\s*(\d)\b/);
+    return { g, sub: gr ? "G" + (gr[1] || gr[2]) : "Sin grado" };
+  }
+  if (!GRUPOS_CON_CALIBRE.has(g)) return { g, sub: nom || "(sin producto)" };
+  const sub = nom
+    .replace(/\b(blanch\w*|blanqu\w*|raw|crud[oa]s?|peanuts?)\b/gi, " ")
     .replace(/\bgrade\s*(\d)/gi, "G$1").replace(/\s+/g, " ").trim()
     .split(" ").map(w => /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
   return { g, sub: sub || "Sin calibre" };
 }
+/* Etiqueta de calibre para los desgloses: "38/42 · Raw", "G2 · Split Blanched" o el nombre del producto */
+function calibreDe(nombre){
+  const x = grupoProducto(nombre || "");
+  return GRUPOS_CON_CALIBRE.has(x.g) ? x.sub + " · " + x.g : x.sub;
+}
 const GRUPOS_ABIERTOS = new Set();
-const GRUPO_COLOR = { Raw: "#2f56f5", Blanched: "#1f9d45", BF: "#e0367f", Roasted: "#e3860f", Otros: "#7a5af5", "Aceite y expeller": "#8e8e93" };
+const GRUPO_COLOR = { Raw: "#2f56f5", Blanched: "#1f9d45", "Split Blanched": "#0f8a7a", "Split Raw": "#5b7cff", Roasted: "#e3860f", BF: "#e0367f",
+  [FAM_UNG]: "#6d7b8d", "Peanut paste": "#7a5af5", Aceite: "#f2c200", Expeller: "#af52de", Harina: "#a2845e", Otros: "#8e8e93" };
+
+/* ---------- Tablas por familia: una fila por familia (con totales) que despliega sus productos ---------- */
+const FAM_ABIERTAS = new Set();   // "tabla|familia" abiertas (solo en esta sesión)
+/* prods: nombres; valor(p): número para ordenar. Familias por valor, "Otros" al final; productos por valor. */
+function familiasDe(prods, valor){
+  const M = new Map();
+  for (const p of prods){ const g = grupoProducto(p).g; if (!M.has(g)) M.set(g, []); M.get(g).push(p); }
+  return [...M.entries()].map(([g, ps]) => ({ g, prods: ps.sort((x, y) => (valor(y) || 0) - (valor(x) || 0)), v: ps.reduce((t, p) => t + (valor(p) || 0), 0) }))
+    .sort((x, y) => (x.g === "Otros") - (y.g === "Otros") || y.v - x.v);
+}
+const famAbierta = (tabla, g) => FAM_ABIERTAS.has(tabla + "|" + g);
+/* primera celda de la fila de familia y de cada producto */
+function famCelda(tabla, g, n, cls = ""){
+  const ab = famAbierta(tabla, g);
+  return `<td class="${cls}"><span class="famcaret" aria-hidden="true">${ab ? "▾" : "▸"}</span><i class="famdot" style="background:${GRUPO_COLOR[g] || "#8e8e93"}" aria-hidden="true"></i>${esc(g)} <small class="famn">${n}</small></td>`;
+}
+const famAttrs = (tabla, g) => `class="famrow" data-fam="${esc(g)}" tabindex="0" role="button" aria-expanded="${famAbierta(tabla, g)}" title="Ver u ocultar los productos de ${esc(g)}"`;
+const famHijoAttrs = (tabla, g) => `class="famchild" data-famof="${esc(g)}"${famAbierta(tabla, g) ? "" : " hidden"}`;
+/* abre o cierra las filas de producto de cada familia (clic, Enter o espacio) */
+function cablearFamilias(cont, tabla){
+  if (!cont) return;
+  cont.querySelectorAll("tr.famrow").forEach(tr => {
+    const g = tr.dataset.fam;
+    const toggle = () => {
+      const k = tabla + "|" + g, abre = !FAM_ABIERTAS.has(k);
+      abre ? FAM_ABIERTAS.add(k) : FAM_ABIERTAS.delete(k);
+      tr.setAttribute("aria-expanded", String(abre));
+      const c = tr.querySelector(".famcaret"); if (c) c.textContent = abre ? "▾" : "▸";
+      cont.querySelectorAll("tr.famchild").forEach(h => { if (h.dataset.famof === g) h.hidden = !abre; });
+    };
+    tr.onclick = toggle;
+    tr.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); } };
+  });
+}
 /* Columnas apiladas por mes (una serie por grupo o por calibre). */
 function barrasMensuales(id, series, f){
   const cv = document.getElementById(id); if (!cv) return;
@@ -7379,7 +7540,7 @@ function barrasMensuales(id, series, f){
 }
 function renderProductGrupos(a, usd, yA){
   const el = document.getElementById("prodGrupos"); if (!el) return;
-  ["pgcTop", "pgcPie"].concat([...Array(8).keys()].map(i => "pgc" + i)).forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
+  ["pgcTop", "pgcPie"].concat([...Array(16).keys()].map(i => "pgc" + i)).forEach(id => { if (charts[id]){ charts[id].destroy(); delete charts[id]; } });
   const tot = usd ? a.prodUsd : a.prodTotals, porMes = usd ? a.productsUsd : a.products;
   const f = usd ? fmtUsd : (x => fmt1(x) + " t"), fm = usd ? fmtUsd : fmt1;
   const cnt = a.prodCount || {}, G = new Map();
@@ -7393,11 +7554,9 @@ function renderProductGrupos(a, usd, yA){
     x.subs.set(sub, s);
     G.set(g, x);
   }
-  const tipos = ["Raw", "Blanched", "Roasted", "BF"];
-  const principales = tipos.map(t => G.get(t)).filter(x => x && x.v > 0).sort((p, q) => q.v - p.v);
-  if (!principales.length){ el.innerHTML = ""; return; }
-  const resto = ["Aceite y expeller", "Otros"].map(t => G.get(t)).filter(x => x && (x.v > 0 || x.n > 0));
-  const lista = [...principales, ...resto];
+  // todas las familias, de mayor a menor; "Otros" siempre al final
+  const lista = [...G.values()].filter(x => x.v > 0 || x.n > 0).sort((p, q) => (p.g === "Otros") - (q.g === "Otros") || q.v - p.v);
+  if (!lista.length){ el.innerHTML = ""; return; }
   const total = lista.reduce((s, x) => s + x.v, 0) || 1, max = Math.max(1, ...lista.map(x => x.v));
   const grafGrupo = new Map();
   const filas = lista.map((x, i) => {
@@ -7442,7 +7601,7 @@ function renderProductGrupos(a, usd, yA){
         tooltip: { callbacks: { label: c => ` ${c.label}: ${f(c.parsed)} · ${pct1(c.parsed)}` } } } },
     plugins: [pctTorta],
   });
-  const dibujar = i => { if (i < 8) barrasMensuales("pgc" + i, grafGrupo.get(i), f); };
+  const dibujar = i => { if (i < 16) barrasMensuales("pgc" + i, grafGrupo.get(i), f); };
   el.querySelectorAll(".pvr").forEach(r => {
     const i = +r.dataset.i;
     if (GRUPOS_ABIERTOS.has(r.dataset.g)) dibujar(i);
@@ -7466,12 +7625,19 @@ function renderProductTable(a, yA){
   const porMes = usd ? a.productsUsd : a.products, tot = usd ? a.prodUsd : a.prodTotals;
   const f = usd ? fmtUsd : fmt1;
   const prods = Object.keys(a.prodTotals).sort((x, y) => (tot[y] || 0) - (tot[x] || 0));
-  let html = `<table><tr><th>Producto${usd ? " (USD)" : " (t)"}</th>` + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
-  for (const p of prods){
-    html += `<tr><td>${esc(p)}</td>` + (porMes[p] || []).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td><b>${f(tot[p] || 0)}</b></td></tr>`;
+  // una fila por familia (con sus totales) que despliega sus productos
+  const fams = familiasDe(prods, p => tot[p]);
+  let html = `<table class="famtable" data-ord="1"><tr><th>Producto${usd ? " (USD)" : " (t)"}</th>` + MESES.map(m => `<th>${m}</th>`).join("") + "<th>Total</th></tr>";
+  for (const F of fams){
+    const meses = Array(12).fill(0);
+    F.prods.forEach(p => (porMes[p] || []).forEach((v, m) => { meses[m] += v; }));
+    html += `<tr ${famAttrs("tabla", F.g)}>${famCelda("tabla", F.g, F.prods.length)}` + meses.map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td>${f(F.v)}</td></tr>`;
+    for (const p of F.prods)
+      html += `<tr ${famHijoAttrs("tabla", F.g)}><td>${esc(p)}</td>` + (porMes[p] || []).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td><b>${f(tot[p] || 0)}</b></td></tr>`;
   }
   html += `<tr class="total"><td>Total</td>` + (usd ? a.usd : a.tns).map(v => `<td>${v ? f(v) : ""}</td>`).join("") + `<td>${f(usd ? a.totUsd : a.totTns)}</td></tr></table>`;
   document.getElementById("prodTable").innerHTML = html;
+  cablearFamilias(document.getElementById("prodTable"), "tabla");
   // forma de ver: visual (por defecto) o tabla completa
   const vista = UI.prodVista === "tabla" ? "tabla" : "visual";
   document.getElementById("prodCard").classList.toggle("pv", vista === "visual");
@@ -7491,17 +7657,25 @@ function renderProductCompare(a, b, yA, yB){
   const el = document.getElementById("prodCompare");
   const prods = [...new Set([...Object.keys(a.prodTotals), ...Object.keys(b.prodTotals)])]
     .sort((x, y) => (a.prodTotals[y] || 0) - (a.prodTotals[x] || 0));
-  let html = `<table><tr><th>Producto</th><th>${yA} (t)</th><th>${yB} (t)</th><th>Δ t</th><th>Δ %</th></tr>`;
-  for (const p of prods){
-    const va = a.prodTotals[p] || 0, vb = b.prodTotals[p] || 0, d = va - vb;
-    const pct = vb ? (d / vb * 100) : null;
-    const cls = d >= 0 ? "up" : "down";
-    html += `<tr><td>${esc(p)}</td><td>${fmt1(va)}</td><td>${fmt1(vb)}</td>
+  const celdas = (va, vb) => {
+    const d = va - vb, pct = vb ? (d / vb * 100) : null, cls = d >= 0 ? "up" : "down";
+    return `<td>${fmt1(va)}</td><td>${fmt1(vb)}</td>
       <td class="delta ${cls}">${d >= 0 ? "+" : ""}${fmt1(d)}</td>
-      <td class="delta ${cls}">${pct === null ? "nuevo" : (pct >= 0 ? "+" : "") + pct.toFixed(1).replace(".", ",") + "%"}</td></tr>`;
+      <td class="delta ${cls}">${pct === null ? (va ? "nuevo" : "—") : (pct >= 0 ? "+" : "") + pct.toFixed(1).replace(".", ",") + "%"}</td>`;
+  };
+  // familias ordenadas por las toneladas del año base; cada una despliega sus productos
+  const fams = familiasDe(prods, p => a.prodTotals[p] || 0);
+  let html = `<table class="famtable" data-ord="1"><tr><th>Producto</th><th>${yA} (t)</th><th>${yB} (t)</th><th>Δ t</th><th>Δ %</th></tr>`;
+  let tA = 0, tB = 0;
+  for (const F of fams){
+    const va = F.prods.reduce((t, p) => t + (a.prodTotals[p] || 0), 0), vb = F.prods.reduce((t, p) => t + (b.prodTotals[p] || 0), 0);
+    tA += va; tB += vb;
+    html += `<tr ${famAttrs("cmp", F.g)}>${famCelda("cmp", F.g, F.prods.length)}${celdas(va, vb)}</tr>`;
+    for (const p of F.prods) html += `<tr ${famHijoAttrs("cmp", F.g)}><td>${esc(p)}</td>${celdas(a.prodTotals[p] || 0, b.prodTotals[p] || 0)}</tr>`;
   }
-  html += "</table>";
+  html += `<tr class="total"><td>Total</td>${celdas(tA, tB)}</tr></table>`;
   el.innerHTML = html;
+  cablearFamilias(el, "cmp");
 }
 
 /* ===== Panel de detalle: una métrica (precio, facturación, comisión, embarques, toneladas) mes a mes,
@@ -7536,10 +7710,7 @@ function tituloCargas(yA){
 const detVacio = () => ({ tns: Array(12).fill(0), usd: Array(12).fill(0), com: Array(12).fill(0), n: Array(12).fill(0), tnsU: Array(12).fill(0) });
 function detClave(r, por){
   if (por === "tipo") return grupoProducto(r.product).g;
-  if (por === "calibre"){
-    const x = grupoProducto(r.product);
-    return x.g === "Otros" || x.g === "Aceite y expeller" ? x.sub : x.sub + " · " + x.g;
-  }
+  if (por === "calibre") return calibreDe(r.product);
   if (por === "proveedor"){
     const p = paisDeProveedor(r.exporter);
     return p ? p.es : "Sin país";
@@ -7725,7 +7896,7 @@ function renderDetalle(){
   const orden = [...G.entries()].filter(([k, g]) => (detSuma(g.tns) > 0 || detSuma(g.n) > 0) && !(met === "precio" && k === "BF")).sort((x, y) => detSuma(y[1].tns) - detSuma(x[1].tns));
   const lineas = met === "precio";
   // el precio no incluye BF (se vende distinto): ni en la vista por tipo ni en las líneas Raw / Blanched
-  const TIPOS_PRECIO = ["Raw", "Blanched"];
+  const TIPOS_PRECIO = ["Raw", "Blanched", "Split Blanched"];
   const GT = lineas && por === "general" ? detAgrupar(recs, yA, MM, "tipo") : null;
   const chips = document.getElementById("detChips");
   const PAL = typeof PALETTE !== "undefined" ? PALETTE : ["#0071e3", "#ff9500", "#34c759", "#af52de", "#ff2d55", "#5ac8fa", "#ffcc00", "#ff6482"];
@@ -7861,7 +8032,7 @@ function renderDetalle(){
   // notas
   const notas = [];
   if (DET.tend) notas.push(por !== "general" && lineas ? "Las líneas finas punteadas son la tendencia de cada serie (ajuste lineal sobre los meses con datos)." : "La línea punteada naranja es la tendencia (ajuste lineal sobre los meses con datos).");
-  if (GT) notas.push("Raw y Blanched muestran su propio precio promedio; BF no se incluye acá. El total sí cuenta todos los tipos.");
+  if (GT) notas.push("Raw, Blanched y Split Blanched muestran su propio precio promedio; BF no se incluye acá. El total sí cuenta todos los tipos.");
   if (lineas) notas.push("Precio = facturación ÷ toneladas, solo de las cargas que ya tienen USD cargado. Los puntos huecos son meses con menos de 2 contenedores: el promedio ahí es poco confiable (y no cuentan para mes más caro / más barato).");
   if (met === "usd" && totB){
     const e = detEfecto(tot, totB);
@@ -8427,9 +8598,12 @@ function renderFilterPanel(){
     : UI.filter.mode === "conv" ? prods.filter(p => !isNOP(p))
     : prods;   // todos
   const box = document.getElementById("prodChecks");
-  box.innerHTML = prods.map(p => `
-    <label><input type="checkbox" value="${p.replace(/"/g, "&quot;")}" ${sel.includes(p) ? "checked" : ""}>
-    ${SP && SP.a.test(p) ? (SP.a.key === "nop" ? "🌿 " : "🥜 ") : ""}${esc(p)}</label>`).join("");
+  // agrupada por familia (Raw, Blanched, Split Blanched…), cada una con su encabezado
+  const fams = familiasDe(prods, () => 0).sort((x, y) => FAMILIAS.indexOf(x.g) - FAMILIAS.indexOf(y.g));
+  box.innerHTML = fams.map(F => `<div class="chkfam"><i class="famdot" style="background:${GRUPO_COLOR[F.g] || "#8e8e93"}" aria-hidden="true"></i>${esc(F.g)} <small class="famn">${F.prods.length}</small></div>` +
+    F.prods.sort((x, y) => x.localeCompare(y, "es")).map(p => `
+    <label><input type="checkbox" value="${esc(p)}" ${sel.includes(p) ? "checked" : ""}>
+    ${SP && SP.a.test(p) ? (SP.a.key === "nop" ? "🌿 " : "🥜 ") : ""}${esc(p)}</label>`).join("")).join("");
   box.querySelectorAll("input").forEach(inp => {
     inp.onchange = () => {
       const chosen = [...box.querySelectorAll("input:checked")].map(i => i.value);
@@ -8525,6 +8699,7 @@ function fillConfigForm(){
   document.getElementById("cfgDecimal").value = c.DECIMAL || "auto";
   document.getElementById("cfgExcluir").value = c.EXCLUDE_EXPORTERS || "";
   document.getElementById("cfgAlias").value = c.ALIAS_EMPRESAS || "";
+  document.getElementById("cfgProdAlias").value = c.PRODUCT_ALIAS || "";
   document.getElementById("cfgFocusExporter").value = c.FOCUS_EXPORTER || "";
   document.getElementById("cfgContractsSheet").value = c.CONTRACTS_SHEET || "";
   document.getElementById("cfgContractsGid").value = c.CONTRACTS_GID || "";
@@ -8620,6 +8795,7 @@ document.getElementById("cfgSave").onclick = async () => {
     DECIMAL: document.getElementById("cfgDecimal").value,
     EXCLUDE_EXPORTERS: txt("cfgExcluir"),
     ALIAS_EMPRESAS: document.getElementById("cfgAlias").value.trim(),
+    PRODUCT_ALIAS: document.getElementById("cfgProdAlias").value.trim(),
     FOCUS_EXPORTER: txt("cfgFocusExporter"),
     CONTRACTS_SHEET: txt("cfgContractsSheet"),
     CONTRACTS_GID: txt("cfgContractsGid").replace(/\D/g, ""),
@@ -8824,7 +9000,7 @@ function zTitulo(biz){
 function zHeatTabla(){
   const t = document.querySelector("#prodTable table"); if (!t) return;
   const num = s => { const x = String(s).replace(/[^\d,.-]/g, ""); return x ? parseFloat(x.replace(/\./g, "").replace(",", ".")) || 0 : 0; };
-  const filas = [...t.querySelectorAll("tr")].filter(r => !r.classList.contains("total") && r.querySelector("td"));
+  const filas = [...t.querySelectorAll("tr")].filter(r => !r.classList.contains("total") && !r.classList.contains("famrow") && r.querySelector("td"));
   const celdas = filas.map(r => [...r.querySelectorAll("td")].slice(1, 13)).flat();
   const max = Math.max(1, ...celdas.map(td => num(td.textContent)));
   celdas.forEach(td => {
@@ -8908,12 +9084,12 @@ function renderZentra(c){
   document.getElementById("zPriceDots").innerHTML = zDots(px.map(v => ({ v, dots: v ? 1 + Math.round((hi > lo ? (v - lo) / (hi - lo) : 1) * 5) : 0 })), "Más alto");
   document.getElementById("zPriceVs").innerHTML = pB == null ? "" : `<span>vs ${yB}</span><b class="${pA - pB >= 0 ? "up" : "down"}">${pA - pB >= 0 ? "+" : "−"}${fmt0(Math.abs(pA - pB))}</b>`;
 
-  // todas las tarjetas abren su detalle
-  const abre = (id, m) => { const el = document.getElementById(id); if (!el) return; el.classList.add("zdetable"); el.setAttribute("role", "button"); el.tabIndex = 0; el.title = "Ver el detalle";
-    el.onclick = e => { if (e.target.closest("button, a")) return; abrirDetalle(m); }; el.onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); abrirDetalle(m); } }; };
-  abre("zSide", "usd"); abre("zShip", "etd"); abre("zPrice", "precio"); abre("zIns", "com");
-  const bd = document.getElementById("zDet"); if (bd) bd.onclick = () => abrirDetalle(metrica === "etd" ? "etd" : metrica);
-
+  // todas las tarjetas abren su detalle
+  const abre = (id, m) => { const el = document.getElementById(id); if (!el) return; el.classList.add("zdetable"); el.setAttribute("role", "button"); el.tabIndex = 0; el.title = "Ver el detalle";
+    el.onclick = e => { if (e.target.closest("button, a")) return; abrirDetalle(m); }; el.onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); abrirDetalle(m); } }; };
+  abre("zSide", "usd"); abre("zShip", "etd"); abre("zPrice", "precio"); abre("zIns", "com");
+  const bd = document.getElementById("zDet"); if (bd) bd.onclick = () => abrirDetalle(metrica === "etd" ? "etd" : metrica);
+
   // comisión (tarjeta destacada)
   const pc = t => t.totUsd ? t.totCom / t.totUsd * 100 : 0;
   document.getElementById("zInsBig").textContent = pc(a).toFixed(2).replace(".", ",") + "%";
@@ -8946,6 +9122,7 @@ async function init(opts){
   const hasConfig = BUSINESSES.some(b => b.status === "active" && CONFIG[b.key].SHEET_ID);
   if (cached && hasConfig && Date.now() - cached.ts < CACHE_MAX_AGE && Object.keys(cached.biz || {}).length){
     DATA = cached.biz; CONTRACTS = cached.contratos || {}; OPEN = cached.abiertos || {}; demoMode = false; paintedFromCache = true;
+    try { normalizarDatosCargados(); } catch(e){}
     const n = Object.values(DATA).reduce((s, r) => s + r.length, 0);
     document.getElementById("statusLine").innerHTML =
       `⚡ ${fmt0(n)} cargas desde la última lectura (${cacheAgeText(cached.ts)}) · <span style="opacity:.75">actualizando…</span>`;

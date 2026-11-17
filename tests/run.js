@@ -107,9 +107,9 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
     pr.UI.prodVista = 'visual'; pr.UI.prodTodos = false; pr.UI.prodMetric = 'tns';
     pr.renderProductTable(a, 2026);
     const viz = g('prodViz').innerHTML;
-    t('detalle visual: 8 productos y botón para ver todos', (viz.match(/class="pvr"/g) || []).length === 8 && /Ver los 12 productos/.test(viz));
+    t('detalle visual: una fila por familia con sus 12 productos adentro', (viz.match(/class="pvr"/g) || []).length === 1 && (viz.match(/class="pvp"/g) || []).length === 12 && /12<\/b> productos en <b>1<\/b> familias/.test(viz));
     t('detalle visual: nombres escapados', /Prod &lt;b&gt;X&lt;\/b&gt;/.test(viz) && !/Prod <b>X/.test(viz));
-    t('detalle: la tabla completa sigue generándose', /<table>/.test(g('prodTable').innerHTML) && /Producto 11/.test(g('prodTable').innerHTML));
+    t('detalle: la tabla completa sigue generándose', /<table/.test(g('prodTable').innerHTML) && /Producto 11/.test(g('prodTable').innerHTML) && /famrow/.test(g('prodTable').innerHTML));
     t('detalle: forma de ver visual por defecto', g('prodCard').classList.contains('pv'));
     pr.UI.prodVista = 'tabla'; pr.renderProductTable(a, 2026);
     t('detalle: forma de ver tabla', !g('prodCard').classList.contains('pv'));
@@ -119,12 +119,12 @@ t('mezcla conserva exactos y ocultas', JSON.stringify(mz.map(r => r.tns)) === '[
   {
     const gp = new Function(code + ';return {grupoProducto};')().grupoProducto;
     const k = n => { const r = gp(n); return r.g + '|' + r.sub; };
-    t('grupos: BF manda sobre Raw y Blanched', k('Split Raw BF') === 'BF|Split' && k('Split Blanched BF') === 'BF|Split' && k('70/80 Raw BF') === 'BF|70/80' && k('Sortex BF') === 'BF|Sortex');
-    t('grupos: Raw, Blanched y Roasted con su calibre', k('38/42 Raw') === 'Raw|38/42' && k('Split Blanched G2') === 'Blanched|Split G2' && k('Split Roasted') === 'Roasted|Split');
-    t('grupos: mismo calibre escrito distinto', k('Blanched 40/50') === 'Blanched|40/50' && k('40/50 blanched Grade 1') === 'Blanched|40/50 G1' && k('Split Blancheado G1') === 'Blanched|Split G1' && k('38/42 crudo') === 'Raw|38/42' && k('Split blanched peanuts') === 'Blanched|Split');
-    t('grupos: Sortex solo, Ungraded Raw, In shell y otros van a Otros', ['Sortex', 'Ungraded Raw', 'In shell Raw', 'Loose grain Raw', 'Ciruela desecada cajas 10kg'].every(n => gp(n).g === 'Otros'));
-    t('grupos: Ungraded con tipo explícito conserva su tipo', k('Ungraded Blanched') === 'Blanched|Ungraded' && k('Ungraded Roasted') === 'Roasted|Ungraded');
-    t('grupos: aceite y expeller aparte', gp('Peanut Oil').g === 'Aceite y expeller' && gp('Expeller').g === 'Aceite y expeller');
+    t('grupos: BF manda sobre Raw y Blanched', ['Split Raw BF', 'Split Blanched BF', '70/80 Raw BF', 'Sortex BF'].every(n => gp(n).g === 'BF'));
+    t('grupos: Raw, Split Blanched y Roasted', k('38/42 Raw') === 'Raw|38/42' && k('Split Blanched G2') === 'Split Blanched|G2' && gp('Split Roasted').g === 'Roasted' && gp('Split Raw').g === 'Split Raw');
+    t('grupos: mismo calibre escrito distinto', k('Blanched 40/50') === 'Blanched|40/50' && k('40/50 blanched Grade 1') === 'Blanched|40/50 G1' && k('Split Blancheado G1') === 'Split Blanched|G1' && k('38/42 crudo') === 'Raw|38/42' && k('Split blanched peanuts') === 'Split Blanched|Sin grado');
+    t('grupos: Sortex, Ungraded, In shell y Loose grain en su familia; lo demás en Otros', ['Sortex', 'Ungraded Raw', 'In shell Raw', 'Loose grain Raw', 'Ungraded Blanched'].every(n => gp(n).g === 'Ungraded / Sortex / In shell / Loose grain') && gp('Ciruela desecada cajas 10kg').g === 'Otros');
+    t('grupos: Roasted manda sobre Ungraded', gp('Ungraded Roasted').g === 'Roasted');
+    t('grupos: aceite y expeller son familias separadas', gp('Peanut Oil').g === 'Aceite' && gp('Expeller').g === 'Expeller');
   }
 
   // plegar: gráficos, detalle y comparación se pliegan; "Plegar todo" cierra todo lo visible y lo vuelve a abrir
@@ -200,9 +200,9 @@ t('precio = USD / t de cargas con USD (ignora la que no tiene USD)', Math.abs(ap
 t('enero tiene 3 cargas', api.detValor(dg, 'etd', 0) === 3);
 t('total del año de precio ponderado', Math.abs(api.detTotal(dg, 'precio') - 490000 / 450) < 1e-9);
 t('mes sin datos de precio es null', api.detValor(dg, 'precio', 5) === null);
-t('por tipo separa Blanched y Raw', [...api.detAgrupar(dr, 2026, 12, 'tipo').keys()].sort().join() === 'Blanched,Raw');
+t('por tipo separa Split Blanched y Raw', [...api.detAgrupar(dr, 2026, 12, 'tipo').keys()].sort().join() === 'Raw,Split Blanched');
 t('por país: sin país', api.detAgrupar(dr, 2026, 12, 'pais').has('Sin país'));
-t('calibre une calibre y tipo', api.detClave(dr[0], 'calibre') === 'Split G2 · Blanched');
+t('calibre une grado y familia', api.detClave(dr[0], 'calibre') === 'G2 · Split Blanched');
 t('corte de meses: MM=1 deja afuera febrero', api.detAgrupar(dr, 2026, 1, 'general').get('Total').tns[1] === 0);
 const ef = api.detEfecto(api.detAgrupar([RD('X', 200, 220000, 1)], 2026, 12, 'general').get('Total'), api.detAgrupar([RD('X', 100, 100000, 1)].map(r => ({ ...r, year: 2025 })), 2025, 12, 'general').get('Total'));
 t('volumen + precio = diferencia de facturación', ef && Math.abs(ef.vol + ef.precio - ef.dif) < 1e-6);
