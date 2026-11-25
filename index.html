@@ -830,6 +830,8 @@
   /* ↻ Actualizar es la acción principal de la barra: botón lleno y la hora de los datos al lado */
   #btnReload{background:var(--accent)!important;color:#fff!important;border-color:transparent!important;font-weight:600;padding-inline:18px;box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 35%,transparent)}
   #btnReload:hover{filter:brightness(1.08);transform:none}
+  #btnGoogle[hidden]{display:none}
+  #btnGoogle.falta{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600}
   #btnReload:focus-visible{outline:2px solid var(--text);outline-offset:2px}
   #frescura{font-size:.78rem;color:var(--muted);white-space:nowrap;margin-right:2px;align-self:center}
   @media(max-width:720px){ #frescura{flex:1 1 100%;order:-1;text-align:right} }
@@ -1375,6 +1377,7 @@
       <span class="glabel">Datos</span>
       <div class="grow">
         <span id="frescura" aria-live="polite"></span>
+        <button id="btnGoogle" type="button" hidden></button>
         <button id="btnReload" type="button" title="Volver a leer las planillas de Google Sheets"><span aria-hidden="true">↻</span> Actualizar</button>
         <button id="btnConfig" type="button" title="Conectar planillas y asignar columnas"><span aria-hidden="true">⚙️</span> Configurar</button>
       </div>
@@ -2689,7 +2692,170 @@ function demoData(){
   return recs;
 }
 
+/* ===== Planillas privadas: lectura de libros de Excel y entrada con Google ====================
+   Si las planillas NO son públicas, cada persona entra con su cuenta de Google y la página las lee con
+   ese permiso (Drive API): solo ve datos quien ya tiene acceso a la planilla. Nada de esto se activa
+   mientras GL_ID esté vacío. El Artifact usa las mismas funciones de lectura con el conector de Drive. */
+const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+/* La hoja como filas de valores: números, texto y fechas {y, mo, d} (las celdas con formato de fecha) */
+function vivoFilas(ws){
+  const rg = XLSX.utils.decode_range(ws["!ref"] || "A1:A1"), out = [];
+  for (let R = rg.s.r; R <= rg.e.r; R++){
+    const fila = [];
+    for (let C = rg.s.c; C <= rg.e.c; C++){
+      const c = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+      if (!c || c.v === undefined || c.v === null || c.v === ""){ fila.push(""); continue; }
+      if (c.t === "n" && c.z && XLSX.SSF.is_date(c.z)){
+        const d = XLSX.SSF.parse_date_code(c.v);
+        fila.push(d ? { y: d.y, mo: d.m, d: d.d } : c.v);
+      } else if (c.t === "n" || c.t === "b") fila.push(c.v);
+      else fila.push(String(c.v));
+    }
+    out.push(fila);
+  }
+  return out;
+}
+const vivoFecha = v => v.y + "-" + String(v.mo).padStart(2, "0") + "-" + String(v.d).padStart(2, "0");
+const vivoTxt = v => v === "" || v == null ? "" : typeof v === "object" ? vivoFecha(v) : String(v);
+/* Como gviz con headers=N: las N primeras filas se juntan en el rótulo de cada columna */
+function vivoRotulos(filas, n){
+  const ncol = filas.reduce((m, r) => Math.max(m, r.length), 0);
+  return Array.from({ length: ncol }, (_, i) => filas.slice(0, n).map(r => vivoTxt(r[i])).filter(s => s !== "").join(" "));
+}
+function vivoGviz(filas, headers){
+  const n = Math.max(0, headers | 0), rot = vivoRotulos(filas, n);
+  const cols = rot.map((label, i) => ({ id: "c" + i, label, type: "string" }));
+  const rows = filas.slice(n).map(r => ({ c: rot.map((_, i) => {
+    const v = r[i] === undefined ? "" : r[i];
+    if (v === "") return null;
+    return { v: typeof v === "object" ? "Date(" + v.y + "," + (v.mo - 1) + "," + v.d + ")" : v };
+  }) }));
+  return "/*O_o*/\ngoogle.visualization.Query.setResponse(" + JSON.stringify({ version: "0.6", status: "ok", table: { cols, rows } }) + ");";
+}
+function vivoCsv(filas, headers){
+  const n = Math.max(0, headers | 0);
+  const f = n > 0 ? [vivoRotulos(filas, n), ...filas.slice(n)] : filas;
+  const ncol = f.reduce((m, r) => Math.max(m, r.length), 0);
+  return f.map(r => Array.from({ length: ncol }, (_, i) => {
+    const s = vivoTxt(r[i]);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(",")).join("\n");
+}
+function vivoPedido(url){
+  const u = new URL(url), p = u.searchParams;
+  const m = u.pathname.match(/\/d\/([^/]+)\//), esExport = u.pathname.includes("/export");
+  return { id: m ? m[1] : "", tipo: esExport ? "export" : (p.get("tqx") || "").includes("json") ? "json" : "csv",
+    hoja: p.get("sheet") || "", gid: p.get("gid") || (esExport ? "0" : ""), headers: p.get("headers") == null ? 0 : +p.get("headers") };
+}
+/* Qué pestaña del libro es: por nombre, o por gid usando lo que dice la configuración de cada negocio */
+function vivoNombreHoja(wb, ped){
+  if (ped.hoja){
+    if (wb.Sheets[ped.hoja]) return ped.hoja;
+    const k = wb.SheetNames.find(n => n.trim().toLowerCase() === ped.hoja.trim().toLowerCase());
+    if (k) return k;
+    throw new Error("No encuentro la pestaña «" + ped.hoja + "»");
+  }
+  const gid = String(ped.gid || "0");
+  for (const c of Object.values(CONFIG || {})){
+    if (c.SHEET_ID === ped.id && String(c.GID || "0") === gid && c.SHEET_NAME && wb.Sheets[c.SHEET_NAME]) return c.SHEET_NAME;
+    for (const [url, nom] of [[c.CLIENTS_URL, c.CLIENTS_SHEET], [c.SUPPLIERS_URL, c.SUPPLIERS_SHEET]]){
+      const mm = String(url || "").match(/\/d\/([^/#?]+)/), gg = String(url || "").match(/[#&?]gid=(\d+)/);
+      if (nom && wb.Sheets[nom] && ((mm && mm[1] === ped.id) || String(url || "").trim() === ped.id) && gg && gg[1] === gid) return nom;
+    }
+  }
+  if (gid === "0") return wb.SheetNames[0];
+  throw new Error("No sé qué pestaña tiene gid=" + gid);
+}
+
+/* Un libro leído con SheetJS → el mismo texto que devolvería Google (JSON de gviz o CSV) para ese pedido */
+function libroATexto(wb, url){
+  const ped = vivoPedido(url), filas = vivoFilas(wb.Sheets[vivoNombreHoja(wb, ped)]);
+  return ped.tipo === "json" ? vivoGviz(filas, ped.headers) : vivoCsv(filas, ped.tipo === "export" ? 0 : ped.headers);
+}
+
+const GL_ID = "";   // ID de cliente OAuth de Google (no es un secreto). Vacío = la página lee solo planillas públicas.
+const GL_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+const GL = { token: "", exp: 0, privadas: false, probado: false, libros: new Map() };
+const GL_ACTIVO = () => !!GL_ID && !window.claude;
+try { const g = JSON.parse(sessionStorage.getItem("glToken")); if (g && g.exp > Date.now() + 60000){ GL.token = g.token; GL.exp = g.exp; } } catch(e){}
+function glToken(interactivo){
+  if (GL.token && Date.now() < GL.exp - 60000) return Promise.resolve(GL.token);
+  if (!interactivo && GL.probado) return Promise.resolve("");
+  GL.probado = true;
+  return cargarScript("https://accounts.google.com/gsi/client").then(() => new Promise(res => {
+    let fin = false, tm = 0; const listo = t => { if (!fin){ fin = true; clearTimeout(tm); res(t || ""); } };
+    tm = setTimeout(() => listo(""), interactivo ? 120000 : 6000);
+    try {
+      const tc = google.accounts.oauth2.initTokenClient({ client_id: GL_ID, scope: GL_SCOPE,
+        callback: r => {
+          if (r && r.access_token){
+            GL.token = r.access_token; GL.exp = Date.now() + (+r.expires_in || 3600) * 1000;
+            try { sessionStorage.setItem("glToken", JSON.stringify({ token: GL.token, exp: GL.exp })); } catch(e){}
+          }
+          listo(r && r.access_token);
+        },
+        error_callback: () => listo("") });
+      tc.requestAccessToken({ prompt: interactivo ? "" : "none" });
+    } catch(e){ listo(""); }
+  })).catch(() => "");
+}
+function glBoton(){
+  const b = document.getElementById("btnGoogle"); if (!b) return;
+  const dentro = !!GL.token && Date.now() < GL.exp;
+  b.hidden = !GL_ACTIVO() || (!GL.privadas && !dentro);
+  b.innerHTML = dentro ? '<span aria-hidden="true">✓</span> Google · Salir' : '<span aria-hidden="true">G</span> Entrar con Google';
+  b.classList.toggle("falta", !dentro);
+  b.title = dentro ? "Estás leyendo las planillas con tu cuenta de Google. Tocá para salir." : "Las planillas son privadas: entrá con tu cuenta de Google para verlas.";
+}
+async function glClick(){
+  if (GL.token && Date.now() < GL.exp){
+    try { google.accounts.oauth2.revoke(GL.token, () => {}); } catch(e){}
+    GL.token = ""; GL.exp = 0; GL.libros.clear(); GL.probado = true;
+    try { sessionStorage.removeItem("glToken"); localStorage.removeItem(CACHE_KEY); } catch(e){}
+    glBoton(); aviso("Saliste de Google. Los datos de este navegador se borraron.");
+    DATA = {}; CONTRACTS = {}; OPEN = {}; closeSheet(); init({ force: true });
+    return;
+  }
+  const t = await glToken(true);
+  glBoton();
+  if (t){ closeSheet(); init({ force: true }); } else aviso("No pude entrar con Google. Probá de nuevo.");
+}
+async function glLibro(id, tok){
+  const h = GL.libros.get(id);
+  if (h && Date.now() - h.t < 30000) return h.p;
+  const p = (async () => {
+    await cargarScript(XLSX_URL);
+    const H = { headers: { Authorization: "Bearer " + tok } };
+    let r = await fetch("https://www.googleapis.com/drive/v3/files/" + id + "/export?mimeType=" + encodeURIComponent(XLSX_MIME), H);
+    if (r.status === 403 || r.status === 400) r = await fetch("https://www.googleapis.com/drive/v3/files/" + id + "?alt=media", H);   // es un .xlsx subido, no una planilla de Google
+    if (r.status === 401){ GL.token = ""; GL.exp = 0; try { sessionStorage.removeItem("glToken"); } catch(e){} glBoton(); throw new Error("GL_LOGIN"); }
+    if (r.status === 404) throw new Error("HTTP 404");
+    if (r.status === 403) throw new Error("GL_SIN_ACCESO");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return XLSX.read(await r.arrayBuffer(), { type: "array", cellNF: true });
+  })();
+  GL.libros.set(id, { t: Date.now(), p });
+  p.catch(() => GL.libros.delete(id));
+  return p;
+}
+async function glLeer(url){
+  const tok = await glToken(false);
+  if (!tok){ glBoton(); throw new Error("GL_LOGIN"); }
+  const t = libroATexto(await glLibro(vivoPedido(url).id, tok), url);
+  glBoton(); return t;
+}
+
+/* Públicas: como siempre. Si no se pueden leer y hay login con Google configurado, se lee con la cuenta de quien mira. */
 async function fetchCsvText(url){
+  if (!GL_ACTIVO()) return await fetchPublico(url);
+  if (!GL.privadas && !GL.token){
+    try { return await fetchPublico(url); }
+    catch(e){ if (!/HTTP 40[13]|no es pública/.test(String(e && e.message))) throw e; GL.privadas = true; glBoton(); }
+  }
+  return await glLeer(url);
+}
+async function fetchPublico(url){
   const res = await fetch(url);
   if (!res.ok) throw new Error("HTTP " + res.status);
   const text = await res.text();
@@ -2889,6 +3055,8 @@ function errorCriollo(e){
   const m = String((e && e.message) || e || "");
   if (/failed to fetch|networkerror|load failed|network request failed/i.test(m))
     return "No me pude conectar con Google Sheets. Revisá la conexión a internet y tocá Reintentar.";
+  if (/GL_LOGIN/.test(m)) return "Las planillas son privadas. Tocá «Entrar con Google» (arriba a la derecha) con una cuenta que tenga acceso.";
+  if (/GL_SIN_ACCESO/.test(m)) return "Tu cuenta de Google no tiene acceso a la planilla. Pedile a quien la administra que te la comparta.";
   if (/HTTP 404/.test(m)) return "No encuentro la planilla. Revisá el enlace en ⚙️ Configurar.";
   if (/HTTP 40[13]/.test(m)) return "La planilla no es pública. Compartila como “Cualquier persona con el enlace: Lector”.";
   if (/HTTP 5\d\d/.test(m)) return "Google Sheets no respondió. Esperá un momento y tocá Reintentar.";
@@ -9145,6 +9313,8 @@ applyTheme(THEME);
 
 layoutForViewport();
 document.getElementById("btnReload").onclick = () => { closeSheet(); init({ force: true }); };
+document.getElementById("btnGoogle").onclick = glClick;
+glBoton();
 init();
 if (!Object.values(CONFIG).some(c => c.SHEET_ID)) setTimeout(openConfig, 400);
 </script>

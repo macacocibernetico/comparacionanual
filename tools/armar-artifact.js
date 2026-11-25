@@ -32,6 +32,14 @@ function reemplazar(desde, hacia, { opcional = false, todas = false } = {}){
 
 /* 1 · datos desde archivos publicados junto a la página */
 reemplazar(`async function fetchCsvText(url){
+  if (!GL_ACTIVO()) return await fetchPublico(url);
+  if (!GL.privadas && !GL.token){
+    try { return await fetchPublico(url); }
+    catch(e){ if (!/HTTP 40[13]|no es pública/.test(String(e && e.message))) throw e; GL.privadas = true; glBoton(); }
+  }
+  return await glLeer(url);
+}
+async function fetchPublico(url){
   const res = await fetch(url);
   if (!res.ok) throw new Error("HTTP " + res.status);
   const text = await res.text();

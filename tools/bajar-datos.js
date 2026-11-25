@@ -76,8 +76,11 @@ function urlsDe(key, c){
 }
 
 (async () => {
-  fs.rmSync(OUT, { recursive: true, force: true });
-  fs.mkdirSync(OUT, { recursive: true });
+  // se baja a una carpeta nueva y solo reemplaza a la anterior si salió todo bien (una caída o un permiso cambiado no vacía la copia)
+  const NUEVO = OUT + ".nuevo";
+  fs.rmSync(NUEVO, { recursive: true, force: true });
+  fs.mkdirSync(NUEVO, { recursive: true });
+  let fallos = 0;
   const files = {}, resumen = [];
   let n = 0;
   for (const [key, c] of Object.entries(CONFIG)){
@@ -93,11 +96,12 @@ function urlsDe(key, c){
         else if (!text.trim()) estado = "vacía";
         else {
           const f = `f${String(++n).padStart(2, "0")}.txt`;
-          fs.writeFileSync(path.join(OUT, f), text);
+          fs.writeFileSync(path.join(NUEVO, f), text);
           files[k] = "data/" + f;
           estado = `ok · ${(Buffer.byteLength(text) / 1024).toFixed(0)} KB`;
         }
       } catch (e){ estado = "error: " + e.message; }
+      if (!estado.startsWith("ok")) fallos++;
       resumen.push(`${key.padEnd(10)} ${que.padEnd(26)} ${estado}`);
     }
   }
@@ -105,11 +109,18 @@ function urlsDe(key, c){
   try {
     const res = await fetch(MUNDO_URL);
     if (!res.ok) throw new Error("HTTP " + res.status);
-    fs.writeFileSync(path.join(OUT, "world-110m.json"), Buffer.from(await res.arrayBuffer()));
+    fs.writeFileSync(path.join(NUEVO, "world-110m.json"), Buffer.from(await res.arrayBuffer()));
     resumen.push(`${"mapa".padEnd(10)} ${"world-110m".padEnd(26)} ok`);
-  } catch (e){ resumen.push(`${"mapa".padEnd(10)} ${"world-110m".padEnd(26)} error: ${e.message}`); }
+  } catch (e){ fallos++; resumen.push(`${"mapa".padEnd(10)} ${"world-110m".padEnd(26)} error: ${e.message}`); }
   const manifest = { generatedAt: new Date().toISOString(), files, config: CONFIG };
-  fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest));
+  fs.writeFileSync(path.join(NUEVO, "manifest.json"), JSON.stringify(manifest));
   console.log(resumen.join("\n"));
+  if (fallos){
+    fs.rmSync(NUEVO, { recursive: true, force: true });
+    console.log(`\n${fallos} fallaron: la copia anterior en ${OUT} NO se tocó.`);
+    process.exit(1);
+  }
+  fs.rmSync(OUT, { recursive: true, force: true });
+  fs.renameSync(NUEVO, OUT);
   console.log(`\n${Object.keys(files).length} archivos en ${OUT}`);
 })();
