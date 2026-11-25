@@ -2775,6 +2775,7 @@ function libroATexto(wb, url){
 }
 
 const GL_ID = "";   // ID de cliente OAuth de Google (no es un secreto). Vacío = la página lee solo planillas públicas.
+const GL_DOMINIO = "latinutsa.com";   // solo se ofrecen cuentas de este dominio (la restricción real la pone Google: app «Interna»)
 const GL_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 const GL = { token: "", exp: 0, privadas: false, probado: false, libros: new Map() };
 const GL_ACTIVO = () => !!GL_ID && !window.claude;
@@ -2787,7 +2788,7 @@ function glToken(interactivo){
     let fin = false, tm = 0; const listo = t => { if (!fin){ fin = true; clearTimeout(tm); res(t || ""); } };
     tm = setTimeout(() => listo(""), interactivo ? 120000 : 6000);
     try {
-      const tc = google.accounts.oauth2.initTokenClient({ client_id: GL_ID, scope: GL_SCOPE,
+      const tc = google.accounts.oauth2.initTokenClient({ client_id: GL_ID, scope: GL_SCOPE, hd: GL_DOMINIO,
         callback: r => {
           if (r && r.access_token){
             GL.token = r.access_token; GL.exp = Date.now() + (+r.expires_in || 3600) * 1000;
