@@ -2774,7 +2774,7 @@ function libroATexto(wb, url){
   return ped.tipo === "json" ? vivoGviz(filas, ped.headers) : vivoCsv(filas, ped.tipo === "export" ? 0 : ped.headers);
 }
 
-const GL_ID = "";   // ID de cliente OAuth de Google (no es un secreto). Vacío = la página lee solo planillas públicas.
+const GL_ID = "145808267652-40bj24q223fas82ginl437sjr78fbhc8.apps.googleusercontent.com";   // ID de cliente OAuth de Google (no es un secreto). Vacío = la página lee solo planillas públicas.
 const GL_DOMINIO = "latinutsa.com";   // solo se ofrecen cuentas de este dominio (la restricción real la pone Google: app «Interna»)
 const GL_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 const GL = { token: "", exp: 0, privadas: false, probado: false, libros: new Map() };
