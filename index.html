@@ -831,6 +831,16 @@
   #btnReload{background:var(--accent)!important;color:#fff!important;border-color:transparent!important;font-weight:600;padding-inline:18px;box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 35%,transparent)}
   #btnReload:hover{filter:brightness(1.08);transform:none}
   #btnGoogle[hidden]{display:none}
+  .glpuerta{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg)}
+  .glpuerta[hidden]{display:none}
+  .glcaja{max-width:420px;width:100%;text-align:center;background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:34px 28px;box-shadow:0 20px 60px rgba(0,0,0,.18)}
+  .glcaja h1{font-size:1.25rem;margin:0 0 10px}
+  .glcaja p{color:var(--muted);font-size:.92rem;line-height:1.5;margin:0 0 22px}
+  #glPuertaBtn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 26px;font-size:1rem;font-weight:600;border-radius:12px;border:0;cursor:pointer;background:var(--accent);color:#fff}
+  #glPuertaBtn:disabled{opacity:.6;cursor:wait}
+  #glPuertaBtn:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+  .glcaja .glmsg{margin:16px 0 0;font-size:.85rem;min-height:1.2em}
+  body.sinLogin{overflow:hidden}
   #btnGoogle.falta{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600}
   #btnReload:focus-visible{outline:2px solid var(--text);outline-offset:2px}
   #frescura{font-size:.78rem;color:var(--muted);white-space:nowrap;margin-right:2px;align-self:center}
@@ -1318,6 +1328,14 @@
 </style>
 </head>
 <body>
+<div id="glPuerta" class="glpuerta" hidden role="dialog" aria-modal="true" aria-labelledby="glPuertaTit">
+  <div class="glcaja">
+    <h1 id="glPuertaTit">Dashboard de Exportaciones</h1>
+    <p>Los datos son privados. Entrá con tu cuenta de Google de la empresa (<b>@latinutsa.com</b>) para verlos.</p>
+    <button id="glPuertaBtn" type="button"><span aria-hidden="true">G</span> Entrar con Google</button>
+    <p id="glPuertaMsg" class="glmsg" aria-live="polite"></p>
+  </div>
+</div>
 <a href="#main" class="skip-link">Saltar al contenido</a>
 <header>
   <div class="topbar">
@@ -2792,7 +2810,7 @@ function glToken(interactivo){
         callback: r => {
           if (r && r.access_token){
             GL.token = r.access_token; GL.exp = Date.now() + (+r.expires_in || 3600) * 1000;
-            try { sessionStorage.setItem("glToken", JSON.stringify({ token: GL.token, exp: GL.exp })); } catch(e){}
+            try { sessionStorage.setItem("glToken", JSON.stringify({ token: GL.token, exp: GL.exp })); localStorage.setItem("glEntro", "1"); } catch(e){}
           }
           listo(r && r.access_token);
         },
@@ -2804,7 +2822,7 @@ function glToken(interactivo){
 function glBoton(){
   const b = document.getElementById("btnGoogle"); if (!b) return;
   const dentro = !!GL.token && Date.now() < GL.exp;
-  b.hidden = !GL_ACTIVO() || (!GL.privadas && !dentro);
+  b.hidden = !GL_ACTIVO();
   b.innerHTML = dentro ? '<span aria-hidden="true">✓</span> Google · Salir' : '<span aria-hidden="true">G</span> Entrar con Google';
   b.classList.toggle("falta", !dentro);
   b.title = dentro ? "Estás leyendo las planillas con tu cuenta de Google. Tocá para salir." : "Las planillas son privadas: entrá con tu cuenta de Google para verlas.";
@@ -2813,14 +2831,39 @@ async function glClick(){
   if (GL.token && Date.now() < GL.exp){
     try { google.accounts.oauth2.revoke(GL.token, () => {}); } catch(e){}
     GL.token = ""; GL.exp = 0; GL.libros.clear(); GL.probado = true;
-    try { sessionStorage.removeItem("glToken"); localStorage.removeItem(CACHE_KEY); } catch(e){}
+    try { sessionStorage.removeItem("glToken"); localStorage.removeItem("glEntro"); localStorage.removeItem(CACHE_KEY); } catch(e){}
     glBoton(); aviso("Saliste de Google. Los datos de este navegador se borraron.");
-    DATA = {}; CONTRACTS = {}; OPEN = {}; closeSheet(); init({ force: true });
+    DATA = {}; CONTRACTS = {}; OPEN = {}; closeSheet(); glPuerta(true);
     return;
   }
   const t = await glToken(true);
   glBoton();
-  if (t){ closeSheet(); init({ force: true }); } else aviso("No pude entrar con Google. Probá de nuevo.");
+  if (t){ closeSheet(); glPuerta(false); init({ force: true }); } else aviso("No pude entrar con Google. Probá de nuevo.");
+}
+/* Pantalla de entrada: se ve apenas se abre la página hasta que la persona entra con su cuenta de Google */
+function glPuerta(ver, msg){
+  const p = document.getElementById("glPuerta"); if (!p) return;
+  p.hidden = !ver;
+  document.body.classList.toggle("sinLogin", !!ver);
+  const m = document.getElementById("glPuertaMsg"); if (m) m.textContent = msg || "";
+  glBoton();
+}
+async function glPuertaEntrar(){
+  const b = document.getElementById("glPuertaBtn"); b.disabled = true;
+  glPuerta(true, "Abriendo Google…");
+  const t = await glToken(true);
+  b.disabled = false;
+  if (t){ glPuerta(false); await init({ force: true }); }
+  else glPuerta(true, "No pude entrar. Probá de nuevo (si no se abrió la ventana de Google, permitila en tu navegador).");
+}
+/* Arranque: con login activo, primero se entra (en silencio si ya había entrado) y recién después se leen las planillas */
+async function glArranque(){
+  if (!GL_ACTIVO()) return init();
+  let tok = GL.token && Date.now() < GL.exp - 60000 ? GL.token : "";
+  let recordaba = false; try { recordaba = !!localStorage.getItem("glEntro"); } catch(e){}
+  if (!tok && recordaba) tok = await glToken(false);
+  if (tok){ glPuerta(false); return init(); }
+  glPuerta(true);
 }
 async function glLibro(id, tok){
   const h = GL.libros.get(id);
@@ -9315,8 +9358,9 @@ applyTheme(THEME);
 layoutForViewport();
 document.getElementById("btnReload").onclick = () => { closeSheet(); init({ force: true }); };
 document.getElementById("btnGoogle").onclick = glClick;
+document.getElementById("glPuertaBtn").onclick = glPuertaEntrar;
 glBoton();
-init();
+glArranque();
 if (!Object.values(CONFIG).some(c => c.SHEET_ID)) setTimeout(openConfig, 400);
 </script>
 </body>

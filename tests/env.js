@@ -5,7 +5,7 @@ function mkEl(tag,id){const el={id,children:[],attrs:{},dataset:{},style:{},_htm
  Object.defineProperty(el,'innerHTML',{get:()=>el._html,set:v=>{el._html=String(v)}});return el;}
 const REG=new Map();const ensure=id=>{if(!REG.has(id))REG.set(id,mkEl('div',id));return REG.get(id)};
 global.document={getElementById:ensure,querySelector:()=>mkEl(),querySelectorAll:()=>[],createElement:()=>mkEl(),addEventListener(){},body:mkEl(),documentElement:mkEl(),head:{appendChild(){}}};
-global.window={addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),location:{href:''},devicePixelRatio:1};
+global.window={claude:{},addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),location:{href:''},devicePixelRatio:1};
 global.matchMedia=global.window.matchMedia;
 global.localStorage={d:{},getItem(k){return this.d[k]??null},setItem(k,v){this.d[k]=v},removeItem(k){delete this.d[k]}};
 global.CHARTS=[];global.Chart=class{constructor(c,cfg){CHARTS.push(cfg)}destroy(){}resize(){}};Chart.register=()=>{};Chart.defaults={font:{},plugins:{legend:{labels:{}}}};

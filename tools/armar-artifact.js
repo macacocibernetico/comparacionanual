@@ -122,7 +122,7 @@ reemplazar(`function loadConfig(){
 `function loadConfig(){
   let saved = window.__CFG_ARTIFACT || {};
   if (!Object.keys(saved).length) try { saved = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e){}`);
-reemplazar(`init();
+reemplazar(`glArranque();
 if (!Object.values(CONFIG).some(c => c.SHEET_ID)) setTimeout(openConfig, 400);`,
 `cargarDatosArtifact().then(() => init());`);
 
